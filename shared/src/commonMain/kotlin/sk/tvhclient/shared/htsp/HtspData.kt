@@ -39,13 +39,28 @@ object HtspData {
         return meta
     }
 
-    /** now/next mapa: pre kazdy kanal prave beziaci event (z EPG dumpu, 1 den). */
+    /** now/next mapa: pre kazdy kanal aktualne beziaci program. Cez getEvents
+     *  na jednom otvorenom spojeni — async dump je tu nepouzitelny, lebo
+     *  posiela najprv tisice DVR zaznamov a eventy sa nestihnu. */
     suspend fun epgNowMap(server: TvhServer, nowSec: Long): Map<String, EpgEvent> {
-        val meta = metadata(server, withEpg = true, nowSec = nowSec, epgMaxDays = 1)
+        val meta = metadata(server, withEpg = false, nowSec = nowSec)
+        val channelIds = meta.channels.mapNotNull { longOf(it, "channelId") }
+        if (channelIds.isEmpty()) return emptyMap()
+        val client = HtspClient(server.host, server.htspPort, server.username, server.password)
+        client.connect()
         val out = HashMap<String, EpgEvent>()
-        for (e in events(meta)) {
-            val cu = e.channelUuid ?: continue
-            if (e.start <= nowSec && nowSec < e.stop) out[cu] = e
+        try {
+            for (cid in channelIds) {
+                val evs = try {
+                    client.getEvents(cid, numFollowing = 2, maxTime = 0)
+                } catch (e: Exception) { continue }
+                val mapped = evs.mapNotNull { mapEvent(it) }
+                val current = mapped.firstOrNull { it.start <= nowSec && nowSec < it.stop }
+                    ?: mapped.firstOrNull()
+                if (current != null) out[cid.toString()] = current
+            }
+        } finally {
+            client.close()
         }
         return out
     }
