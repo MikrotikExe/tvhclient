@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TVH Client</string>
+    <string name="servers_title">Servers</string>
+    <string name="no_servers">No servers configured yet. Add your Tvheadend server.</string>
+    <string name="add_server">Add server</string>
+    <string name="edit_server">Edit server</string>
+    <string name="active">Active</string>
+    <string name="use_server">Use</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="field_name">Name</string>
+    <string name="field_host">Host / IP address</string>
+    <string name="field_port">Port</string>
+    <string name="field_https">Use HTTPS</string>
+    <string name="field_username">Username</string>
+    <string name="field_password">Password</string>
+    <string name="test_connection">Test connection</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="testing">Testing connection…</string>
+    <string name="test_ok">Connected: Tvheadend %1$s (API v%2$d)</string>
+    <string name="test_auth_failed">Authentication failed. Check username and password.</string>
+    <string name="test_http_error">Server returned HTTP error %1$d.</string>
+    <string name="test_network_error">Connection failed: %1$s</string>
+    <string name="tab_channels">Channels</string>
+    <string name="search_channels">Search channels</string>
+    <string name="all_channels">All</string>
+    <string name="no_channels">No channels.</string>
+    <string name="no_active_server">No active server. Add one in the Servers tab.</string>
+</resources>

@@ -1,0 +1,10 @@
+package sk.tvhclient.shared.storage
+
+import com.russhwolf.settings.Settings
+
+/**
+ * Platformovo specificke zabezpecene ulozisko:
+ * - Android: EncryptedSharedPreferences (AES-256)
+ * - iOS: Keychain
+ */
+expect fun createSecureSettings(): Settings
