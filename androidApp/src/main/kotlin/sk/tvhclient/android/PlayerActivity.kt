@@ -108,6 +108,7 @@ class PlayerActivity : ComponentActivity() {
             PlayerUi(
                 title = channelTitle,
                 player = mediaPlayer,
+                seekable = directUrl != null,  // DVR nahravka = da sa pretacat; live nie
                 onAttach = { layout -> mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
                     val media = Media(libVlc, Uri.parse(streamUrl))
@@ -160,6 +161,7 @@ private fun MediaPlayer.spuTrackItems(): List<TrackItem> =
 private fun PlayerUi(
     title: String,
     player: MediaPlayer,
+    seekable: Boolean,
     onAttach: (VLCVideoLayout) -> Unit,
     onStart: () -> Unit,
     onClose: () -> Unit
@@ -168,6 +170,24 @@ private fun PlayerUi(
     var isPlaying by remember { mutableStateOf(true) }
     // menu: null = ziadne, "audio" = audio stopy, "spu" = titulky
     var menu by remember { mutableStateOf<String?>(null) }
+    // seek stav (len pre DVR): aktualny cas a dlzka v ms
+    var positionMs by remember { mutableStateOf(0L) }
+    var lengthMs by remember { mutableStateOf(0L) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableStateOf(0f) }
+
+    // Aktualizuj cas kazdu sekundu (len ked je seekable a netiahneme)
+    if (seekable) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                if (!dragging) {
+                    positionMs = player.time
+                    lengthMs = player.length
+                }
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
 
     LaunchedEffect(controlsVisible, menu) {
         if (controlsVisible && menu == null) {
@@ -236,15 +256,40 @@ private fun PlayerUi(
                     modifier = Modifier.align(Alignment.Center)
                 )
 
-                // Dolny pruh: audio + titulky
-                Row(
+                // Dolna cast: seek lista (len DVR) + audio/titulky
+                Column(
                     Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 ) {
-                    TextChip("\uD83D\uDD0A Audio") { menu = if (menu == "audio") null else "audio" }
-                    TextChip("\uD83D\uDCAC Titulky") { menu = if (menu == "spu") null else "spu" }
+                    if (seekable && lengthMs > 0) {
+                        val cur = if (dragging) (dragValue * lengthMs).toLong() else positionMs
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(fmtMs(cur), color = Color.White,
+                                style = MaterialTheme.typography.bodySmall)
+                            androidx.compose.material3.Slider(
+                                value = if (dragging) dragValue
+                                        else (positionMs.toFloat() / lengthMs).coerceIn(0f, 1f),
+                                onValueChange = { dragging = true; dragValue = it },
+                                onValueChangeFinished = {
+                                    player.time = (dragValue * lengthMs).toLong()
+                                    positionMs = (dragValue * lengthMs).toLong()
+                                    dragging = false
+                                },
+                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                            )
+                            Text(fmtMs(lengthMs), color = Color.White,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Row(
+                        Modifier.align(Alignment.End),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        TextChip("\uD83D\uDD0A Audio") { menu = if (menu == "audio") null else "audio" }
+                        TextChip("\uD83D\uDCAC Titulky") { menu = if (menu == "spu") null else "spu" }
+                    }
                 }
             }
         }
@@ -370,5 +415,18 @@ private fun CircleButton(
             textAlign = TextAlign.Center,
             fontSize = if (big) 34.sp else 20.sp
         )
+    }
+}
+
+private fun fmtMs(ms: Long): String {
+    if (ms <= 0) return "0:00"
+    val totalSec = ms / 1000
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) {
+        "$h:" + m.toString().padStart(2, '0') + ":" + s.toString().padStart(2, '0')
+    } else {
+        "$m:" + s.toString().padStart(2, '0')
     }
 }
