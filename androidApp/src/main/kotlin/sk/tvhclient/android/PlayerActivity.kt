@@ -123,6 +123,7 @@ class PlayerActivity : ComponentActivity() {
                 progTitleArg = progTitle,
                 server = server,
                 liveChannelUuid = if (directUrl == null) channelUuid else null,
+                preferredAudio = AudioPref.get(this),
                 onAttach = { layout -> mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
                     val media = Media(libVlc, Uri.parse(streamUrl))
@@ -186,6 +187,7 @@ private fun PlayerUi(
     progTitleArg: String = "",
     server: sk.tvhclient.shared.model.TvhServer? = null,
     liveChannelUuid: String? = null,
+    preferredAudio: List<String> = emptyList(),
     onAttach: (VLCVideoLayout) -> Unit,
     onStart: () -> Unit,
     onClose: () -> Unit
@@ -261,6 +263,27 @@ private fun PlayerUi(
             while (true) {
                 liveNowSec = System.currentTimeMillis() / 1000
                 kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
+    // Auto-vyber preferovanej audio stopy (SK -> CZ -> EN ...) po nacitani stop
+    if (preferredAudio.isNotEmpty()) {
+        LaunchedEffect(Unit) {
+            repeat(30) {
+                kotlinx.coroutines.delay(500)
+                val tracks = player.audioTracks
+                val real = tracks?.filter { it.id >= 0 } ?: emptyList()
+                if (real.size >= 2) {
+                    for (code in preferredAudio) {
+                        val m = real.firstOrNull { AudioPref.matches(it.name ?: "", code) }
+                        if (m != null) {
+                            if (player.audioTrack != m.id) player.audioTrack = m.id
+                            return@LaunchedEffect
+                        }
+                    }
+                    return@LaunchedEffect
+                }
             }
         }
     }

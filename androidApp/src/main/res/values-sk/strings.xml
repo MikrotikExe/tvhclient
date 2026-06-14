@@ -153,4 +153,8 @@
     <string name="view_tiles">Dlaždice</string>
     <string name="language">Jazyk</string>
     <string name="lang_system">Systém</string>
+    <string name="audio_pref_title">Predvolené audio (priorita)</string>
+    <string name="audio_pref_1">1. audio</string>
+    <string name="audio_pref_2">2. audio</string>
+    <string name="audio_pref_3">3. audio</string>
 </resources>

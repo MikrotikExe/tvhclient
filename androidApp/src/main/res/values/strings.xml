@@ -153,4 +153,8 @@
     <string name="view_tiles">Tiles</string>
     <string name="language">Language</string>
     <string name="lang_system">System</string>
+    <string name="audio_pref_title">Preferred audio (priority)</string>
+    <string name="audio_pref_1">1. audio</string>
+    <string name="audio_pref_2">2. audio</string>
+    <string name="audio_pref_3">3. audio</string>
 </resources>

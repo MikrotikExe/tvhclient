@@ -180,6 +180,28 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                 }
             )
             Spacer(Modifier.height(16.dp))
+
+            // Predvolene audio stopy (priorita 1-3)
+            Text(stringResource(R.string.audio_pref_title),
+                style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            var audio by remember {
+                mutableStateOf(AudioPref.get(ctx).let { l -> List(3) { l.getOrNull(it) ?: "" } })
+            }
+            fun setSlot(i: Int, code: String) {
+                val list = audio.toMutableList()
+                list[i] = code
+                audio = list
+                AudioPref.set(ctx, list)
+            }
+            val audioLabels: @Composable (String) -> String = { code ->
+                AudioPref.options.firstOrNull { it.first == code }?.second ?: "—"
+            }
+            val audioOptions = AudioPref.options.map { it.first }
+            DropdownField(stringResource(R.string.audio_pref_1), audio[0], audioOptions, audioLabels) { setSlot(0, it) }
+            DropdownField(stringResource(R.string.audio_pref_2), audio[1], audioOptions, audioLabels) { setSlot(1, it) }
+            DropdownField(stringResource(R.string.audio_pref_3), audio[2], audioOptions, audioLabels) { setSlot(2, it) }
+            Spacer(Modifier.height(16.dp))
             if (servers.isEmpty()) {
                 Text(stringResource(R.string.no_servers))
                 Spacer(Modifier.height(16.dp))
