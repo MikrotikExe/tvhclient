@@ -52,6 +52,9 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
     val query by vm.query.collectAsState()
     var selectedTag by remember { mutableStateOf<String?>(null) } // tag uuid alebo null = vsetky
     var epgFor by remember { mutableStateOf<ChannelRow?>(null) }
+    // Scroll pozicie prezivaju odskok do EPG a spat (remember v scope obrazovky)
+    val listStateMain = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listStateSearch = androidx.compose.foundation.lazy.rememberLazyListState()
 
     LaunchedEffect(Unit) { vm.load() }
 
@@ -88,7 +91,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                     // Vyhladavanie: plochy filtrovany zoznam
                     val q = query.trim().lowercase()
                     val results = s.allRows.filter { it.channel.name.lowercase().contains(q) }
-                    ChannelList(results) { epgFor = it }
+                    ChannelList(results, listStateSearch) { epgFor = it }
                 } else {
                     // Filtre podla tagov
                     val tags = s.categories.mapNotNull { it.tag }
@@ -114,7 +117,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                     } else {
                         s.categories.firstOrNull { it.tag?.uuid == selectedTag }?.rows ?: emptyList()
                     }
-                    ChannelList(rows) { epgFor = it }
+                    ChannelList(rows, listStateMain) { epgFor = it }
                 }
             }
         }
@@ -122,7 +125,11 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
 }
 
 @Composable
-private fun ChannelList(rows: List<ChannelRow>, onShowEpg: (ChannelRow) -> Unit) {
+private fun ChannelList(
+    rows: List<ChannelRow>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onShowEpg: (ChannelRow) -> Unit
+) {
     val context = LocalContext.current
     val server = remember { Tvh.store.active() }
     val loader = remember(server?.id) { PiconImageLoader.get(context, server) }
@@ -131,7 +138,7 @@ private fun ChannelList(rows: List<ChannelRow>, onShowEpg: (ChannelRow) -> Unit)
         CenterBox { Text(stringResource(R.string.no_channels)) }
         return
     }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(rows, key = { it.channel.uuid }) { row ->
             ChannelItem(row, loader, context, onShowEpg)
         }
