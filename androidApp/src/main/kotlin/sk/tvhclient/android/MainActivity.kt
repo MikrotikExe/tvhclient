@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -217,6 +218,9 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
     var username by remember { mutableStateOf(existing?.username ?: "") }
     var password by remember { mutableStateOf(existing?.password ?: "") }
     var profile by remember { mutableStateOf(existing?.profile ?: "pass") }
+    var authMode by remember { mutableStateOf(existing?.authMode ?: "auto") }
+    var connMode by remember { mutableStateOf(existing?.connectionMode ?: "http") }
+    var htspPort by remember { mutableStateOf((existing?.htspPort ?: 9982).toString()) }
 
     val testState by vm.testState.collectAsState()
 
@@ -231,7 +235,10 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
             useHttps = useHttps,
             username = username.trim(),
             password = password,
-            profile = profile.trim().ifBlank { "pass" }
+            profile = profile.trim().ifBlank { "pass" },
+            authMode = authMode,
+            connectionMode = connMode,
+            htspPort = htspPort.toIntOrNull() ?: 9982
         )
     }
 
@@ -269,6 +276,23 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
                 label = { Text(stringResource(R.string.field_port)) },
                 singleLine = true, modifier = Modifier.width(160.dp)
             )
+            DropdownField(
+                label = stringResource(R.string.field_conn_mode),
+                value = connMode,
+                options = listOf("http", "htsp"),
+                optionLabel = {
+                    if (it == "htsp") stringResource(R.string.conn_htsp)
+                    else stringResource(R.string.conn_http)
+                },
+                onSelect = { connMode = it }
+            )
+            if (connMode == "htsp") {
+                OutlinedTextField(
+                    value = htspPort, onValueChange = { htspPort = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.field_htsp_port)) },
+                    singleLine = true, modifier = Modifier.width(160.dp)
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = useHttps, onCheckedChange = { useHttps = it })
                 Spacer(Modifier.width(8.dp))
@@ -286,11 +310,29 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
-            OutlinedTextField(
-                value = profile, onValueChange = { profile = it },
-                label = { Text(stringResource(R.string.field_profile)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+            DropdownField(
+                label = stringResource(R.string.field_profile),
+                value = profile,
+                options = listOf(
+                    "pass", "mpegts", "matroska",
+                    "webtv-h264-aac-matroska", "webtv-h264-aac-mpegts"
+                ),
+                optionLabel = { it },
+                onSelect = { profile = it }
+            )
+            DropdownField(
+                label = stringResource(R.string.field_auth),
+                value = authMode,
+                options = listOf("auto", "basic", "digest", "none"),
+                optionLabel = {
+                    when (it) {
+                        "auto" -> stringResource(R.string.auth_auto)
+                        "basic" -> stringResource(R.string.auth_basic)
+                        "digest" -> stringResource(R.string.auth_digest)
+                        else -> stringResource(R.string.auth_none)
+                    }
+                },
+                onSelect = { authMode = it }
             )
 
             TestResultView(testState)
@@ -343,6 +385,44 @@ fun TestResultView(state: TestState) {
                 stringResource(R.string.test_network_error, r.message),
                 color = MaterialTheme.colorScheme.error
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DropdownField(
+    label: String,
+    value: String,
+    options: List<String>,
+    optionLabel: @Composable (String) -> String,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    androidx.compose.material3.ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = optionLabel(value),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor()
+        )
+        androidx.compose.material3.ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { opt ->
+                DropdownMenuItem(
+                    text = { Text(optionLabel(opt)) },
+                    onClick = { onSelect(opt); expanded = false }
+                )
+            }
         }
     }
 }

@@ -56,14 +56,18 @@ class TvhApi(private val server: TvhServer) {
             requestTimeoutMillis = 20_000
             socketTimeoutMillis = 20_000
         }
-        if (server.username.isNotEmpty()) {
+        if (server.username.isNotEmpty() && server.authMode != "none") {
             install(Auth) {
-                basic {
-                    credentials { BasicAuthCredentials(server.username, server.password) }
-                    realm = null
+                if (server.authMode == "auto" || server.authMode == "basic") {
+                    basic {
+                        credentials { BasicAuthCredentials(server.username, server.password) }
+                        realm = null
+                    }
                 }
-                digest {
-                    credentials { DigestAuthCredentials(server.username, server.password) }
+                if (server.authMode == "auto" || server.authMode == "digest") {
+                    digest {
+                        credentials { DigestAuthCredentials(server.username, server.password) }
+                    }
                 }
             }
         }

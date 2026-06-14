@@ -138,4 +138,13 @@
     <string name="sub_hb_ine">Ostatné</string>
     <string name="tab_radio">Rádio</string>
     <string name="radio_empty">Žiadne rádiá.</string>
+    <string name="field_auth">HTTP autentifikácia</string>
+    <string name="auth_auto">Automaticky</string>
+    <string name="auth_basic">Basic</string>
+    <string name="auth_digest">Digest</string>
+    <string name="auth_none">Žiadna</string>
+    <string name="field_conn_mode">Spôsob pripojenia</string>
+    <string name="conn_http">HTTP API (9981)</string>
+    <string name="conn_htsp">HTSP (9982)</string>
+    <string name="field_htsp_port">HTSP port</string>
 </resources>

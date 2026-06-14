@@ -17,6 +17,29 @@ object Tvh {
 
     @Throws(CancellationException::class)
     suspend fun testConnection(server: TvhServer): ConnectionResult {
+        if (server.connectionMode == "htsp") {
+            val client = sk.tvhclient.shared.htsp.HtspClient(
+                host = server.host, port = server.htspPort,
+                user = server.username, pwd = server.password
+            )
+            return try {
+                client.connect()
+                val meta = client.fetchMetadata(
+                    withEpg = false, channelsOnly = true, nowSec = currentTimeSeconds()
+                )
+                ConnectionResult.Success(
+                    sk.tvhclient.shared.model.ServerInfo(
+                        swVersion = "HTSP v${client.serverVersion ?: "?"} · ${meta.channels.size} kanálov",
+                        apiVersion = (client.serverVersion ?: 0L).toInt(),
+                        name = client.serverName ?: "Tvheadend"
+                    )
+                )
+            } catch (e: Exception) {
+                ConnectionResult.NetworkError(e.message ?: "HTSP chyba")
+            } finally {
+                client.close()
+            }
+        }
         val api = TvhApi(server)
         try { return api.testConnection() } finally { api.close() }
     }

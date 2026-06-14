@@ -11,7 +11,13 @@ data class TvhServer(
     val useHttps: Boolean = false,
     val username: String = "",
     val password: String = "",
-    val profile: String = "pass"
+    val profile: String = "pass",
+    // auto = ponuka basic aj digest (Ktor vyberie podla servera);
+    // basic / digest = vynuti jednu; none = bez auth (verejny server)
+    val authMode: String = "auto",
+    // http = REST API (9981); htsp = binarny protokol (9982) na metadata
+    val connectionMode: String = "http",
+    val htspPort: Int = 9982
 ) {
     val baseUrl: String
         get() {
