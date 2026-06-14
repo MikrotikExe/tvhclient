@@ -56,3 +56,9 @@ expect fun formatTimeHm(epochSec: Long): String
 
 /** Formatuje unix sekundy na nazov dna "Pondelok 14.6." v lokalnom case. */
 expect fun formatDayLabel(epochSec: Long): String
+
+/** Kluc datumu "YYYY-MM-DD" v lokalnom case pre zoskupenie. */
+expect fun dateKey(epochSec: Long): String
+
+/** Citatelny datum "14.6.2026" v lokalnom case. */
+expect fun formatDateFull(epochSec: Long): String

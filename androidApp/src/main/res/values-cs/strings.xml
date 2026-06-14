@@ -62,4 +62,8 @@
     <string name="epg_record">Nahrát</string>
     <string name="epg_record_done">Nahrávka naplánována</string>
     <string name="epg_record_fail">Nahrávku se nepodařilo naplánovat</string>
+    <string name="dvr_archive">Archiv</string>
+    <string name="dvr_by_channel">Podle kanálů</string>
+    <string name="dvr_by_genre">Podle žánru</string>
+    <string name="dvr_channels_count">kanálů</string>
 </resources>

@@ -62,4 +62,8 @@
     <string name="epg_record">Record</string>
     <string name="epg_record_done">Recording scheduled</string>
     <string name="epg_record_fail">Failed to schedule recording</string>
+    <string name="dvr_archive">Archive</string>
+    <string name="dvr_by_channel">By channel</string>
+    <string name="dvr_by_genre">By genre</string>
+    <string name="dvr_channels_count">channels</string>
 </resources>

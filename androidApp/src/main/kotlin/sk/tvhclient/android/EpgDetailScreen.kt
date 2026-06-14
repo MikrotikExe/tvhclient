@@ -1,14 +1,6 @@
 package sk.tvhclient.android
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.material3.Button
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -125,40 +117,6 @@ fun EpgDetailScreen(event: EpgEvent, onBack: () -> Unit) {
                 desc.ifBlank { stringResource(R.string.epg_no_description) },
                 style = MaterialTheme.typography.bodyLarge
             )
-
-            // Nahrat (naplanuj nahravku z EPG eventu)
-            val eid = event.eventId
-            if (eid != null && eid > 0) {
-                Spacer(Modifier.height(20.dp))
-                val context = LocalContext.current
-                val scope = rememberCoroutineScope()
-                val scheduling = remember { mutableStateOf(false) }
-                Button(
-                    onClick = {
-                        scheduling.value = true
-                        scope.launch {
-                            val server = sk.tvhclient.shared.Tvh.store.active()
-                            val ok = if (server != null) {
-                                withContext(Dispatchers.IO) {
-                                    val api = sk.tvhclient.shared.Tvh.apiFor(server)
-                                    try { api.dvrRecordEvent(eid) } finally { api.close() }
-                                }
-                            } else false
-                            scheduling.value = false
-                            android.widget.Toast.makeText(
-                                context,
-                                context.getString(
-                                    if (ok) R.string.epg_record_done else R.string.epg_record_fail
-                                ),
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    },
-                    enabled = !scheduling.value
-                ) {
-                    Text("\u23FA  " + stringResource(R.string.epg_record))
-                }
-            }
         }
     }
 }

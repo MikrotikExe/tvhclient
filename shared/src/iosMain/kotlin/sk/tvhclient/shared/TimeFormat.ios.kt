@@ -14,3 +14,7 @@ actual fun formatTimeHm(epochSec: Long): String = fmt("HH:mm", epochSec)
 
 actual fun formatDayLabel(epochSec: Long): String =
     fmt("EEEE d.M.", epochSec).replaceFirstChar { it.uppercase() }
+
+actual fun dateKey(epochSec: Long): String = fmt("yyyy-MM-dd", epochSec)
+
+actual fun formatDateFull(epochSec: Long): String = fmt("d.M.yyyy", epochSec)
