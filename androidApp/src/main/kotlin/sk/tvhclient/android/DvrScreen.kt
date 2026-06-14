@@ -289,6 +289,7 @@ private fun RecordingRow(entry: DvrEntry, context: Context, progressTick: Int) {
     Row(
         Modifier
             .fillMaxWidth()
+            .dpadFocusable()
             .clickable {
                 val srv = Tvh.store.active() ?: return@clickable
                 val url = Tvh.dvrUrl(srv, entry.uuid)
@@ -386,6 +387,7 @@ private fun ChannelFolderRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .dpadFocusable()
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -421,6 +423,7 @@ private fun FolderRow(label: String, sub: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
+            .dpadFocusable()
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically

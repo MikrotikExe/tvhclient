@@ -646,6 +646,7 @@ private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
+            .dpadFocusable()
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -663,6 +664,7 @@ private fun TextChip(label: String, onClick: () -> Unit) {
     Box(
         Modifier
             .clip(RoundedCornerShape(20.dp))
+            .dpadFocusable(RoundedCornerShape(20.dp))
             .background(Color(0x88000000))
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 10.dp)
@@ -683,6 +685,7 @@ private fun CircleButton(
         modifier
             .size(s)
             .clip(CircleShape)
+            .dpadFocusable(CircleShape)
             .background(Color(0x88000000))
             .clickable { onClick() },
         contentAlignment = Alignment.Center

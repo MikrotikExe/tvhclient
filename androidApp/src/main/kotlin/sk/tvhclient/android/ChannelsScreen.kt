@@ -275,6 +275,7 @@ private fun ActionRow(label: String, onClick: () -> Unit) {
         label,
         modifier = Modifier
             .fillMaxWidth()
+            .dpadFocusable()
             .clickable { onClick() }
             .padding(horizontal = 20.dp, vertical = 14.dp),
         style = MaterialTheme.typography.bodyLarge
@@ -303,6 +304,7 @@ private fun ProfilePickerDialog(
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .dpadFocusable()
                             .clickable { onPick(code) }
                             .padding(horizontal = 20.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -394,6 +396,7 @@ private fun ChannelGrid(
                 Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0x14FFFFFF))
+                    .dpadFocusable()
                     .combinedClickable(
                         onClick = { playChannel(context, row, nowTitle, nowStart, nowStop) },
                         onLongClick = { onShowEpg(row) }
@@ -488,6 +491,7 @@ private fun ChannelItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
+            .dpadFocusable()
             .combinedClickable(
                 onClick = { playChannel(context, row, curTitle, curStart, curStop) },
                 onLongClick = { onShowEpg(row) }
