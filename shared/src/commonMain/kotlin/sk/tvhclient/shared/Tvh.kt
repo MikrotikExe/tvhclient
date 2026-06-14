@@ -35,7 +35,8 @@ object Tvh {
                     )
                 )
             } catch (e: Exception) {
-                ConnectionResult.NetworkError(e.message ?: "HTSP chyba")
+                val detail = e.message ?: e::class.simpleName ?: "neznáma chyba"
+                ConnectionResult.NetworkError("HTSP: $detail")
             } finally {
                 client.close()
             }

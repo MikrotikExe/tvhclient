@@ -49,12 +49,23 @@ class HtspClient(
     suspend fun connect() {
         val sel = SelectorManager(Dispatchers.Default)
         selector = sel
-        val s = aSocket(sel).tcp().connect(host, port)
+        val s = withTimeoutOrNull(8_000) {
+            aSocket(sel).tcp().connect(host, port)
+        } ?: run {
+            sel.close()
+            throw IllegalStateException("port $port nedostupný (timeout) — je HTSP forwardnutý?")
+        }
         socket = s
         read = s.openReadChannel()
         write = s.openWriteChannel(autoFlush = true)
-        hello()
-        if (!auth()) {
+        val ok = withTimeoutOrNull(8_000) {
+            hello()
+            auth()
+        } ?: run {
+            close()
+            throw IllegalStateException("HTSP handshake timeout (odpovedá port HTSP serverom?)")
+        }
+        if (!ok) {
             close()
             throw IllegalStateException("HTSP autentifikácia zlyhala")
         }
