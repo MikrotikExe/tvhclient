@@ -20,6 +20,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -57,16 +59,16 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App() {
     var tab by remember { mutableStateOf(0) }
-    androidx.compose.material3.Scaffold(
+    Scaffold(
         bottomBar = {
-            androidx.compose.material3.NavigationBar {
-                androidx.compose.material3.NavigationBarItem(
+            NavigationBar {
+                NavigationBarItem(
                     selected = tab == 0,
                     onClick = { tab = 0 },
                     icon = {},
                     label = { Text(stringResource(R.string.tab_channels)) }
                 )
-                androidx.compose.material3.NavigationBarItem(
+                NavigationBarItem(
                     selected = tab == 1,
                     onClick = { tab = 1 },
                     icon = {},

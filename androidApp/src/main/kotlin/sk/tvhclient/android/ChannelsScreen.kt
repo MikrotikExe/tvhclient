@@ -179,9 +179,10 @@ private fun ChannelItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (row.nowTitle != null) {
+            val now = row.nowTitle
+            if (now != null) {
                 Text(
-                    row.nowTitle,
+                    now,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
