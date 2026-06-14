@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TVH Klient</string>
+    <string name="servers_title">Servery</string>
+    <string name="no_servers">Zatiaľ žiadny server. Pridaj svoj Tvheadend server.</string>
+    <string name="add_server">Pridať server</string>
+    <string name="edit_server">Upraviť server</string>
+    <string name="active">Aktívny</string>
+    <string name="use_server">Použiť</string>
+    <string name="edit">Upraviť</string>
+    <string name="delete">Zmazať</string>
+    <string name="field_name">Názov</string>
+    <string name="field_host">Host / IP adresa</string>
+    <string name="field_port">Port</string>
+    <string name="field_https">Použiť HTTPS</string>
+    <string name="field_username">Používateľské meno</string>
+    <string name="field_password">Heslo</string>
+    <string name="test_connection">Otestovať pripojenie</string>
+    <string name="save">Uložiť</string>
+    <string name="cancel">Zrušiť</string>
+    <string name="testing">Testujem pripojenie…</string>
+    <string name="test_ok">Pripojené: Tvheadend %1$s (API v%2$d)</string>
+    <string name="test_auth_failed">Prihlásenie zlyhalo. Skontroluj meno a heslo.</string>
+    <string name="test_http_error">Server vrátil HTTP chybu %1$d.</string>
+    <string name="test_network_error">Pripojenie zlyhalo: %1$s</string>
+</resources>
