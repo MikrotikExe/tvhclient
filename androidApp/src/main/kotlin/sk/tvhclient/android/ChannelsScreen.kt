@@ -52,6 +52,7 @@ import sk.tvhclient.shared.api.ChannelRow
 fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val query by vm.query.collectAsState()
+    val epgMap by vm.epgMap.collectAsState()
     var selectedTag by remember { mutableStateOf<String?>(null) } // tag uuid alebo null = vsetky
     var epgFor by remember { mutableStateOf<ChannelRow?>(null) }
     // Scroll pozicie prezivaju odskok do EPG a spat (remember v scope obrazovky)
@@ -116,7 +117,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                     // Vyhladavanie: plochy filtrovany zoznam
                     val q = query.trim().lowercase()
                     val results = s.allRows.filter { it.channel.name.lowercase().contains(q) }
-                    ChannelList(results, listStateSearch, nowTick) { epgFor = it }
+                    ChannelList(results, listStateSearch, nowTick, epgMap) { epgFor = it }
                 } else {
                     // Filtre podla tagov
                     val tags = s.categories.mapNotNull { it.tag }
@@ -142,7 +143,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                     } else {
                         s.categories.firstOrNull { it.tag?.uuid == selectedTag }?.rows ?: emptyList()
                     }
-                    ChannelList(rows, listStateMain, nowTick) { epgFor = it }
+                    ChannelList(rows, listStateMain, nowTick, epgMap) { epgFor = it }
                 }
             }
         }
@@ -154,6 +155,7 @@ private fun ChannelList(
     rows: List<ChannelRow>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     nowSec: Long,
+    epgMap: Map<String, List<sk.tvhclient.shared.model.EpgEvent>>,
     onShowEpg: (ChannelRow) -> Unit
 ) {
     val context = LocalContext.current
@@ -166,7 +168,7 @@ private fun ChannelList(
     }
     LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(rows, key = { it.channel.uuid }) { row ->
-            ChannelItem(row, loader, context, nowSec, onShowEpg)
+            ChannelItem(row, loader, context, nowSec, epgMap[row.channel.uuid], onShowEpg)
         }
     }
 }
@@ -178,6 +180,7 @@ private fun ChannelItem(
     loader: coil.ImageLoader,
     context: android.content.Context,
     nowSec: Long,
+    epgList: List<sk.tvhclient.shared.model.EpgEvent>?,
     onShowEpg: (ChannelRow) -> Unit
 ) {
     Row(
@@ -239,19 +242,32 @@ private fun ChannelItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            val now = row.nowTitle
-            if (now != null) {
+            // Aktualna relacia: z HTSP zoznamu (auto-prechod podla casu), inak z row
+            val curEvent = epgList?.firstOrNull { it.start <= nowSec && nowSec < it.stop }
+            val nowTitleStr: String?
+            val nowStartV: Long
+            val nowStopV: Long
+            if (epgList != null) {
+                nowTitleStr = curEvent?.title?.ifBlank { null }
+                nowStartV = curEvent?.start ?: 0
+                nowStopV = curEvent?.stop ?: 0
+            } else {
+                nowTitleStr = row.nowTitle
+                nowStartV = row.nowStart
+                nowStopV = row.nowStop
+            }
+            if (nowTitleStr != null) {
                 Text(
-                    now,
+                    nowTitleStr,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 // Ciara priebehu aktualnej relacie
-                if (row.nowStart > 0 && row.nowStop > row.nowStart) {
-                    val frac = ((nowSec - row.nowStart).toFloat() /
-                        (row.nowStop - row.nowStart).toFloat()).coerceIn(0f, 1f)
+                if (nowStartV > 0 && nowStopV > nowStartV) {
+                    val frac = ((nowSec - nowStartV).toFloat() /
+                        (nowStopV - nowStartV).toFloat()).coerceIn(0f, 1f)
                     Spacer(Modifier.height(3.dp))
                     androidx.compose.material3.LinearProgressIndicator(
                         progress = { frac },

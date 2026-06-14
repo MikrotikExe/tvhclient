@@ -30,6 +30,10 @@ class ChannelsViewModel : ViewModel() {
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
 
+    // HTSP: kanal -> zoznam nadchadzajucich relacii (na auto-prechod na zozname)
+    private val _epgMap = MutableStateFlow<Map<String, List<sk.tvhclient.shared.model.EpgEvent>>>(emptyMap())
+    val epgMap: StateFlow<Map<String, List<sk.tvhclient.shared.model.EpgEvent>>> = _epgMap
+
     private var api: TvhApi? = null
     private var loadedOnce = false
 
@@ -77,28 +81,10 @@ class ChannelsViewModel : ViewModel() {
 
     private fun loadHtspNowNext(server: sk.tvhclient.shared.model.TvhServer) {
         viewModelScope.launch {
-            val nowMap = try {
-                withContext(Dispatchers.IO) {
-                    val a = Tvh.apiFor(server)
-                    try { Tvh.fetchEpgNow(server, a) } finally { a.close() }
-                }
+            val map = try {
+                withContext(Dispatchers.IO) { Tvh.fetchEpgUpcoming(server) }
             } catch (e: Exception) { emptyMap() }
-            if (nowMap.isEmpty()) return@launch
-            val cur = _state.value
-            if (cur is ChannelsState.Loaded) {
-                fun merge(r: ChannelRow): ChannelRow {
-                    val ev = nowMap[r.channel.uuid] ?: return r
-                    return r.copy(
-                        nowTitle = ev.title.ifBlank { null },
-                        nowStart = ev.start,
-                        nowStop = ev.stop
-                    )
-                }
-                _state.value = ChannelsState.Loaded(
-                    cur.categories.map { it.copy(rows = it.rows.map(::merge)) },
-                    cur.allRows.map(::merge)
-                )
-            }
+            if (map.isNotEmpty()) _epgMap.value = map
         }
     }
 

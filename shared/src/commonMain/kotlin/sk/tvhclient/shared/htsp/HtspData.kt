@@ -17,7 +17,7 @@ import sk.tvhclient.shared.model.TvhServer
 object HtspData {
     private data class Cache(val ts: Long, val meta: HtspClient.Metadata, val withEpg: Boolean)
     private val cache = HashMap<String, Cache>()
-    private data class NowCache(val ts: Long, val map: Map<String, EpgEvent>)
+    private data class NowCache(val ts: Long, val map: Map<String, List<EpgEvent>>)
     private val nowCache = HashMap<String, NowCache>()
 
     private fun longOf(m: Map<String, Any?>, key: String): Long? = (m[key] as? Long)
@@ -44,7 +44,9 @@ object HtspData {
     /** now/next mapa: pre kazdy kanal aktualne beziaci program. Cez getEvents
      *  na jednom otvorenom spojeni — async dump je tu nepouzitelny, lebo
      *  posiela najprv tisice DVR zaznamov a eventy sa nestihnu. */
-    suspend fun epgNowMap(server: TvhServer, nowSec: Long): Map<String, EpgEvent> {
+    /** Mapa kanal -> zoznam nadchadzajucich relacii (aktualna + dalsie).
+     *  Zoznam umozni klientovi prepnut na dalsiu relaciu bez noveho stahovania. */
+    suspend fun epgUpcomingMap(server: TvhServer, nowSec: Long): Map<String, List<EpgEvent>> {
         val nc = nowCache[server.id]
         if (nc != null && nowSec - nc.ts < 600) return nc.map
         val meta = metadata(server, withEpg = false, nowSec = nowSec)
@@ -52,16 +54,16 @@ object HtspData {
         if (channelIds.isEmpty()) return emptyMap()
         val client = HtspClient(server.host, server.htspPort, server.username, server.password)
         client.connect()
-        val out = HashMap<String, EpgEvent>()
+        val out = HashMap<String, List<EpgEvent>>()
         try {
             for (cid in channelIds) {
                 val evs = try {
-                    client.getEvents(cid, numFollowing = 2, maxTime = 0)
+                    client.getEvents(cid, numFollowing = 5, maxTime = 0)
                 } catch (e: Exception) { continue }
                 val mapped = evs.mapNotNull { mapEvent(it) }
-                val current = mapped.firstOrNull { it.start <= nowSec && nowSec < it.stop }
-                    ?: mapped.firstOrNull()
-                if (current != null) out[cid.toString()] = current
+                    .filter { it.stop > nowSec }
+                    .sortedBy { it.start }
+                if (mapped.isNotEmpty()) out[cid.toString()] = mapped
             }
         } finally {
             client.close()
