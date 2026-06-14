@@ -31,8 +31,15 @@ class ChannelsViewModel : ViewModel() {
     val query: StateFlow<String> = _query
 
     private var api: TvhApi? = null
+    private var loadedOnce = false
 
     fun setQuery(q: String) { _query.value = q }
+
+    /** Nacita len ak este nebolo nacitane (pri navrate na kartu neresetuje). */
+    fun loadIfNeeded() {
+        if (loadedOnce && _state.value is ChannelsState.Loaded) return
+        load()
+    }
 
     fun load(force: Boolean = false) {
         val server = Tvh.store.active()
@@ -41,6 +48,9 @@ class ChannelsViewModel : ViewModel() {
             return
         }
         _state.value = ChannelsState.Loading
+        if (force && server.connectionMode == "htsp") {
+            sk.tvhclient.shared.htsp.HtspData.clear(server.id)
+        }
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -53,6 +63,7 @@ class ChannelsViewModel : ViewModel() {
                     cats to all
                 }
                 _state.value = ChannelsState.Loaded(result.first, result.second)
+                loadedOnce = true
 
                 // HTSP: now/next nie je v rychlom dumpe -> doplnime na pozadi
                 if (server.connectionMode == "htsp") {

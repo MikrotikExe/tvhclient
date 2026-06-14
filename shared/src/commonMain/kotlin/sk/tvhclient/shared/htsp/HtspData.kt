@@ -17,6 +17,8 @@ import sk.tvhclient.shared.model.TvhServer
 object HtspData {
     private data class Cache(val ts: Long, val meta: HtspClient.Metadata, val withEpg: Boolean)
     private val cache = HashMap<String, Cache>()
+    private data class NowCache(val ts: Long, val map: Map<String, EpgEvent>)
+    private val nowCache = HashMap<String, NowCache>()
 
     private fun longOf(m: Map<String, Any?>, key: String): Long? = (m[key] as? Long)
     private fun strOf(m: Map<String, Any?>, key: String): String = (m[key] as? String) ?: ""
@@ -43,6 +45,8 @@ object HtspData {
      *  na jednom otvorenom spojeni — async dump je tu nepouzitelny, lebo
      *  posiela najprv tisice DVR zaznamov a eventy sa nestihnu. */
     suspend fun epgNowMap(server: TvhServer, nowSec: Long): Map<String, EpgEvent> {
+        val nc = nowCache[server.id]
+        if (nc != null && nowSec - nc.ts < 600) return nc.map
         val meta = metadata(server, withEpg = false, nowSec = nowSec)
         val channelIds = meta.channels.mapNotNull { longOf(it, "channelId") }
         if (channelIds.isEmpty()) return emptyMap()
@@ -62,10 +66,11 @@ object HtspData {
         } finally {
             client.close()
         }
+        nowCache[server.id] = NowCache(nowSec, out)
         return out
     }
 
-    fun clear(serverId: String) { cache.remove(serverId) }
+    fun clear(serverId: String) { cache.remove(serverId); nowCache.remove(serverId) }
 
     // ---- mapovanie ----
 

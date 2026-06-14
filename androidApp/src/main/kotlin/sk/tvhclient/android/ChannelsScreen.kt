@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,7 +58,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
     val listStateMain = androidx.compose.foundation.lazy.rememberLazyListState()
     val listStateSearch = androidx.compose.foundation.lazy.rememberLazyListState()
 
-    LaunchedEffect(Unit) { vm.load() }
+    LaunchedEffect(Unit) { vm.loadIfNeeded() }
 
     val epgRow = epgFor
     if (epgRow != null) {
@@ -69,13 +71,21 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
     }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { vm.setQuery(it) },
-            label = { Text(stringResource(R.string.search_channels)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { vm.setQuery(it) },
+                label = { Text(stringResource(R.string.search_channels)) },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            androidx.compose.material3.IconButton(onClick = { vm.load(true) }) {
+                androidx.compose.material3.Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.retry)
+                )
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         when (val s = state) {
@@ -224,6 +234,20 @@ private fun ChannelItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                // Ciara priebehu aktualnej relacie
+                if (row.nowStart > 0 && row.nowStop > row.nowStart) {
+                    val nowSec = System.currentTimeMillis() / 1000
+                    val frac = ((nowSec - row.nowStart).toFloat() /
+                        (row.nowStop - row.nowStart).toFloat()).coerceIn(0f, 1f)
+                    Spacer(Modifier.height(3.dp))
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { frac },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
             }
         }
         // Ikona sipky -> otvori EPG kanala
