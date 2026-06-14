@@ -136,7 +136,13 @@ private fun ChannelItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .clickable { /* M3: spusti prehravanie */ }
+            .clickable {
+                val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
+                    putExtra(PlayerActivity.EXTRA_UUID, row.channel.uuid)
+                    putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
+                }
+                context.startActivity(intent)
+            }
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

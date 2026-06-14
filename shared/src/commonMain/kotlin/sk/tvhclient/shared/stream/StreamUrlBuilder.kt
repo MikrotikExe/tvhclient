@@ -60,6 +60,23 @@ object StreamUrlBuilder {
         channelTitle: String? = null
     ): String = build(server, STREAM_CH.format(channelUuid), profile, channelTitle)
 
+    /**
+     * Live URL bez creds — pre ExoPlayer/VLCKit kde auth ide cez hlavicku.
+     */
+    fun liveUrlNoCreds(
+        server: TvhServer,
+        channelUuid: String,
+        profile: String = "pass",
+        channelTitle: String? = null
+    ): String {
+        var url = server.baseUrl.trimEnd('/') + "/" + STREAM_CH.format(channelUuid)
+        val q = mutableListOf<String>()
+        if (profile.isNotBlank()) q.add("profile=" + encode(profile))
+        if (!channelTitle.isNullOrBlank()) q.add("title=" + encode(channelTitle))
+        if (q.isNotEmpty()) url += "?" + q.joinToString("&")
+        return url
+    }
+
     fun dvrUrl(server: TvhServer, dvrFileId: String): String =
         withCreds(server, server.baseUrl.trimEnd('/') + "/dvrfile/" + dvrFileId)
 

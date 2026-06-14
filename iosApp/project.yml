@@ -4,6 +4,11 @@ options:
   bundleIdPrefix: sk.tvhclient
   deploymentTarget:
     iOS: "15.0"
+packages:
+  MobileVLCKit:
+    url: https://github.com/tylerjonesio/vlckit-spm
+    minVersion: "3.6.0"
+    maxVersion: "4.0.0"
 settings:
   base:
     SWIFT_VERSION: "5.9"
@@ -13,6 +18,8 @@ targets:
     platform: iOS
     sources:
       - TvhClient
+    dependencies:
+      - package: MobileVLCKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sk.tvhclient.ios

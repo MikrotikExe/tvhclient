@@ -200,6 +200,7 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
     var useHttps by remember { mutableStateOf(existing?.useHttps ?: false) }
     var username by remember { mutableStateOf(existing?.username ?: "") }
     var password by remember { mutableStateOf(existing?.password ?: "") }
+    var profile by remember { mutableStateOf(existing?.profile ?: "pass") }
 
     val testState by vm.testState.collectAsState()
 
@@ -213,7 +214,8 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
             port = p,
             useHttps = useHttps,
             username = username.trim(),
-            password = password
+            password = password,
+            profile = profile.trim().ifBlank { "pass" }
         )
     }
 
@@ -265,6 +267,12 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
                 label = { Text(stringResource(R.string.field_password)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = profile, onValueChange = { profile = it },
+                label = { Text(stringResource(R.string.field_profile)) },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 

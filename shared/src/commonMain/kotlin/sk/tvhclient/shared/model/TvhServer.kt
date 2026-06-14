@@ -10,7 +10,8 @@ data class TvhServer(
     val port: Int = 9981,
     val useHttps: Boolean = false,
     val username: String = "",
-    val password: String = ""
+    val password: String = "",
+    val profile: String = "pass"
 ) {
     val baseUrl: String
         get() {

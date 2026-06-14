@@ -3,9 +3,10 @@
 Kotlin Multiplatform projekt: zdieľané jadro (Ktor, modely, secure storage),
 natívne UI — Jetpack Compose (Android mobil + TV), SwiftUI (iOS).
 
-Stav: Míľnik M2 — zoznam kanálov (tagy/kategórie, picony s cache, vyhľadávanie,
-now/next EPG). M1 (setup, multi-server, secure storage, test pripojenia) overený
-na reálnom serveri.
+Stav: Míľnik M3 — live prehrávanie. Android: Media3/ExoPlayer, MPEG-TS (pass
+profil), klik na kanál spustí prehrávač. iOS: VLCKit prehrávač (kód hotový,
+otestuje sa po nastavení Xcode — CI ho nestavia). Profil servera nastaviteľný
+(default pass). M1+M2 overené na reálnom serveri.
 
 ## Čo je prebraté z Enigma2 pluginu (plugin_video_tvheadend)
 
@@ -68,6 +69,19 @@ open TvhClient.xcodeproj
 
 Xcode pri builde sám zavolá gradle task embedAndSignAppleFrameworkForXcode,
 ktorý skompiluje shared modul do Shared.framework.
+
+## Test checklist M3
+
+1. Klik na kanál v zozname → otvorí sa prehrávač, video nabehne (MPEG-TS pass)
+2. Ovládanie prehrávača (play/pause cez tap), návrat späť tlačidlom
+3. MPEG-2 kanál (DVB-S/T2) sa prehrá — overuje HW dekód na boxe; na mobile
+   ak chýba kodek → toast "Prehrávanie zlyhalo: …"
+4. H.264/HEVC kanál sa prehrá
+5. Zlý/nedostupný kanál → čitateľná chybová hláška, appka nespadne
+6. Profil: v nastaveniach servera políčko "Stream profil" (default pass),
+   zmena na iný profil (napr. ak máš HLS/matroska profil na serveri)
+7. Android TV: D-pad fokus na kanáli + OK spustí prehrávač
+8. Auth: prehrávanie funguje s prihlasovacími údajmi (Basic hlavička)
 
 ## Test checklist M2
 

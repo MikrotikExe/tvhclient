@@ -28,4 +28,6 @@
     <string name="all_channels">Všetky</string>
     <string name="no_channels">Žiadne kanály.</string>
     <string name="no_active_server">Žiadny aktívny server. Pridaj ho v záložke Servery.</string>
+    <string name="playback_error">Prehrávanie zlyhalo: %1$s</string>
+    <string name="field_profile">Stream profil</string>
 </resources>

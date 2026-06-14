@@ -28,4 +28,6 @@
     <string name="all_channels">All</string>
     <string name="no_channels">No channels.</string>
     <string name="no_active_server">No active server. Add one in the Servers tab.</string>
+    <string name="playback_error">Playback failed: %1$s</string>
+    <string name="field_profile">Stream profile</string>
 </resources>

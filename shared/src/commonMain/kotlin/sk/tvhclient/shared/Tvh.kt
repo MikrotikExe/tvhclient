@@ -40,6 +40,10 @@ object Tvh {
     fun liveUrl(server: TvhServer, channelUuid: String, channelTitle: String?, profile: String): String =
         StreamUrlBuilder.liveUrl(server, channelUuid, profile, channelTitle)
 
+    /** Live URL bez creds (auth cez hlavicku) — pouziva profil zo servera. */
+    fun liveUrlNoCreds(server: TvhServer, channelUuid: String, channelTitle: String?): String =
+        StreamUrlBuilder.liveUrlNoCreds(server, channelUuid, server.profile.ifBlank { "pass" }, channelTitle)
+
     fun dvrUrl(server: TvhServer, dvrFileId: String): String =
         StreamUrlBuilder.dvrUrl(server, dvrFileId)
 }
