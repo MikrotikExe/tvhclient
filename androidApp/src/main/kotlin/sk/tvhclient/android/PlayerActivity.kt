@@ -73,6 +73,7 @@ class PlayerActivity : ComponentActivity() {
         val channelUuid = intent.getStringExtra(EXTRA_UUID)
         val channelTitle = intent.getStringExtra(EXTRA_TITLE) ?: ""
         val directUrl = intent.getStringExtra(EXTRA_URL)
+        val durationMs = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
 
         val server = Tvh.store.active()
         if (server == null || (channelUuid == null && directUrl == null)) {
@@ -109,6 +110,7 @@ class PlayerActivity : ComponentActivity() {
                 title = channelTitle,
                 player = mediaPlayer,
                 seekable = directUrl != null,  // DVR nahravka = da sa pretacat; live nie
+                knownDurationMs = durationMs,  // dlzka z DVR entry (TS subor ju nenese)
                 onAttach = { layout -> mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
                     val media = Media(libVlc, Uri.parse(streamUrl))
@@ -145,6 +147,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_UUID = "channel_uuid"
         const val EXTRA_TITLE = "channel_title"
         const val EXTRA_URL = "stream_url"
+        const val EXTRA_DURATION_MS = "duration_ms"
     }
 }
 
@@ -162,6 +165,7 @@ private fun PlayerUi(
     title: String,
     player: MediaPlayer,
     seekable: Boolean,
+    knownDurationMs: Long,
     onAttach: (VLCVideoLayout) -> Unit,
     onStart: () -> Unit,
     onClose: () -> Unit
@@ -170,19 +174,23 @@ private fun PlayerUi(
     var isPlaying by remember { mutableStateOf(true) }
     // menu: null = ziadne, "audio" = audio stopy, "spu" = titulky
     var menu by remember { mutableStateOf<String?>(null) }
-    // seek stav (len pre DVR): aktualny cas a dlzka v ms
-    var positionMs by remember { mutableStateOf(0L) }
-    var lengthMs by remember { mutableStateOf(0L) }
+    // seek stav (len pre DVR). TS subor nenese dlzku, takze pouzivame:
+    //  - dlzku z DVR entry (knownDurationMs), fallback player.length
+    //  - position (zlomok 0..1) na zobrazenie aj pretacanie (na TS spolahlivejsie nez setTime)
+    var posFraction by remember { mutableStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(0f) }
 
-    // Aktualizuj cas kazdu sekundu (len ked je seekable a netiahneme)
+    // Dlzka: primarne z DVR entry, fallback co hlasi VLC
+    val lengthMs = if (knownDurationMs > 0) knownDurationMs else player.length
+
+    // Aktualizuj poziciu kazdu sekundu (len ked je seekable a netiahneme)
     if (seekable) {
         LaunchedEffect(Unit) {
             while (true) {
                 if (!dragging) {
-                    positionMs = player.time
-                    lengthMs = player.length
+                    val p = player.position
+                    if (p in 0f..1f) posFraction = p
                 }
                 kotlinx.coroutines.delay(1000)
             }
@@ -264,17 +272,17 @@ private fun PlayerUi(
                         .padding(16.dp)
                 ) {
                     if (seekable && lengthMs > 0) {
-                        val cur = if (dragging) (dragValue * lengthMs).toLong() else positionMs
+                        val frac = if (dragging) dragValue else posFraction
+                        val cur = (frac * lengthMs).toLong()
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(fmtMs(cur), color = Color.White,
                                 style = MaterialTheme.typography.bodySmall)
                             androidx.compose.material3.Slider(
-                                value = if (dragging) dragValue
-                                        else (positionMs.toFloat() / lengthMs).coerceIn(0f, 1f),
+                                value = frac.coerceIn(0f, 1f),
                                 onValueChange = { dragging = true; dragValue = it },
                                 onValueChangeFinished = {
-                                    player.time = (dragValue * lengthMs).toLong()
-                                    positionMs = (dragValue * lengthMs).toLong()
+                                    player.position = dragValue
+                                    posFraction = dragValue
                                     dragging = false
                                 },
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp)

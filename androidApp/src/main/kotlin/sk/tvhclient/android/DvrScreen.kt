@@ -82,7 +82,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
                 if (s.entries.isEmpty()) {
                     Text(stringResource(R.string.dvr_empty), Modifier.align(Alignment.Center))
                 } else {
-                    DvrContent(s.entries, nav, context, onNav = { nav = it })
+                    DvrContent(s.entries, s.channelOrder, nav, context, onNav = { nav = it })
                 }
             }
         }
@@ -92,6 +92,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
 @Composable
 private fun DvrContent(
     entries: List<DvrEntry>,
+    channelOrder: Map<String, Int>,
     nav: DvrNav,
     context: Context,
     onNav: (DvrNav) -> Unit
@@ -121,9 +122,12 @@ private fun DvrContent(
         }
 
         is DvrNav.Channels -> {
-            // Kanaly ktore maju nahravky, s poctom
+            // Kanaly ktore maju nahravky, zoradene podla cisla kanala (ako v zozname),
+            // kanaly bez cisla na koniec podla abecedy.
             val byChannel = entries.groupBy { it.channelName.ifBlank { "—" } }
-            val channels = byChannel.keys.sortedBy { it.lowercase() }
+            val channels = byChannel.keys.sortedWith(
+                compareBy({ channelOrder[it] ?: Int.MAX_VALUE }, { it.lowercase() })
+            )
             LazyColumn(Modifier.fillMaxSize()) {
                 item("hdr") { Header(stringResource(R.string.dvr_by_channel)) }
                 items(channels, key = { it }) { ch ->
@@ -188,6 +192,7 @@ private fun RecordingRow(entry: DvrEntry, context: Context) {
                 val intent = Intent(context, PlayerActivity::class.java).apply {
                     putExtra(PlayerActivity.EXTRA_URL, url)
                     putExtra(PlayerActivity.EXTRA_TITLE, entry.title)
+                    putExtra(PlayerActivity.EXTRA_DURATION_MS, entry.durationSec * 1000)
                 }
                 context.startActivity(intent)
             }

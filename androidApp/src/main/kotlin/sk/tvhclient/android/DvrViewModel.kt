@@ -13,14 +13,18 @@ import sk.tvhclient.shared.model.DvrEntry
 sealed class DvrState {
     data object Loading : DvrState()
     data object NoServer : DvrState()
-    data class Loaded(val entries: List<DvrEntry>) : DvrState()
+    // channelOrder: meno kanala -> cislo (pre zoradenie archivu ako v zozname)
+    data class Loaded(
+        val entries: List<DvrEntry>,
+        val channelOrder: Map<String, Int>
+    ) : DvrState()
     data class Error(val message: String) : DvrState()
 }
 
 /**
  * DVR je read-only archiv (mazanie/planovanie su admin funkcie, tu nie su).
- * Nacita vsetky dokoncene nahravky raz; navigaciu cez zlozky (kanaly/datumy,
- * kategorie) robi obrazovka v pamati.
+ * Nacita vsetky dokoncene nahravky + zoznam kanalov (pre poradie) raz;
+ * navigaciu cez zlozky robi obrazovka v pamati.
  */
 class DvrViewModel : ViewModel() {
 
@@ -36,11 +40,19 @@ class DvrViewModel : ViewModel() {
         _state.value = DvrState.Loading
         viewModelScope.launch {
             try {
-                val entries = withContext(Dispatchers.IO) {
+                val (entries, order) = withContext(Dispatchers.IO) {
                     val api = Tvh.apiFor(server)
-                    try { api.dvrFinished() } finally { api.close() }
+                    try {
+                        val e = api.dvrFinished()
+                        val order = api.channels()
+                            .filter { it.number != null }
+                            .associate { it.name to it.number!! }
+                        e to order
+                    } finally {
+                        api.close()
+                    }
                 }
-                _state.value = DvrState.Loaded(entries)
+                _state.value = DvrState.Loaded(entries, order)
             } catch (e: Exception) {
                 _state.value = DvrState.Error(e.message ?: "Chyba načítania")
             }
