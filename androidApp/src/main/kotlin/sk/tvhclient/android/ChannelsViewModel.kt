@@ -53,8 +53,40 @@ class ChannelsViewModel : ViewModel() {
                     cats to all
                 }
                 _state.value = ChannelsState.Loaded(result.first, result.second)
+
+                // HTSP: now/next nie je v rychlom dumpe -> doplnime na pozadi
+                if (server.connectionMode == "htsp") {
+                    loadHtspNowNext(server)
+                }
             } catch (e: Exception) {
                 _state.value = ChannelsState.Error(e.message ?: "Chyba načítania")
+            }
+        }
+    }
+
+    private fun loadHtspNowNext(server: sk.tvhclient.shared.model.TvhServer) {
+        viewModelScope.launch {
+            val nowMap = try {
+                withContext(Dispatchers.IO) {
+                    val a = Tvh.apiFor(server)
+                    try { Tvh.fetchEpgNow(server, a) } finally { a.close() }
+                }
+            } catch (e: Exception) { emptyMap() }
+            if (nowMap.isEmpty()) return@launch
+            val cur = _state.value
+            if (cur is ChannelsState.Loaded) {
+                fun merge(r: ChannelRow): ChannelRow {
+                    val ev = nowMap[r.channel.uuid] ?: return r
+                    return r.copy(
+                        nowTitle = ev.title.ifBlank { null },
+                        nowStart = ev.start,
+                        nowStop = ev.stop
+                    )
+                }
+                _state.value = ChannelsState.Loaded(
+                    cur.categories.map { it.copy(rows = it.rows.map(::merge)) },
+                    cur.allRows.map(::merge)
+                )
             }
         }
     }

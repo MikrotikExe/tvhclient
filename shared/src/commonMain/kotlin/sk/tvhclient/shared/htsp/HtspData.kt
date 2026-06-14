@@ -21,7 +21,7 @@ object HtspData {
     private fun longOf(m: Map<String, Any?>, key: String): Long? = (m[key] as? Long)
     private fun strOf(m: Map<String, Any?>, key: String): String = (m[key] as? String) ?: ""
 
-    suspend fun metadata(server: TvhServer, withEpg: Boolean, nowSec: Long): HtspClient.Metadata {
+    suspend fun metadata(server: TvhServer, withEpg: Boolean, nowSec: Long, epgMaxDays: Int = 1): HtspClient.Metadata {
         val key = server.id
         val ttl = if (withEpg) 600 else 120
         val c = cache[key]
@@ -31,12 +31,23 @@ object HtspData {
         val client = HtspClient(server.host, server.htspPort, server.username, server.password)
         client.connect()
         val meta = try {
-            client.fetchMetadata(withEpg = withEpg, epgMaxDays = 3, nowSec = nowSec)
+            client.fetchMetadata(withEpg = withEpg, epgMaxDays = epgMaxDays, nowSec = nowSec)
         } finally {
             client.close()
         }
         cache[key] = Cache(nowSec, meta, withEpg)
         return meta
+    }
+
+    /** now/next mapa: pre kazdy kanal prave beziaci event (z EPG dumpu, 1 den). */
+    suspend fun epgNowMap(server: TvhServer, nowSec: Long): Map<String, EpgEvent> {
+        val meta = metadata(server, withEpg = true, nowSec = nowSec, epgMaxDays = 1)
+        val out = HashMap<String, EpgEvent>()
+        for (e in events(meta)) {
+            val cu = e.channelUuid ?: continue
+            if (e.start <= nowSec && nowSec < e.stop) out[cu] = e
+        }
+        return out
     }
 
     fun clear(serverId: String) { cache.remove(serverId) }

@@ -89,6 +89,12 @@ object Tvh {
                 sk.tvhclient.shared.htsp.HtspData.metadata(server, false, currentTimeSeconds()))
         else api.dvrFinished()
 
+    /** now/next EPG mapa: HTSP (dump 1 den) alebo HTTP (epg grid). */
+    suspend fun fetchEpgNow(server: TvhServer, api: TvhApi): Map<String, sk.tvhclient.shared.model.EpgEvent> =
+        if (server.connectionMode == "htsp")
+            sk.tvhclient.shared.htsp.HtspData.epgNowMap(server, currentTimeSeconds())
+        else api.epgNow()
+
     /** EPG pre kanal (denny program): HTSP getEvents (rychle) alebo HTTP. */
     suspend fun fetchEpgForChannel(server: TvhServer, api: TvhApi, channelUuid: String): List<sk.tvhclient.shared.model.EpgEvent> =
         if (server.connectionMode == "htsp") {
