@@ -84,7 +84,13 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                 Text(stringResource(R.string.no_active_server))
             }
             is ChannelsState.Error -> CenterBox {
-                Text(s.message, color = MaterialTheme.colorScheme.error)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(s.message, color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(12.dp))
+                    androidx.compose.material3.Button(onClick = { vm.load(true) }) {
+                        Text(stringResource(R.string.retry))
+                    }
+                }
             }
             is ChannelsState.Loaded -> {
                 if (query.isNotBlank()) {

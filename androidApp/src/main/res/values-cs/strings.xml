@@ -147,4 +147,5 @@
     <string name="conn_http">HTTP API (9981)</string>
     <string name="conn_htsp">HTSP (9982)</string>
     <string name="field_htsp_port">HTSP port</string>
+    <string name="retry">Zkusit znovu</string>
 </resources>

@@ -61,10 +61,16 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
                 is RadioState.NoServer -> Text(
                     stringResource(R.string.no_active_server), Modifier.align(Alignment.Center)
                 )
-                is RadioState.Error -> Text(
-                    s.message, Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.error
-                )
+                is RadioState.Error -> Column(
+                    Modifier.align(Alignment.Center).padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(s.message, color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(12.dp))
+                    androidx.compose.material3.Button(onClick = { vm.load() }) {
+                        Text(stringResource(R.string.retry))
+                    }
+                }
                 is RadioState.Loaded -> {
                     val q = query.trim().lowercase()
                     val rows = if (q.isBlank()) s.rows

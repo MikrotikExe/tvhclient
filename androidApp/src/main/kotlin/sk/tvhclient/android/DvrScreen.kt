@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -79,10 +80,16 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
             is DvrState.NoServer -> Text(
                 stringResource(R.string.no_active_server), Modifier.align(Alignment.Center)
             )
-            is DvrState.Error -> Text(
-                s.message, Modifier.align(Alignment.Center),
-                color = MaterialTheme.colorScheme.error
-            )
+            is DvrState.Error -> Column(
+                Modifier.align(Alignment.Center).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(s.message, color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(12.dp))
+                androidx.compose.material3.Button(onClick = { vm.load() }) {
+                    Text(stringResource(R.string.retry))
+                }
+            }
             is DvrState.Loaded -> {
                 if (s.entries.isEmpty()) {
                     Text(stringResource(R.string.dvr_empty), Modifier.align(Alignment.Center))
