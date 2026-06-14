@@ -55,6 +55,10 @@ import sk.tvhclient.shared.Tvh
  * (jazyk) a titulkov (libVLC get/setAudioTrack, get/setSpuTrack).
  */
 class PlayerActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
+    }
+
 
     private lateinit var libVlc: LibVLC
     private lateinit var mediaPlayer: MediaPlayer

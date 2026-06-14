@@ -151,4 +151,6 @@
     <string name="view_list">List</string>
     <string name="view_grid">Grid</string>
     <string name="view_tiles">Tiles</string>
+    <string name="language">Language</string>
+    <string name="lang_system">System</string>
 </resources>

@@ -55,6 +55,10 @@ import sk.tvhclient.shared.api.ConnectionResult
 import sk.tvhclient.shared.model.TvhServer
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -152,6 +156,30 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                 .padding(padding)
                 .padding(16.dp)
         ) {
+            // Vyber jazyka appky (Systém/SK/CZ/EN) — zmena restartuje aktivitu
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            var lang by remember { mutableStateOf(LocaleHelper.getLang(ctx)) }
+            DropdownField(
+                label = stringResource(R.string.language),
+                value = lang,
+                options = listOf("", "sk", "cs", "en"),
+                optionLabel = {
+                    when (it) {
+                        "sk" -> "Slovenčina"
+                        "cs" -> "Čeština"
+                        "en" -> "English"
+                        else -> stringResource(R.string.lang_system)
+                    }
+                },
+                onSelect = {
+                    if (it != lang) {
+                        lang = it
+                        LocaleHelper.setLang(ctx, it)
+                        (ctx as? android.app.Activity)?.recreate()
+                    }
+                }
+            )
+            Spacer(Modifier.height(16.dp))
             if (servers.isEmpty()) {
                 Text(stringResource(R.string.no_servers))
                 Spacer(Modifier.height(16.dp))

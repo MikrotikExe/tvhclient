@@ -151,4 +151,6 @@
     <string name="view_list">Seznam</string>
     <string name="view_grid">Mřížka</string>
     <string name="view_tiles">Dlaždice</string>
+    <string name="language">Jazyk</string>
+    <string name="lang_system">Systém</string>
 </resources>
