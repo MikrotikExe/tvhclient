@@ -194,12 +194,12 @@ object DvrClassifier {
     }
 
     // ----------------------------------------------------------------------
-    // Sub-zanre (Level 2). Prebrate z classifier.py _KEYWORD_TO_SUBCAT
-    // (film) a _SPORT_KEYWORD_TO_SUBCAT (sport). Pouzite pre Film/Serial/
-    // Detske (filmova mapa) a Sport (sportova mapa).
+    // Sub-zanre (Level 2). Prebrate z classifier.py keyword map pre kazdu
+    // kategoriu. Pouzite: Film/Serial (movie), Sport, Spravodajstvo, Sou,
+    // Detske, Hudba, Umenie, Dokumenty, Hobby.
     // ----------------------------------------------------------------------
 
-    // Film/serial/detske sub-zanre
+    // -- Film/Serial sub-zanre --
     const val MV_AKCNY = "mv_akcny"
     const val MV_KOMEDIA = "mv_komedia"
     const val MV_KRIMI = "mv_krimi"
@@ -212,13 +212,10 @@ object DvrClassifier {
     const val MV_HISTORICKY = "mv_historicky"
     const val MV_WESTERN = "mv_western"
     const val MV_INE = "mv_ine"
-
     val movieSubOrder = listOf(
         MV_AKCNY, MV_KOMEDIA, MV_KRIMI, MV_DRAMA, MV_SCIFI, MV_ROMANTIKA,
         MV_HOROR, MV_DOBRODR, MV_ANIMAK, MV_HISTORICKY, MV_WESTERN, MV_INE
     )
-
-    // poradie = specificke najprv (ako plugin)
     private val movieKeyword: List<Pair<Regex, String>> = listOf(
         Regex("""\b(detektiv|kriminal|krimi|thriller|vraz|policajn|vysetrov)""") to MV_KRIMI,
         Regex("""\b(sci-?fi|sci\.\s?fi|fantasy|vedeckofant|vesmirn|mimozem|robot|kybern)""") to MV_SCIFI,
@@ -233,7 +230,7 @@ object DvrClassifier {
     )
     private val horrorTitle = Regex("""\b(horor|horror|hruza|strasidel|zombie|upir|krvav)""")
 
-    // Sport sub-zanre
+    // -- Sport sub-zanre --
     const val SP_FUTBAL = "sp_futbal"
     const val SP_HOKEJ = "sp_hokej"
     const val SP_BASKETBAL = "sp_basketbal"
@@ -248,13 +245,11 @@ object DvrClassifier {
     const val SP_VODNE = "sp_vodne"
     const val SP_NEWS = "sp_news"
     const val SP_INE = "sp_ine"
-
     val sportSubOrder = listOf(
         SP_FUTBAL, SP_HOKEJ, SP_BASKETBAL, SP_TENIS, SP_VOLEJBAL, SP_HADZANA,
         SP_BOJOVE, SP_ATLETIKA, SP_CYKLISTIKA, SP_MOTORSPORT, SP_ZIMNE,
         SP_VODNE, SP_NEWS, SP_INE
     )
-
     private val sportKeyword: List<Pair<Regex, String>> = listOf(
         Regex("""\b(sportove noviny|sportovni noviny|sport news|spravy zo sportu|sportovni studio)""") to SP_NEWS,
         Regex("""\b(hokej|hockey|nhl|iihf|khl)""") to SP_HOKEJ,
@@ -272,38 +267,169 @@ object DvrClassifier {
         Regex("""\b(plavan|vodne|kanoist|veslov|water polo)""") to SP_VODNE
     )
 
-    /** Ma dana top kategoria sub-zanre? */
-    fun hasSubgenres(topCat: String): Boolean =
-        topCat == FILM || topCat == SERIAL || topCat == CHILDREN || topCat == SPORT
+    // -- Spravodajstvo sub-zanre --
+    const val NW_HLAVNE = "nw_hlavne"
+    const val NW_POLITIKA = "nw_politika"
+    const val NW_KRIMI = "nw_krimi"
+    const val NW_MAGAZINY = "nw_magaziny"
+    const val NW_POCASIE = "nw_pocasie"
+    const val NW_INE = "nw_ine"
+    val newsSubOrder = listOf(NW_HLAVNE, NW_POLITIKA, NW_KRIMI, NW_MAGAZINY, NW_POCASIE, NW_INE)
+    private val newsKeyword: List<Pair<Regex, String>> = listOf(
+        Regex("""\b(pocasi|predpoved|predpovid)""") to NW_POCASIE,
+        Regex("""\b(krimi noviny|reporter|reportaz|investigativ|tajomstv|kriminal)""") to NW_KRIMI,
+        Regex("""\b(politik|diskusia|diskuse|debata|otazky vaclava|studio 6|polemika|interview plus|partia)""") to NW_POLITIKA,
+        Regex("""\b(spravodajsky magazin|reflex|7 dni|plus 7|fokus|profil|lifestyle)""") to NW_MAGAZINY,
+        Regex("""\b(noviny|spravy|spravi|udalosti|hlavni sprav|hlavne sprav|tv noviny|telerano|spravodajstv)""") to NW_HLAVNE
+    )
 
-    /** Su zaznamy danej kategorie serialy (zoskupit epizody pod serial)? */
+    // -- Sou sub-zanre --
+    const val SH_REALITY = "sh_reality"
+    const val SH_TALK = "sh_talk"
+    const val SH_SUTAZ = "sh_sutaz"
+    const val SH_KUCHARSKE = "sh_kucharske"
+    const val SH_ZABAVA = "sh_zabava"
+    const val SH_MAGAZINY = "sh_magaziny"
+    const val SH_INE = "sh_ine"
+    val showSubOrder = listOf(SH_REALITY, SH_TALK, SH_SUTAZ, SH_KUCHARSKE, SH_ZABAVA, SH_MAGAZINY, SH_INE)
+    private val showKeyword: List<Pair<Regex, String>> = listOf(
+        Regex("""\b(kucharsk|masterchef|hell|ano sefe|jamie oliver|recept|kuchar|gordon ramsay)""") to SH_KUCHARSKE,
+        Regex("""\b(reality|farmer|farma|survivor|big brother|rande|love island|prezit|holky z)""") to SH_REALITY,
+        Regex("""\b(talent|x factor|got talent|the voice|superstar|tvoja tvar|dancing with|stardance|lets dance)""") to SH_SUTAZ,
+        Regex("""\b(talk show|talkshow|jana krausa|late night|kraus|particka|cestou necestou)""") to SH_TALK,
+        Regex("""\b(magazin|reflex|zivot v luxuse|5 proti 5|inkognito|klic|lifestyle|polopate)""") to SH_MAGAZINY,
+        Regex("""\b(zabavn|humor|estrad|skecz|stand-?up|parodi|sranda|veselohra|kabaret|satira)""") to SH_ZABAVA
+    )
+
+    // -- Detske sub-zanre --
+    const val CH_ANIMAK = "ch_animak"
+    const val CH_ROZPRAVKY = "ch_rozpravky"
+    const val CH_VZDELAVAC = "ch_vzdelavac"
+    const val CH_FILMY = "ch_filmy"
+    const val CH_INE = "ch_ine"
+    val childrenSubOrder = listOf(CH_ANIMAK, CH_ROZPRAVKY, CH_VZDELAVAC, CH_FILMY, CH_INE)
+    private val childrenKeyword: List<Pair<Regex, String>> = listOf(
+        Regex("""\b(rozpravk|pohadk|princ|princezn|kralovstvo|carodej)""") to CH_ROZPRAVKY,
+        Regex("""\b(animovan|kreslen|loutkov|cartoon|anime|animak)""") to CH_ANIMAK,
+        Regex("""\b(kouzeln. skolk|studio kamar|vzdelavac|vyuka|naucn|edukacn|do skoly)""") to CH_VZDELAVAC,
+        Regex("""\b(detsky film|pre deti film|family film|rodinny film)""") to CH_FILMY
+    )
+
+    // -- Hudba sub-zanre --
+    const val MU_KLASIKA = "mu_klasika"
+    const val MU_KONCERT = "mu_koncert"
+    const val MU_HITY = "mu_hity"
+    const val MU_FOLK = "mu_folk"
+    const val MU_MAGAZINY = "mu_magaziny"
+    const val MU_INE = "mu_ine"
+    val musicSubOrder = listOf(MU_KLASIKA, MU_KONCERT, MU_HITY, MU_FOLK, MU_MAGAZINY, MU_INE)
+    private val musicKeyword: List<Pair<Regex, String>> = listOf(
+        Regex("""\b(klasick. hudb|opera|symfoni|filharmon|orchester|orchestr|arie|smetanova|ma vlast)""") to MU_KLASIKA,
+        Regex("""\b(koncert|live concert|tour|mtv live|unplugged)""") to MU_KONCERT,
+        Regex("""\b(folk|country|ludova hudba|lidova hudba|cimbal|ludovk|lidovk|folklor)""") to MU_FOLK,
+        Regex("""\b(hitparad|chart|charts|pop|popmusic|videoklip)""") to MU_HITY,
+        Regex("""\b(hudobn. magaz|music news|hudobnik)""") to MU_MAGAZINY
+    )
+
+    // -- Umenie sub-zanre --
+    const val AR_DIVADLO = "ar_divadlo"
+    const val AR_VYTVARNE = "ar_vytvarne"
+    const val AR_LITERATURA = "ar_literatura"
+    const val AR_FILM = "ar_film"
+    const val AR_INE = "ar_ine"
+    val artsSubOrder = listOf(AR_DIVADLO, AR_VYTVARNE, AR_LITERATURA, AR_FILM, AR_INE)
+    private val artsKeyword: List<Pair<Regex, String>> = listOf(
+        Regex("""\b(divadl|theater|inscenace|cinohra|opera plus|baletn|cinoherni)""") to AR_DIVADLO,
+        Regex("""\b(vytvarn|malba|maliarstv|socharst|galeri|umelci|umelec|art gallery|vystav)""") to AR_VYTVARNE,
+        Regex("""\b(literatur|literar|knih|kniha|spisovate|roman|prozaik|poezi|basen|kniznic)""") to AR_LITERATURA,
+        Regex("""\b(filmov. umen|filmov. klasik|filmovi tvorco|reziser|kameraman|filmari)""") to AR_FILM
+    )
+
+    // -- Dokumenty sub-zanre --
+    const val DC_PRIRODA = "dc_priroda"
+    const val DC_HISTORIA = "dc_historia"
+    const val DC_VEDA = "dc_veda"
+    const val DC_CESTOPIS = "dc_cestopis"
+    const val DC_OSOBNOSTI = "dc_osobnosti"
+    const val DC_SPOLOCNOST = "dc_spolocnost"
+    const val DC_INE = "dc_ine"
+    val docSubOrder = listOf(DC_PRIRODA, DC_HISTORIA, DC_VEDA, DC_CESTOPIS, DC_OSOBNOSTI, DC_SPOLOCNOST, DC_INE)
+    private val docKeyword: List<Pair<Regex, String>> = listOf(
+        Regex("""\b(prirod|zviera|zvire|zivocich|fauna|flora|narodny park|narodni park|safari|ocean|dzungla|tiger|delfin|velryba|animal planet)""") to DC_PRIRODA,
+        Regex("""\b(histori|dejiny|stredovek|archeo|antick|stara civiliza|imperi|cisar|kral|pyramid|rimsk)""") to DC_HISTORIA,
+        Regex("""\b(veda|vedeck|fyzik|chemi|biolog|matematik|technika|technolog|vesmir|kozmos|planeta|nasa|raketa|vynalez|umela inteligenci)""") to DC_VEDA,
+        Regex("""\b(cestopis|cesty|krajiny|cestovate|expedici|expedice|geografi|narody sveta)""") to DC_CESTOPIS,
+        Regex("""\b(biografi|portret osob|osobnost|zivotopis|zivot a dielo|pamati|memoare|spomienky na)""") to DC_OSOBNOSTI,
+        Regex("""\b(spoloc|spolecn|ekonom|politick. dokum|kapitalizm|globali|chudoba|migra)""") to DC_SPOLOCNOST
+    )
+
+    // -- Hobby sub-zanre --
+    const val HB_ZAHRADA = "hb_zahrada"
+    const val HB_BYVANIE = "hb_byvanie"
+    const val HB_VARENIE = "hb_varenie"
+    const val HB_AUTO = "hb_auto"
+    const val HB_CESTOVANIE = "hb_cestovanie"
+    const val HB_ZDRAVIE = "hb_zdravie"
+    const val HB_DIY = "hb_diy"
+    const val HB_INE = "hb_ine"
+    val hobbySubOrder = listOf(HB_ZAHRADA, HB_BYVANIE, HB_VARENIE, HB_AUTO, HB_CESTOVANIE, HB_ZDRAVIE, HB_DIY, HB_INE)
+    private val hobbyKeyword: List<Pair<Regex, String>> = listOf(
+        Regex("""\b(zahrad|kvetin|sklenik|tri v zahrade|okrasn. rastlin)""") to HB_ZAHRADA,
+        Regex("""\b(byvan|interier|renovac|architektur|rekonstruk|nabytk|bydleni)""") to HB_BYVANIE,
+        Regex("""\b(varen|recept|jedl|kuchar|peciem|babickovy)""") to HB_VARENIE,
+        Regex("""\b(auto|moto|automobil|motorka|automotive|autosalon|garaz)""") to HB_AUTO,
+        Regex("""\b(cestovan|cestujeme|destinac|vylety|destination|cestopis)""") to HB_CESTOVANIE,
+        Regex("""\b(zdrav|fitness|cvicen|wellness)""") to HB_ZDRAVIE,
+        Regex("""\b(kutil|diy|hand made|vlastnorucn|svojpomocn)""") to HB_DIY
+    )
+
+    // Mapa kategoria -> (poradie sub-zanrov, keyword mapa, "ine" kluc)
+    private fun subConfig(topCat: String): Triple<List<String>, List<Pair<Regex, String>>, String>? =
+        when (topCat) {
+            FILM, SERIAL -> Triple(movieSubOrder, movieKeyword, MV_INE)
+            SPORT -> Triple(sportSubOrder, sportKeyword, SP_INE)
+            NEWS -> Triple(newsSubOrder, newsKeyword, NW_INE)
+            SHOW -> Triple(showSubOrder, showKeyword, SH_INE)
+            CHILDREN -> Triple(childrenSubOrder, childrenKeyword, CH_INE)
+            MUSIC -> Triple(musicSubOrder, musicKeyword, MU_INE)
+            ARTS -> Triple(artsSubOrder, artsKeyword, AR_INE)
+            DOCUMENTARY -> Triple(docSubOrder, docKeyword, DC_INE)
+            HOBBY -> Triple(hobbySubOrder, hobbyKeyword, HB_INE)
+            else -> null
+        }
+
+    /** Ma dana top kategoria sub-zanre? (vsetky okrem Nezaradene) */
+    fun hasSubgenres(topCat: String): Boolean = subConfig(topCat) != null
+
+    /** Zoskupovat zaznamy pod nazov programu? (opakovane programy: serialy,
+     *  spravy, sou, detske, hudba, umenie, dokumenty, hobby). Filmy a sport nie. */
     fun isSeriesLike(topCat: String): Boolean =
-        topCat == SERIAL || topCat == CHILDREN
+        topCat != FILM && topCat != SPORT && topCat != OTHER
 
     fun subOrderFor(topCat: String): List<String> =
-        if (topCat == SPORT) sportSubOrder else movieSubOrder
+        subConfig(topCat)?.first ?: emptyList()
 
     /** Sub-zaner pre zaznam v danej top kategorii. */
     fun subgenre(entry: DvrEntry, topCat: String): String {
+        val cfg = subConfig(topCat) ?: return ""
         val text = stripAccentsLower(
             listOf(entry.dispTitle, entry.dispSubtitle, entry.dispDescription)
                 .filter { it.isNotBlank() }.joinToString(" ")
         )
-        if (topCat == SPORT) {
-            for ((p, sub) in sportKeyword) if (p.containsMatchIn(text)) return sub
-            return SP_INE
-        }
-        // film/serial/detske
         if (text.isNotBlank()) {
-            for ((p, sub) in movieKeyword) if (p.containsMatchIn(text)) return sub
+            for ((p, sub) in cfg.second) if (p.containsMatchIn(text)) return sub
         }
-        val titleOnly = stripAccentsLower(entry.dispTitle)
-        if (titleOnly.isNotBlank() && horrorTitle.containsMatchIn(titleOnly)) return MV_HOROR
-        return MV_INE
+        // film/serial: horor len v nazve
+        if (topCat == FILM || topCat == SERIAL) {
+            val titleOnly = stripAccentsLower(entry.dispTitle)
+            if (titleOnly.isNotBlank() && horrorTitle.containsMatchIn(titleOnly)) return MV_HOROR
+        }
+        return cfg.third
     }
 
-    /** Kanonicky nazov serialu (bez epizodneho sufixu a tech markerov) na
-     *  zoskupenie epizod. "Otec Brown IV (1)" -> "Otec Brown IV". */
+    /** Kanonicky nazov programu (bez epizodneho sufixu a tech markerov) na
+     *  zoskupenie. "Otec Brown IV (1)" -> "Otec Brown IV",
+     *  "TV Noviny" zostane "TV Noviny" (vsetky bulletiny pod jednou zlozkou). */
     fun seriesCanonicalTitle(title: String): String {
         if (title.isBlank()) return ""
         var clean = techMarker.replace(title, " ").trim()

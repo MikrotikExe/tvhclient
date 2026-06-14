@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -86,7 +87,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
                 if (s.entries.isEmpty()) {
                     Text(stringResource(R.string.dvr_empty), Modifier.align(Alignment.Center))
                 } else {
-                    DvrContent(s.entries, s.channelOrder, nav, context, onNav = { nav = it })
+                    DvrContent(s.entries, s.channelOrder, s.channelPicons, nav, context, onNav = { nav = it })
                 }
             }
         }
@@ -97,10 +98,13 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
 private fun DvrContent(
     entries: List<DvrEntry>,
     channelOrder: Map<String, Int>,
+    channelPicons: Map<String, String?>,
     nav: DvrNav,
     context: Context,
     onNav: (DvrNav) -> Unit
 ) {
+    val server = remember { Tvh.store.active() }
+    val piconLoader = remember(server?.id) { PiconImageLoader.get(context, server) }
     when (nav) {
         is DvrNav.Root -> {
             // Zlozky: Podla kanalov + kategorie ktore maju nahravky
@@ -136,7 +140,7 @@ private fun DvrContent(
                 item("hdr") { Header(stringResource(R.string.dvr_by_channel)) }
                 items(channels, key = { it }) { ch ->
                     val cnt = byChannel[ch]?.size ?: 0
-                    FolderRow("\uD83D\uDCFA  $ch", sub = "$cnt") {
+                    ChannelFolderRow(ch, channelPicons[ch], piconLoader, context, sub = "$cnt") {
                         onNav(DvrNav.Dates(ch))
                     }
                 }
@@ -191,20 +195,16 @@ private fun DvrContent(
                 DvrClassifier.subgenre(it, nav.catKey) == nav.subKey
             }
             if (DvrClassifier.isSeriesLike(nav.catKey)) {
-                // Zoskup epizody pod serial (canonical title).
+                // Zoskup epizody pod serial (canonical title). Vzdy zlozka,
+                // aj ked ma serial len jednu epizodu (konzistentne).
                 val bySeries = inSub.groupBy { DvrClassifier.seriesCanonicalTitle(it.title) }
                 val titles = bySeries.keys.sortedBy { it.lowercase() }
                 LazyColumn(Modifier.fillMaxSize()) {
                     item("hdr") { Header(subLabel(nav.subKey)) }
                     items(titles, key = { it }) { t ->
                         val grp = bySeries[t] ?: emptyList()
-                        if (grp.size == 1) {
-                            // Jedna epizoda -> rovno prehrat
-                            RecordingRow(grp.first(), context)
-                        } else {
-                            FolderRow("\uD83D\uDCFA  $t", sub = "${grp.size}") {
-                                onNav(DvrNav.Series(nav.catKey, nav.subKey, t))
-                            }
+                        FolderRow("\uD83D\uDCFA  $t", sub = "${grp.size}") {
+                            onNav(DvrNav.Series(nav.catKey, nav.subKey, t))
                         }
                     }
                 }
@@ -292,6 +292,48 @@ private fun Header(text: String) {
 }
 
 @Composable
+private fun ChannelFolderRow(
+    name: String,
+    piconUrl: String?,
+    loader: coil.ImageLoader,
+    context: Context,
+    sub: String,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(width = 56.dp, height = 40.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (piconUrl != null) {
+                coil.compose.AsyncImage(
+                    model = coil.request.ImageRequest.Builder(context).data(piconUrl).build(),
+                    contentDescription = name,
+                    imageLoader = loader,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(2.dp)
+                )
+            } else {
+                Text(name.take(2).uppercase(), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.width(8.dp))
+        Text(sub, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("  \u203A", style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
 private fun FolderRow(label: String, sub: String, onClick: () -> Unit) {
     Row(
         Modifier
@@ -337,6 +379,50 @@ private fun subLabel(key: String): String {
         DvrClassifier.SP_ZIMNE -> R.string.sub_sp_zimne
         DvrClassifier.SP_VODNE -> R.string.sub_sp_vodne
         DvrClassifier.SP_NEWS -> R.string.sub_sp_news
+        DvrClassifier.NW_HLAVNE -> R.string.sub_nw_hlavne
+        DvrClassifier.NW_POLITIKA -> R.string.sub_nw_politika
+        DvrClassifier.NW_KRIMI -> R.string.sub_nw_krimi
+        DvrClassifier.NW_MAGAZINY -> R.string.sub_nw_magaziny
+        DvrClassifier.NW_POCASIE -> R.string.sub_nw_pocasie
+        DvrClassifier.NW_INE -> R.string.sub_nw_ine
+        DvrClassifier.SH_REALITY -> R.string.sub_sh_reality
+        DvrClassifier.SH_TALK -> R.string.sub_sh_talk
+        DvrClassifier.SH_SUTAZ -> R.string.sub_sh_sutaz
+        DvrClassifier.SH_KUCHARSKE -> R.string.sub_sh_kucharske
+        DvrClassifier.SH_ZABAVA -> R.string.sub_sh_zabava
+        DvrClassifier.SH_MAGAZINY -> R.string.sub_sh_magaziny
+        DvrClassifier.SH_INE -> R.string.sub_sh_ine
+        DvrClassifier.CH_ANIMAK -> R.string.sub_ch_animak
+        DvrClassifier.CH_ROZPRAVKY -> R.string.sub_ch_rozpravky
+        DvrClassifier.CH_VZDELAVAC -> R.string.sub_ch_vzdelavac
+        DvrClassifier.CH_FILMY -> R.string.sub_ch_filmy
+        DvrClassifier.CH_INE -> R.string.sub_ch_ine
+        DvrClassifier.MU_KLASIKA -> R.string.sub_mu_klasika
+        DvrClassifier.MU_KONCERT -> R.string.sub_mu_koncert
+        DvrClassifier.MU_HITY -> R.string.sub_mu_hity
+        DvrClassifier.MU_FOLK -> R.string.sub_mu_folk
+        DvrClassifier.MU_MAGAZINY -> R.string.sub_mu_magaziny
+        DvrClassifier.MU_INE -> R.string.sub_mu_ine
+        DvrClassifier.AR_DIVADLO -> R.string.sub_ar_divadlo
+        DvrClassifier.AR_VYTVARNE -> R.string.sub_ar_vytvarne
+        DvrClassifier.AR_LITERATURA -> R.string.sub_ar_literatura
+        DvrClassifier.AR_FILM -> R.string.sub_ar_film
+        DvrClassifier.AR_INE -> R.string.sub_ar_ine
+        DvrClassifier.DC_PRIRODA -> R.string.sub_dc_priroda
+        DvrClassifier.DC_HISTORIA -> R.string.sub_dc_historia
+        DvrClassifier.DC_VEDA -> R.string.sub_dc_veda
+        DvrClassifier.DC_CESTOPIS -> R.string.sub_dc_cestopis
+        DvrClassifier.DC_OSOBNOSTI -> R.string.sub_dc_osobnosti
+        DvrClassifier.DC_SPOLOCNOST -> R.string.sub_dc_spolocnost
+        DvrClassifier.DC_INE -> R.string.sub_dc_ine
+        DvrClassifier.HB_ZAHRADA -> R.string.sub_hb_zahrada
+        DvrClassifier.HB_BYVANIE -> R.string.sub_hb_byvanie
+        DvrClassifier.HB_VARENIE -> R.string.sub_hb_varenie
+        DvrClassifier.HB_AUTO -> R.string.sub_hb_auto
+        DvrClassifier.HB_CESTOVANIE -> R.string.sub_hb_cestovanie
+        DvrClassifier.HB_ZDRAVIE -> R.string.sub_hb_zdravie
+        DvrClassifier.HB_DIY -> R.string.sub_hb_diy
+        DvrClassifier.HB_INE -> R.string.sub_hb_ine
         else -> R.string.sub_mv_ine
     }
     return stringResource(resId)

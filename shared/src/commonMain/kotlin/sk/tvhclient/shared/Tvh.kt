@@ -46,6 +46,9 @@ object Tvh {
 
     fun dvrUrl(server: TvhServer, dvrFileId: String): String =
         StreamUrlBuilder.dvrUrl(server, dvrFileId)
+
+    fun piconUrl(server: TvhServer, iconPublicUrl: String?): String? =
+        StreamUrlBuilder.piconUrlNoCreds(server, iconPublicUrl)
 }
 
 /** Aktualny cas v sekundach — expect/actual per platforma. */
