@@ -74,6 +74,8 @@ class PlayerActivity : ComponentActivity() {
         val channelTitle = intent.getStringExtra(EXTRA_TITLE) ?: ""
         val directUrl = intent.getStringExtra(EXTRA_URL)
         val durationMs = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
+        val progStart = intent.getLongExtra(EXTRA_PROG_START, 0L)
+        val progStop = intent.getLongExtra(EXTRA_PROG_STOP, 0L)
 
         val server = Tvh.store.active()
         if (server == null || (channelUuid == null && directUrl == null)) {
@@ -111,6 +113,8 @@ class PlayerActivity : ComponentActivity() {
                 player = mediaPlayer,
                 seekable = directUrl != null,  // DVR nahravka = da sa pretacat; live nie
                 knownDurationMs = durationMs,  // dlzka z DVR entry (TS subor ju nenese)
+                progStartSec = progStart,
+                progStopSec = progStop,
                 onAttach = { layout -> mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
                     val media = Media(libVlc, Uri.parse(streamUrl))
@@ -148,6 +152,8 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_TITLE = "channel_title"
         const val EXTRA_URL = "stream_url"
         const val EXTRA_DURATION_MS = "duration_ms"
+        const val EXTRA_PROG_START = "prog_start"
+        const val EXTRA_PROG_STOP = "prog_stop"
     }
 }
 
@@ -166,6 +172,8 @@ private fun PlayerUi(
     player: MediaPlayer,
     seekable: Boolean,
     knownDurationMs: Long,
+    progStartSec: Long = 0,
+    progStopSec: Long = 0,
     onAttach: (VLCVideoLayout) -> Unit,
     onStart: () -> Unit,
     onClose: () -> Unit
@@ -194,6 +202,18 @@ private fun PlayerUi(
                     val p = player.position
                     if (p in 0f..1f) posFraction = p
                 }
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
+    // Live priebeh aktualnej relacie (z EPG): tika po sekundach
+    var liveNowSec by remember { mutableStateOf(System.currentTimeMillis() / 1000) }
+    val hasLiveProg = !seekable && progStartSec > 0 && progStopSec > progStartSec
+    if (hasLiveProg) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                liveNowSec = System.currentTimeMillis() / 1000
                 kotlinx.coroutines.delay(1000)
             }
         }
@@ -285,6 +305,22 @@ private fun PlayerUi(
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
+                    if (hasLiveProg) {
+                        val total = (progStopSec - progStartSec).coerceAtLeast(1)
+                        val elapsed = (liveNowSec - progStartSec).coerceIn(0, total)
+                        val frac = elapsed.toFloat() / total.toFloat()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(fmtMs(elapsed * 1000), color = Color.White,
+                                style = MaterialTheme.typography.bodySmall)
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { frac },
+                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                trackColor = Color(0x55FFFFFF)
+                            )
+                            Text("-" + fmtMs((total - elapsed) * 1000), color = Color.White,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                     if (seekable && lengthMs > 0) {
                         val frac = if (dragging) dragValue else posFraction
                         val cur = (frac * lengthMs).toLong()

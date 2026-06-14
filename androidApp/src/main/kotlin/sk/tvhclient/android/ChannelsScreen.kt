@@ -189,6 +189,8 @@ private fun ChannelItem(
                     val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
                         putExtra(PlayerActivity.EXTRA_UUID, row.channel.uuid)
                         putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
+                        putExtra(PlayerActivity.EXTRA_PROG_START, row.nowStart)
+                        putExtra(PlayerActivity.EXTRA_PROG_STOP, row.nowStop)
                     }
                     context.startActivity(intent)
                 },
