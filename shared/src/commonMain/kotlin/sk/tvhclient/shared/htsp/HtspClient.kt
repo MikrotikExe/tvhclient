@@ -177,15 +177,14 @@ class HtspClient(
         var syncDone = false
 
         val result = withTimeoutOrNull(overallTimeoutMs) {
+            // fast path (bez EPG): koniec hned po initialSyncCompleted.
+            // EPG path: cita kym chodia spravy; ked 8s ticho -> koniec.
+            val idleMs = 8_000L
             while (true) {
                 if (channelsOnly && channels.isNotEmpty() && dvr.isNotEmpty()) break
                 if (syncDone && !withEpg) break
-                // po sync pri EPG: cakaj na dalsi event max 6s, inak koniec (idle)
-                val m = if (syncDone && withEpg) {
-                    withTimeoutOrNull(6_000) { recv() } ?: break
-                } else {
-                    recv()
-                }
+                val m = if (withEpg) withTimeoutOrNull(idleMs) { recv() } else recv()
+                if (m == null) break  // idle timeout pri EPG -> hotovo
                 when (m["method"] as? String) {
                     "channelAdd" -> channels.add(m)
                     "tagAdd" -> tags.add(m)
