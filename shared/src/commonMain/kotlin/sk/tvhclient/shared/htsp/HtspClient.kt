@@ -164,8 +164,12 @@ class HtspClient(
             while (true) {
                 if (channelsOnly && channels.isNotEmpty() && dvr.isNotEmpty()) break
                 if (syncDone && !withEpg) break
-                // pri EPG: idle cakanie riesi nadradeny timeout (zjednodusene)
-                val m = recv()
+                // po sync pri EPG: cakaj na dalsi event max 6s, inak koniec (idle)
+                val m = if (syncDone && withEpg) {
+                    withTimeoutOrNull(6_000) { recv() } ?: break
+                } else {
+                    recv()
+                }
                 when (m["method"] as? String) {
                     "channelAdd" -> channels.add(m)
                     "tagAdd" -> tags.add(m)

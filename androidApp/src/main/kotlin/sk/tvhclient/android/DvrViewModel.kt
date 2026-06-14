@@ -45,8 +45,8 @@ class DvrViewModel : ViewModel() {
                 val result = withContext(Dispatchers.IO) {
                     val api = Tvh.apiFor(server)
                     try {
-                        val e = api.dvrFinished()
-                        val channels = api.channels()
+                        val e = Tvh.fetchDvrFinished(server, api)
+                        val channels = Tvh.fetchChannels(server, api)
                         val order = channels
                             .filter { it.number != null }
                             .associate { it.name to it.number!! }

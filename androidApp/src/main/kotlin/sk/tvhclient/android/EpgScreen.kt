@@ -71,7 +71,7 @@ fun EpgScreen(channelUuid: String, channelName: String, onBack: () -> Unit) {
         try {
             val events = withContext(Dispatchers.IO) {
                 val api = Tvh.apiFor(server)
-                try { api.epgForChannel(channelUuid) } finally { api.close() }
+                try { Tvh.fetchEpgForChannel(server, api, channelUuid) } finally { api.close() }
             }
             state = EpgState.Loaded(events)
         } catch (e: Exception) {

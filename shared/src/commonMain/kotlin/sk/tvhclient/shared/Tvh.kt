@@ -53,20 +53,58 @@ object Tvh {
     /** Vytvori API klienta pre dany server (volajuci je zodpovedny za close). */
     fun apiFor(server: TvhServer): TvhApi = TvhApi(server)
 
-    /** Repository kanalov pre dany server. Picon URL bez creds (auth cez hlavicku). */
-    fun channelRepository(server: TvhServer, api: TvhApi): ChannelRepository =
-        ChannelRepository(
-            api = api,
+    /** Repository kanalov pre dany server. V HTSP rezime data cez 9982,
+     *  inak cez HTTP /api. Picon URL bez creds (auth cez hlavicku). */
+    fun channelRepository(server: TvhServer, api: TvhApi): ChannelRepository {
+        val htsp = server.connectionMode == "htsp"
+        return ChannelRepository(
+            channelsProvider = { fetchChannels(server, api) },
+            tagsProvider = {
+                if (htsp) sk.tvhclient.shared.htsp.HtspData.tags(
+                    sk.tvhclient.shared.htsp.HtspData.metadata(server, false, currentTimeSeconds())
+                ) else api.tags()
+            },
+            epgNowProvider = {
+                // HTSP: now/next by vyzadoval tazky EPG dump -> preskoc pre
+                // rychle nacitanie kanalov. Denny program (EpgScreen) si EPG
+                // stiahne az na vyziadanie.
+                if (htsp) emptyMap() else api.epgNow()
+            },
             piconUrlFor = { ch -> StreamUrlBuilder.piconUrlNoCreds(server, ch.iconPublicUrl) },
             nowSec = { currentTimeSeconds() }
         )
+    }
+
+    /** Kanaly: HTSP alebo HTTP. */
+    suspend fun fetchChannels(server: TvhServer, api: TvhApi): List<sk.tvhclient.shared.model.Channel> =
+        if (server.connectionMode == "htsp")
+            sk.tvhclient.shared.htsp.HtspData.channels(
+                sk.tvhclient.shared.htsp.HtspData.metadata(server, false, currentTimeSeconds()))
+        else api.channels()
+
+    /** Dokoncene DVR: HTSP alebo HTTP. */
+    suspend fun fetchDvrFinished(server: TvhServer, api: TvhApi): List<sk.tvhclient.shared.model.DvrEntry> =
+        if (server.connectionMode == "htsp")
+            sk.tvhclient.shared.htsp.HtspData.dvrFinished(
+                sk.tvhclient.shared.htsp.HtspData.metadata(server, false, currentTimeSeconds()))
+        else api.dvrFinished()
+
+    /** EPG pre kanal (denny program): HTSP (filtruje z dumpu) alebo HTTP. */
+    suspend fun fetchEpgForChannel(server: TvhServer, api: TvhApi, channelUuid: String): List<sk.tvhclient.shared.model.EpgEvent> =
+        if (server.connectionMode == "htsp") {
+            val meta = sk.tvhclient.shared.htsp.HtspData.metadata(server, true, currentTimeSeconds())
+            sk.tvhclient.shared.htsp.HtspData.events(meta)
+                .filter { it.channelUuid == channelUuid }
+                .sortedBy { it.start }
+        } else api.epgForChannel(channelUuid)
 
     fun liveUrl(server: TvhServer, channelUuid: String, channelTitle: String?, profile: String): String =
-        StreamUrlBuilder.liveUrl(server, channelUuid, profile, channelTitle)
+        StreamUrlBuilder.liveUrl(server, channelUuid, profile, channelTitle, htsp = server.connectionMode == "htsp")
 
     /** Live URL bez creds (auth cez hlavicku) — pouziva profil zo servera. */
     fun liveUrlNoCreds(server: TvhServer, channelUuid: String, channelTitle: String?): String =
-        StreamUrlBuilder.liveUrlNoCreds(server, channelUuid, server.profile.ifBlank { "pass" }, channelTitle)
+        StreamUrlBuilder.liveUrlNoCreds(server, channelUuid, server.profile.ifBlank { "pass" }, channelTitle,
+            htsp = server.connectionMode == "htsp")
 
     fun dvrUrl(server: TvhServer, dvrFileId: String): String =
         StreamUrlBuilder.dvrUrl(server, dvrFileId)

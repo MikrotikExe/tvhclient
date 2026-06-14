@@ -57,8 +57,12 @@ object StreamUrlBuilder {
         server: TvhServer,
         channelUuid: String,
         profile: String = "pass",
-        channelTitle: String? = null
-    ): String = build(server, STREAM_CH.format(channelUuid), profile, channelTitle)
+        channelTitle: String? = null,
+        htsp: Boolean = false
+    ): String {
+        val ep = if (htsp) STREAM_CHID.format(channelUuid) else STREAM_CH.format(channelUuid)
+        return build(server, ep, profile, channelTitle)
+    }
 
     /**
      * Live URL bez creds — pre ExoPlayer/VLCKit kde auth ide cez hlavicku.
@@ -67,9 +71,11 @@ object StreamUrlBuilder {
         server: TvhServer,
         channelUuid: String,
         profile: String = "pass",
-        channelTitle: String? = null
+        channelTitle: String? = null,
+        htsp: Boolean = false
     ): String {
-        var url = server.baseUrl.trimEnd('/') + "/" + STREAM_CH.format(channelUuid)
+        val ep = if (htsp) STREAM_CHID.format(channelUuid) else STREAM_CH.format(channelUuid)
+        var url = server.baseUrl.trimEnd('/') + "/" + ep
         val q = mutableListOf<String>()
         if (profile.isNotBlank()) q.add("profile=" + encode(profile))
         if (!channelTitle.isNullOrBlank()) q.add("title=" + encode(channelTitle))
@@ -94,7 +100,11 @@ object StreamUrlBuilder {
      * hlavicku (OkHttp neposle userinfo z URL automaticky).
      */
     fun piconUrlNoCreds(server: TvhServer, iconPublicUrl: String?): String? {
-        val ipu = iconPublicUrl?.trim()?.trimStart('/') ?: return null
+        val raw = iconPublicUrl?.trim() ?: return null
+        if (raw.isEmpty()) return null
+        // HTSP casto vracia plne URL (http://.../imagecache/N) — vrat tak ako je
+        if (raw.startsWith("http://") || raw.startsWith("https://")) return raw
+        val ipu = raw.trimStart('/')
         if (!ipu.startsWith("imagecache/")) return null
         return server.baseUrl.trimEnd('/') + "/" + ipu
     }

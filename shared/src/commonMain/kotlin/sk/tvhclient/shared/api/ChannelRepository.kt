@@ -28,7 +28,9 @@ data class ChannelCategory(
  * pluginnom get_channels (ExpiringLRUCache 60s).
  */
 class ChannelRepository(
-    private val api: TvhApi,
+    private val channelsProvider: suspend () -> List<Channel>,
+    private val tagsProvider: suspend () -> List<ChannelTag>,
+    private val epgNowProvider: suspend () -> Map<String, EpgEvent>,
     private val piconUrlFor: (Channel) -> String?,
     private val nowSec: () -> Long,
     private val cacheTtlSec: Long = 60
@@ -40,13 +42,13 @@ class ChannelRepository(
     suspend fun load(force: Boolean = false): List<ChannelCategory> {
         val now = nowSec()
         if (force || cachedChannels == null || (now - cacheTs) >= cacheTtlSec) {
-            cachedChannels = api.channels().filter { it.enabled }
-            cachedTags = api.tags().filter { it.enabled }.sortedBy { it.index }
+            cachedChannels = channelsProvider().filter { it.enabled }
+            cachedTags = tagsProvider().filter { it.enabled }.sortedBy { it.index }
             cacheTs = now
         }
         val channels = cachedChannels ?: emptyList()
         val tags = cachedTags ?: emptyList()
-        val epgNow = runCatching { api.epgNow() }.getOrDefault(emptyMap())
+        val epgNow = runCatching { epgNowProvider() }.getOrDefault(emptyMap())
 
         // Tag uuid -> nazov, na rozpoznanie radia (RadioDetector).
         val tagNameOf = tags.associate { it.uuid to it.name }
@@ -97,7 +99,7 @@ class ChannelRepository(
         val channels = cachedChannels ?: emptyList()
         val tags = cachedTags ?: emptyList()
         val tagNameOf = tags.associate { it.uuid to it.name }
-        val epgNow = runCatching { api.epgNow() }.getOrDefault(emptyMap())
+        val epgNow = runCatching { epgNowProvider() }.getOrDefault(emptyMap())
         return channels
             .filterNot { sk.tvhclient.shared.model.RadioDetector.isRadio(it.tags.mapNotNull { t -> tagNameOf[t] }) }
             .sortedWith(compareBy({ it.number ?: Int.MAX_VALUE }, { it.name.lowercase() }))
