@@ -172,6 +172,8 @@ private fun PlayerUi(
 ) {
     var controlsVisible by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
+    var orientationLocked by remember { mutableStateOf(false) }
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     // menu: null = ziadne, "audio" = audio stopy, "spu" = titulky
     var menu by remember { mutableStateOf<String?>(null) }
     // seek stav (len pre DVR). TS subor nenese dlzku, takze pouzivame:
@@ -246,7 +248,19 @@ private fun PlayerUi(
                         title,
                         color = Color.White,
                         style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 12.dp)
+                        modifier = Modifier.padding(start = 12.dp).weight(1f),
+                        maxLines = 1
+                    )
+                    // Zamok orientacie: zamknuty = aktualna poloha, odomknuty = podla telefonu
+                    CircleButton(
+                        label = if (orientationLocked) "\uD83D\uDD12" else "\uD83D\uDD13",
+                        onClick = {
+                            orientationLocked = !orientationLocked
+                            activity?.requestedOrientation = if (orientationLocked)
+                                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                            else
+                                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+                        }
                     )
                 }
 
