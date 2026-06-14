@@ -23,4 +23,9 @@
     <string name="test_auth_failed">Přihlášení selhalo. Zkontroluj jméno a heslo.</string>
     <string name="test_http_error">Server vrátil HTTP chybu %1$d.</string>
     <string name="test_network_error">Připojení selhalo: %1$s</string>
+    <string name="tab_channels">Kanály</string>
+    <string name="search_channels">Hledat kanály</string>
+    <string name="all_channels">Všechny</string>
+    <string name="no_channels">Žádné kanály.</string>
+    <string name="no_active_server">Žádný aktivní server. Přidej ho v záložce Servery.</string>
 </resources>

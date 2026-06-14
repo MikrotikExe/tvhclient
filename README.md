@@ -3,7 +3,26 @@
 Kotlin Multiplatform projekt: zdieľané jadro (Ktor, modely, secure storage),
 natívne UI — Jetpack Compose (Android mobil + TV), SwiftUI (iOS).
 
-Stav: Míľnik M1 — setup obrazovka, multi-server, secure storage, test pripojenia.
+Stav: Míľnik M2 — zoznam kanálov (tagy/kategórie, picony s cache, vyhľadávanie,
+now/next EPG). M1 (setup, multi-server, secure storage, test pripojenia) overený
+na reálnom serveri.
+
+## Čo je prebraté z Enigma2 pluginu (plugin_video_tvheadend)
+
+Battle-tested logika portovaná do KMP jadra:
+- TvhApi: retry-with-backoff (3×, 0.5/1/2s, len 5xx/408/429), stránkovanie
+  start/limit do total — z tvheadend.py (FIX 0.48)
+- endpoint konštanty zhodné s pluginom (stream/channel, dvrfile, imagecache,
+  api/channel/grid, api/channeltag/grid, api/epg/events/grid mode=now)
+- StreamUrlBuilder: live + DVR URL, credentials v URL, profile/title param
+  — z _stream_urls.py
+- Picon404Cache: negatívna 404 cache (1h TTL) + early-abort prah (30) proti
+  OOM na slabých boxoch — z _picons.py (FIX 0.48b + FIX 0.71.1)
+- ChannelRepository: 60s cache kanálov ako get_channels (ExpiringLRUCache)
+
+Odložené na neskôr: classifier.py (1407 r., DVR kategorizácia) → M5;
+HTSP protokol → post-MVP; vlastný SHA-256/512 digest (HTTPDigestAuthMulti)
+→ len ak Ktor stock digest zlyhá na tvojom serveri.
 
 ## Štruktúra
 
@@ -50,20 +69,33 @@ open TvhClient.xcodeproj
 Xcode pri builde sám zavolá gradle task embedAndSignAppleFrameworkForXcode,
 ktorý skompiluje shared modul do Shared.framework.
 
+## Test checklist M2
+
+1. Záložka Kanály → načíta sa zoznam (~600 kanálov), bez zamrznutia GUI
+2. Picony sa zobrazujú vedľa názvov, lazy podľa scrollu (žiadny upfront burst)
+3. Kanály bez piconu → placeholder s prvými 2 písmenami názvu
+4. Filtre tagov hore (Všetky + jednotlivé kategórie) → klik prepne zoznam
+5. Now/next: pod názvom kanálu práve bežiaci program (ak server vracia EPG)
+6. Vyhľadávanie → píš názov, zoznam sa filtruje naprieč všetkými kanálmi
+7. Číslo kanálu pred názvom, zoradenie podľa čísla
+8. Prepnutie aktívneho servera v záložke Servery → Kanály načítajú nový server
+9. Bez aktívneho servera → hláška "Žiadny aktívny server"
+10. Android TV: D-pad prejde filtre aj zoznam, fokus viditeľný
+11. Picon cache: druhé otvorenie appky → picony okamžite z disku (cacheDir/picons)
+
 ## Test checklist M1
 
 1. Pridanie servera: host, port 9981, meno/heslo → Otestovať pripojenie
-   → očakávaný výsledok: "Pripojené: Tvheadend 4.3-2657 (API v…)"
-2. Zlé heslo → "Prihlásenie zlyhalo" (test plain aj digest režim na serveri)
-3. Zlý host/port → "Pripojenie zlyhalo: …" do ~5 s (connect timeout)
+   → "Pripojené: Tvheadend 4.3-… (API v…)"
+2. Zlé heslo → "Prihlásenie zlyhalo" (test plain aj digest režim)
+3. Zlý host/port → "Pripojenie zlyhalo: …" do ~5 s
 4. Uloženie, kill appky, znovuotvorenie → server v zozname, aktívny označený
-5. Druhý server (napr. IPTVHost aj HP-Server), prepínanie aktívneho
+5. Druhý server, prepínanie aktívneho
 6. Úprava a zmazanie servera
-7. Android TV: celý flow čisto D-padom (fokus na poliach, switch, tlačidlá)
-8. Jazyk telefónu SK/CZ/EN → preložené texty
-9. Overenie, že credentials nie sú v plain texte:
-   adb shell + pozri /data/data/sk.tvhclient/shared_prefs/tvh_secure_prefs.xml
-   (hodnoty musia byť zašifrované bloby)
+7. Android TV: celý flow D-padom
+8. Jazyk telefónu SK/CZ/EN → preklady
+9. Credentials nie sú plain: adb shell, /data/data/sk.tvhclient/shared_prefs/
+   tvh_secure_prefs.xml → zašifrované bloby
 
 ## Známe poznámky
 

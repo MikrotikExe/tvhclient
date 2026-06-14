@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -54,7 +55,37 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun App(vm: ServersViewModel = viewModel()) {
+fun App() {
+    var tab by remember { mutableStateOf(0) }
+    androidx.compose.material3.Scaffold(
+        bottomBar = {
+            androidx.compose.material3.NavigationBar {
+                androidx.compose.material3.NavigationBarItem(
+                    selected = tab == 0,
+                    onClick = { tab = 0 },
+                    icon = {},
+                    label = { Text(stringResource(R.string.tab_channels)) }
+                )
+                androidx.compose.material3.NavigationBarItem(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    icon = {},
+                    label = { Text(stringResource(R.string.servers_title)) }
+                )
+            }
+        }
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
+            when (tab) {
+                0 -> ChannelsScreen()
+                else -> ServersTab()
+            }
+        }
+    }
+}
+
+@Composable
+fun ServersTab(vm: ServersViewModel = viewModel()) {
     var editing by remember { mutableStateOf<TvhServer?>(null) }
     var showForm by remember { mutableStateOf(false) }
 
