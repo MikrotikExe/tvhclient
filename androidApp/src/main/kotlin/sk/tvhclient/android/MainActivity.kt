@@ -21,6 +21,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Dvr
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -70,28 +75,28 @@ fun App() {
                     selected = tab == 0,
                     onClick = { tab = 0 },
                     icon = { androidx.compose.material3.Icon(
-                        androidx.compose.material.icons.Icons.Default.LiveTv, contentDescription = null) },
+                        Icons.Default.LiveTv, contentDescription = null) },
                     label = { Text(stringResource(R.string.tab_channels)) }
                 )
                 NavigationBarItem(
                     selected = tab == 1,
                     onClick = { tab = 1 },
                     icon = { androidx.compose.material3.Icon(
-                        androidx.compose.material.icons.Icons.Default.Radio, contentDescription = null) },
+                        Icons.Default.Radio, contentDescription = null) },
                     label = { Text(stringResource(R.string.tab_radio)) }
                 )
                 NavigationBarItem(
                     selected = tab == 2,
                     onClick = { tab = 2 },
                     icon = { androidx.compose.material3.Icon(
-                        androidx.compose.material.icons.Icons.Default.Dvr, contentDescription = null) },
+                        Icons.Default.Dvr, contentDescription = null) },
                     label = { Text(stringResource(R.string.tab_dvr)) }
                 )
                 NavigationBarItem(
                     selected = tab == 3,
                     onClick = { tab = 3 },
                     icon = { androidx.compose.material3.Icon(
-                        androidx.compose.material.icons.Icons.Default.Dns, contentDescription = null) },
+                        Icons.Default.Dns, contentDescription = null) },
                     label = { Text(stringResource(R.string.servers_title)) }
                 )
             }
