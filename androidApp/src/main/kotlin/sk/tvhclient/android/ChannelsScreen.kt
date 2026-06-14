@@ -2,6 +2,7 @@ package sk.tvhclient.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,8 +51,19 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val query by vm.query.collectAsState()
     var selectedTag by remember { mutableStateOf<String?>(null) } // tag uuid alebo null = vsetky
+    var epgFor by remember { mutableStateOf<ChannelRow?>(null) }
 
     LaunchedEffect(Unit) { vm.load() }
+
+    val epgRow = epgFor
+    if (epgRow != null) {
+        EpgScreen(
+            channelUuid = epgRow.channel.uuid,
+            channelName = epgRow.channel.name,
+            onBack = { epgFor = null }
+        )
+        return
+    }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         OutlinedTextField(
@@ -76,7 +88,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                     // Vyhladavanie: plochy filtrovany zoznam
                     val q = query.trim().lowercase()
                     val results = s.allRows.filter { it.channel.name.lowercase().contains(q) }
-                    ChannelList(results)
+                    ChannelList(results) { epgFor = it }
                 } else {
                     // Filtre podla tagov
                     val tags = s.categories.mapNotNull { it.tag }
@@ -102,7 +114,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                     } else {
                         s.categories.firstOrNull { it.tag?.uuid == selectedTag }?.rows ?: emptyList()
                     }
-                    ChannelList(rows)
+                    ChannelList(rows) { epgFor = it }
                 }
             }
         }
@@ -110,7 +122,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
 }
 
 @Composable
-private fun ChannelList(rows: List<ChannelRow>) {
+private fun ChannelList(rows: List<ChannelRow>, onShowEpg: (ChannelRow) -> Unit) {
     val context = LocalContext.current
     val server = remember { Tvh.store.active() }
     val loader = remember(server?.id) { PiconImageLoader.get(context, server) }
@@ -121,28 +133,33 @@ private fun ChannelList(rows: List<ChannelRow>) {
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(rows, key = { it.channel.uuid }) { row ->
-            ChannelItem(row, loader, context)
+            ChannelItem(row, loader, context, onShowEpg)
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelItem(
     row: ChannelRow,
     loader: coil.ImageLoader,
-    context: android.content.Context
+    context: android.content.Context,
+    onShowEpg: (ChannelRow) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .clickable {
-                val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
-                    putExtra(PlayerActivity.EXTRA_UUID, row.channel.uuid)
-                    putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
-                }
-                context.startActivity(intent)
-            }
+            .combinedClickable(
+                onClick = {
+                    val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
+                        putExtra(PlayerActivity.EXTRA_UUID, row.channel.uuid)
+                        putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
+                    }
+                    context.startActivity(intent)
+                },
+                onLongClick = { onShowEpg(row) }
+            )
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

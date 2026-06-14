@@ -3,10 +3,9 @@
 Kotlin Multiplatform projekt: zdieľané jadro (Ktor, modely, secure storage),
 natívne UI — Jetpack Compose (Android mobil + TV), SwiftUI (iOS).
 
-Stav: Míľnik M3 — live prehrávanie. Android: Media3/ExoPlayer, MPEG-TS (pass
-profil), klik na kanál spustí prehrávač. iOS: VLCKit prehrávač (kód hotový,
-otestuje sa po nastavení Xcode — CI ho nestavia). Profil servera nastaviteľný
-(default pass). M1+M2 overené na reálnom serveri.
+Stav: Míľnik M4 — EPG. Now/next v zozname (M2) + denný grid: dlhý klik na
+kanál ukáže program na celý deň zoskupený po dňoch, práve bežiaci zvýraznený.
+Krátky klik = prehrávanie (M3). M1-M3 overené na reálnom serveri.
 
 ## Čo je prebraté z Enigma2 pluginu (plugin_video_tvheadend)
 
@@ -69,6 +68,17 @@ open TvhClient.xcodeproj
 
 Xcode pri builde sám zavolá gradle task embedAndSignAppleFrameworkForXcode,
 ktorý skompiluje shared modul do Shared.framework.
+
+## Test checklist M4
+
+1. Dlhý klik (podržanie) na kanál → otvorí sa EPG program kanála
+2. Program zoskupený po dňoch (hlavička s názvom dňa), zoradený podľa času
+3. Práve bežiaci program zvýraznený (tučne + farebný čas + podsvietenie)
+4. Čas začiatku vľavo (HH:MM), názov + podtitul/popis vpravo
+5. Krátky klik na kanál stále spustí prehrávanie (nepletie sa s EPG)
+6. Zavretie EPG (✕ vľavo hore) → návrat na zoznam kanálov
+7. Kanál bez EPG → "Žiadny program"
+8. Android TV: dlhé stlačenie OK na kanáli otvorí EPG
 
 ## Test checklist M3
 

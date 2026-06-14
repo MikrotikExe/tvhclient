@@ -50,3 +50,9 @@ object Tvh {
 
 /** Aktualny cas v sekundach — expect/actual per platforma. */
 expect fun currentTimeSeconds(): Long
+
+/** Formatuje unix sekundy na "HH:MM" v lokalnom case. expect/actual. */
+expect fun formatTimeHm(epochSec: Long): String
+
+/** Formatuje unix sekundy na nazov dna "Pondelok 14.6." v lokalnom case. */
+expect fun formatDayLabel(epochSec: Long): String

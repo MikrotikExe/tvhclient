@@ -193,6 +193,25 @@ class TvhApi(private val server: TvhServer) {
         return out
     }
 
+    /**
+     * EPG program pre konkretny kanal (denny grid). TVH api/epg/events/grid
+     * vie filtrovat podla channel uuid priamo na serveri (efektivnejsie ako
+     * klientsky filter cely grid ako robil plugin). Zoradene podla start.
+     */
+    suspend fun epgForChannel(channelUuid: String, limit: Int = 500): List<EpgEvent> {
+        val data = runCatching {
+            apiGet("api/epg/events/grid", mapOf(
+                "channel" to channelUuid,
+                "limit" to limit.toString(),
+                "sort" to "start",
+                "dir" to "ASC"
+            ))
+        }.getOrNull() ?: return emptyList()
+        return (data["entries"] as? JsonArray)?.mapNotNull { el ->
+            (el as? JsonObject)?.let { runCatching { decode<EpgEvent>(it) }.getOrNull() }
+        } ?: emptyList()
+    }
+
     fun close() = client.close()
 }
 
