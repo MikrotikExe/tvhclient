@@ -136,4 +136,6 @@
     <string name="sub_hb_zdravie">Zdravie / Fitness</string>
     <string name="sub_hb_diy">Kutilstvo</string>
     <string name="sub_hb_ine">Ostatné</string>
+    <string name="tab_radio">Rádio</string>
+    <string name="radio_empty">Žiadne rádiá.</string>
 </resources>

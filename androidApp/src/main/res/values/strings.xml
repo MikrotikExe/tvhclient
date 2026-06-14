@@ -136,4 +136,6 @@
     <string name="sub_hb_zdravie">Health / Fitness</string>
     <string name="sub_hb_diy">DIY</string>
     <string name="sub_hb_ine">Other</string>
+    <string name="tab_radio">Radio</string>
+    <string name="radio_empty">No radio stations.</string>
 </resources>
