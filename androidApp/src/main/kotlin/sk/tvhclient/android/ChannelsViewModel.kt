@@ -22,6 +22,8 @@ sealed class ChannelsState {
     data object NoServer : ChannelsState()
 }
 
+enum class ChannelViewMode { LIST, GRID, TILES }
+
 class ChannelsViewModel : ViewModel() {
 
     private val _state = MutableStateFlow<ChannelsState>(ChannelsState.Loading)
@@ -33,6 +35,10 @@ class ChannelsViewModel : ViewModel() {
     // HTSP: kanal -> zoznam nadchadzajucich relacii (na auto-prechod na zozname)
     private val _epgMap = MutableStateFlow<Map<String, List<sk.tvhclient.shared.model.EpgEvent>>>(emptyMap())
     val epgMap: StateFlow<Map<String, List<sk.tvhclient.shared.model.EpgEvent>>> = _epgMap
+
+    private val _viewMode = MutableStateFlow(ChannelViewMode.LIST)
+    val viewMode: StateFlow<ChannelViewMode> = _viewMode
+    fun setViewMode(m: ChannelViewMode) { _viewMode.value = m }
 
     private var api: TvhApi? = null
     private var loadedOnce = false

@@ -148,4 +148,7 @@
     <string name="conn_htsp">HTSP (9982)</string>
     <string name="field_htsp_port">HTSP port</string>
     <string name="retry">Try again</string>
+    <string name="view_list">List</string>
+    <string name="view_grid">Grid</string>
+    <string name="view_tiles">Tiles</string>
 </resources>

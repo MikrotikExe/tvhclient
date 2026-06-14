@@ -148,4 +148,7 @@
     <string name="conn_htsp">HTSP (9982)</string>
     <string name="field_htsp_port">HTSP port</string>
     <string name="retry">Zkusit znovu</string>
+    <string name="view_list">Seznam</string>
+    <string name="view_grid">Mřížka</string>
+    <string name="view_tiles">Dlaždice</string>
 </resources>
