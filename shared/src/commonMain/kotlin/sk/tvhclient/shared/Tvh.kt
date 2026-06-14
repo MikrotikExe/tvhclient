@@ -89,13 +89,10 @@ object Tvh {
                 sk.tvhclient.shared.htsp.HtspData.metadata(server, false, currentTimeSeconds()))
         else api.dvrFinished()
 
-    /** EPG pre kanal (denny program): HTSP (filtruje z dumpu) alebo HTTP. */
+    /** EPG pre kanal (denny program): HTSP getEvents (rychle) alebo HTTP. */
     suspend fun fetchEpgForChannel(server: TvhServer, api: TvhApi, channelUuid: String): List<sk.tvhclient.shared.model.EpgEvent> =
         if (server.connectionMode == "htsp") {
-            val meta = sk.tvhclient.shared.htsp.HtspData.metadata(server, true, currentTimeSeconds())
-            sk.tvhclient.shared.htsp.HtspData.events(meta)
-                .filter { it.channelUuid == channelUuid }
-                .sortedBy { it.start }
+            sk.tvhclient.shared.htsp.HtspData.epgForChannel(server, channelUuid, currentTimeSeconds())
         } else api.epgForChannel(channelUuid)
 
     fun liveUrl(server: TvhServer, channelUuid: String, channelTitle: String?, profile: String): String =

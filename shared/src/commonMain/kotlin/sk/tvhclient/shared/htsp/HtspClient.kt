@@ -140,6 +140,22 @@ class HtspClient(
      * initialSyncCompleted (+ pri EPG kratky idle), potom vypne async.
      * epgMaxDays obmedzi EPG (0 = bez limitu). channelsOnly = rychla cesta.
      */
+    /**
+     * Program pre jeden kanal (HTSP getEvents) — synchronny reply, ovela
+     * rychlejsie nez cely async EPG dump. Vrati zoznam event map.
+     */
+    suspend fun getEvents(channelId: Long, numFollowing: Int = 60, maxTime: Long = 0): List<Map<String, Any?>> {
+        val args = HashMap<String, Any?>()
+        args["channelId"] = channelId
+        if (numFollowing > 0) args["numFollowing"] = numFollowing.toLong()
+        if (maxTime > 0) args["maxTime"] = maxTime
+        val s = send("getEvents", args)
+        val r = recvReply(s)
+        @Suppress("UNCHECKED_CAST")
+        val evs = r["events"] as? List<Any?> ?: return emptyList()
+        return evs.mapNotNull { it as? Map<String, Any?> }
+    }
+
     suspend fun fetchMetadata(
         withEpg: Boolean = false,
         epgMaxDays: Int = 2,

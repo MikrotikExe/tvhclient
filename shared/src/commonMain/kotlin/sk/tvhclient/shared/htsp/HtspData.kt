@@ -96,23 +96,39 @@ object HtspData {
 
     /** Všetky EPG eventy (len ak meta načítané withEpg). */
     fun events(meta: HtspClient.Metadata): List<EpgEvent> =
-        meta.events.mapNotNull { e ->
-            val cid = longOf(e, "channelId") ?: return@mapNotNull null
-            val ct = longOf(e, "contentType")?.toInt() ?: 0
-            EpgEvent(
-                eventId = longOf(e, "eventId"),
-                channelUuid = cid.toString(),
-                channelName = "",
-                start = longOf(e, "start") ?: 0,
-                stop = longOf(e, "stop") ?: 0,
-                title = strOf(e, "title"),
-                subtitle = strOf(e, "subtitle"),
-                summary = strOf(e, "summary"),
-                description = strOf(e, "description"),
-                genre = if (ct > 0) listOf(ct) else emptyList(),
-                ageRating = longOf(e, "ageRating")?.toInt() ?: 0,
-                episodeOnscreen = strOf(e, "episodeOnscreen"),
-                nextEventId = longOf(e, "nextEventId")
-            )
+        meta.events.mapNotNull { mapEvent(it) }
+
+    private fun mapEvent(e: Map<String, Any?>): EpgEvent? {
+        val cid = longOf(e, "channelId") ?: return null
+        val ct = longOf(e, "contentType")?.toInt() ?: 0
+        return EpgEvent(
+            eventId = longOf(e, "eventId"),
+            channelUuid = cid.toString(),
+            channelName = "",
+            start = longOf(e, "start") ?: 0,
+            stop = longOf(e, "stop") ?: 0,
+            title = strOf(e, "title"),
+            subtitle = strOf(e, "subtitle"),
+            summary = strOf(e, "summary"),
+            description = strOf(e, "description"),
+            genre = if (ct > 0) listOf(ct) else emptyList(),
+            ageRating = longOf(e, "ageRating")?.toInt() ?: 0,
+            episodeOnscreen = strOf(e, "episodeOnscreen"),
+            nextEventId = longOf(e, "nextEventId")
+        )
+    }
+
+    /** Program pre kanal cez HTSP getEvents (rychle, per-kanal). */
+    suspend fun epgForChannel(server: TvhServer, channelId: String, nowSec: Long): List<EpgEvent> {
+        val cid = channelId.toLongOrNull() ?: return emptyList()
+        val client = HtspClient(server.host, server.htspPort, server.username, server.password)
+        client.connect()
+        return try {
+            client.getEvents(cid, numFollowing = 80, maxTime = nowSec + 3 * 86400)
+                .mapNotNull { mapEvent(it) }
+                .sortedBy { it.start }
+        } finally {
+            client.close()
         }
+    }
 }
