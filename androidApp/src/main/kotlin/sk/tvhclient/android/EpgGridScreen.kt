@@ -77,14 +77,17 @@ fun EpgGridScreen(
         val nowS = System.currentTimeMillis() / 1000
         LivePlaylist.channels = rows.map { r ->
             val cur = seed[r.channel.uuid]?.firstOrNull { it.start <= nowS && nowS < it.stop }
+            val nt = (cur?.title?.ifBlank { null }) ?: r.nowTitle ?: ""
+            val ns = if (cur != null) cur.start else r.nowStart
+            val ne = if (cur != null) cur.stop else r.nowStop
             LivePlaylist.LiveChannel(
                 uuid = r.channel.uuid,
                 name = r.channel.name,
                 number = r.channel.number ?: 0,
                 piconUrl = r.piconUrl,
-                nowTitle = cur?.title ?: "",
-                nowStart = cur?.start ?: 0L,
-                nowStop = cur?.stop ?: 0L
+                nowTitle = nt,
+                nowStart = ns,
+                nowStop = ne
             )
         }
     }

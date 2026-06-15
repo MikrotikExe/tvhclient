@@ -91,15 +91,15 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0) {
         (state as? ChannelsState.Loaded)?.let { st ->
             val nowS = System.currentTimeMillis() / 1000
             LivePlaylist.channels = st.allRows.map { r ->
-                val cur = epgMap[r.channel.uuid]?.firstOrNull { it.start <= nowS && nowS < it.stop }
+                val (nt, ns, ne) = currentNow(r, epgMap[r.channel.uuid], nowS)
                 LivePlaylist.LiveChannel(
                     uuid = r.channel.uuid,
                     name = r.channel.name,
                     number = r.channel.number ?: 0,
                     piconUrl = r.piconUrl,
-                    nowTitle = cur?.title ?: "",
-                    nowStart = cur?.start ?: 0L,
-                    nowStop = cur?.stop ?: 0L
+                    nowTitle = nt ?: "",
+                    nowStart = ns,
+                    nowStop = ne
                 )
             }
         }
