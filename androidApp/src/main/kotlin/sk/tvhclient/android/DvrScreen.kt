@@ -277,8 +277,9 @@ private fun DvrContent(
         is DvrNav.Category -> {
             val inCat = entries.filter { DvrClassifier.classify(it) == nav.catKey }
             if (DvrClassifier.hasSubgenres(nav.catKey)) {
-                // Zlozky sub-zanrov ktore maju zaznamy
-                val bySub = inCat.groupBy { DvrClassifier.subgenre(it, nav.catKey) }
+                // Zlozky sub-zanrov ktore maju zaznamy (serialovy konsenzus)
+                val consensus = DvrClassifier.consensusSubgenres(inCat, nav.catKey)
+                val bySub = inCat.groupBy { DvrClassifier.subgenreOf(it, nav.catKey, consensus) }
                 val order = DvrClassifier.subOrderFor(nav.catKey)
                 LazyColumn(Modifier.fillMaxSize()) {
                     item("hdr") { Header(catLabel(nav.catKey)) }
@@ -294,9 +295,10 @@ private fun DvrContent(
         }
 
         is DvrNav.Subgenre -> {
-            val inSub = entries.filter {
-                DvrClassifier.classify(it) == nav.catKey &&
-                DvrClassifier.subgenre(it, nav.catKey) == nav.subKey
+            val catEntries = entries.filter { DvrClassifier.classify(it) == nav.catKey }
+            val consensus = DvrClassifier.consensusSubgenres(catEntries, nav.catKey)
+            val inSub = catEntries.filter {
+                DvrClassifier.subgenreOf(it, nav.catKey, consensus) == nav.subKey
             }
             if (DvrClassifier.isSeriesLike(nav.catKey)) {
                 // Zoskup epizody pod serial (canonical title). Vzdy zlozka,
@@ -318,9 +320,10 @@ private fun DvrContent(
         }
 
         is DvrNav.Series -> {
-            val eps = entries.filter {
-                DvrClassifier.classify(it) == nav.catKey &&
-                DvrClassifier.subgenre(it, nav.catKey) == nav.subKey &&
+            val catEntries = entries.filter { DvrClassifier.classify(it) == nav.catKey }
+            val consensus = DvrClassifier.consensusSubgenres(catEntries, nav.catKey)
+            val eps = catEntries.filter {
+                DvrClassifier.subgenreOf(it, nav.catKey, consensus) == nav.subKey &&
                 DvrClassifier.seriesCanonicalTitle(it.title) == nav.seriesTitle
             }.sortedByDescending { it.start }
             RecordingList(eps, context, progressTick, header = nav.seriesTitle)

@@ -245,6 +245,32 @@ object DvrClassifier {
     )
 
     private val yearSuffixEnd = Regex("""\s*\(\s*(?:19|20)\d{2}\s*\)\s*$""")
+    // Pripona serie na konci: rimske cislo (i, ii, viii, xxv...) alebo cislo
+    private val seasonSuffix = Regex("""\s+(?:[ivxlcdm]{1,6}|\d{1,3})$""")
+
+    /** Konsenzus podzanru pre cely serial: vsetky epizody serialu dostanu
+     *  rovnaky podzaner (najcastejsi non-INE), aby sa serial neobjavoval vo
+     *  viacerych priecinkoch naraz. Pre ne-serialove kategorie prazdna mapa. */
+    fun consensusSubgenres(catEntries: List<DvrEntry>, topCat: String): Map<String, String> {
+        if (!isSeriesLike(topCat)) return emptyMap()
+        val out = HashMap<String, String>()
+        catEntries.groupBy { seriesCanonicalTitle(it.title) }.forEach { (key, eps) ->
+            val votes = eps.map { subgenre(it, topCat) }
+            val nonIne = votes.filter { !it.endsWith("_ine") }
+            val pool = if (nonIne.isNotEmpty()) nonIne else votes
+            val counts = pool.groupingBy { it }.eachCount()
+            val order = subOrderFor(topCat)
+            // najcastejsi; pri zhode skor v poradi (nizsi index)
+            out[key] = counts.entries.maxWith(
+                compareBy({ it.value }, { -(order.indexOf(it.key).let { i -> if (i < 0) 999 else i }) })
+            ).key
+        }
+        return out
+    }
+
+    /** Podzaner pre zaznam s ohladom na serialovy konsenzus. */
+    fun subgenreOf(entry: DvrEntry, topCat: String, consensus: Map<String, String>): String =
+        consensus[seriesCanonicalTitle(entry.title)] ?: subgenre(entry, topCat)
 
     /** Kanonizacia nazvu pre korpus lookup (musi ladit s tvorbou korpus JSON). */
     private fun canonicalTitleForCorpus(title: String): String {
@@ -442,7 +468,13 @@ object DvrClassifier {
             if (ct in 0x11..0x18) dvbGenreToSubcat[ct]?.let { return it }
             if (corpus.isNotEmpty()) {
                 val key = canonicalTitleForCorpus(entry.dispTitle)
-                if (key.isNotEmpty()) corpus[key]?.let { return it }
+                if (key.isNotEmpty()) {
+                    corpus[key]?.let { return it }
+                    // serial ma casto priponu serie (rimske cislo / cislo) ktoru
+                    // korpus nema — skus zakladny nazov
+                    val base = seasonSuffix.replace(key, "").trim()
+                    if (base != key && base.isNotEmpty()) corpus[base]?.let { return it }
+                }
             }
         }
         val text = stripAccentsLower(
