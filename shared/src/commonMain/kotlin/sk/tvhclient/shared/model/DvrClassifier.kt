@@ -280,6 +280,15 @@ object DvrClassifier {
         return stripAccentsLower(noYear)
     }
 
+    /** Public: kanonicky nazov (pre IMDb cache zhodny s korpusom). */
+    fun canonicalForCorpus(title: String): String = canonicalTitleForCorpus(title)
+
+    /** Public: zakladny nazov bez pripony serie (pre IMDb query — viac zhod). */
+    fun canonicalForImdb(title: String): String {
+        val k = canonicalTitleForCorpus(title)
+        return seasonSuffix.replace(k, "").trim()
+    }
+
     // -- Sport sub-zanre --
     const val SP_FUTBAL = "sp_futbal"
     const val SP_HOKEJ = "sp_hokej"
@@ -476,6 +485,8 @@ object DvrClassifier {
                     if (base != key && base.isNotEmpty()) corpus[base]?.let { return it }
                 }
             }
+            // 3) IMDb online lookup (z cache; plni sa na pozadi)
+            ImdbLookup.cachedSub(entry.dispTitle)?.let { return it }
         }
         val text = stripAccentsLower(
             listOf(entry.dispTitle, entry.dispSubtitle, entry.dispDescription, entry.channelName)

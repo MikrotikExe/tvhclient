@@ -46,6 +46,7 @@ import sk.tvhclient.shared.formatDateFull
 import sk.tvhclient.shared.formatTimeHm
 import sk.tvhclient.shared.model.DvrClassifier
 import sk.tvhclient.shared.model.DvrEntry
+import sk.tvhclient.shared.model.ImdbLookup
 
 // Navigacia v archive (read-only zlozky)
 private sealed class DvrNav {
@@ -86,6 +87,40 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
     }
 
     LaunchedEffect(Unit) { vm.loadIfNeeded() }
+
+    // IMDb online lookup: nacitaj cache z disku + dopln na pozadi necachnute
+    // filmy/serialy (slovenske/ceske nazvy ktore korpus nepozna).
+    var imdbTick by remember { mutableStateOf(0) }
+    LaunchedEffect(state) {
+        val s = state
+        if (s !is DvrState.Loaded) return@LaunchedEffect
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            loadImdbCache(context)
+        }
+        imdbTick++
+        // tituly filmov/serialov co treba dohladat
+        val pending = LinkedHashSet<String>()
+        for (e in s.entries) {
+            val cat = DvrClassifier.classify(e)
+            if (cat != DvrClassifier.FILM && cat != DvrClassifier.SERIAL) continue
+            val title = e.title
+            if (ImdbLookup.isCached(title) || !ImdbLookup.worthSearching(title)) continue
+            pending.add(title)
+        }
+        var done = 0
+        for (title in pending) {
+            if (ImdbLookup.fetch(title)) {
+                done++
+                if (done % 20 == 0) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { saveImdbCache(context) }
+                    imdbTick++  // priebezne prekreslenie
+                }
+                kotlinx.coroutines.delay(1100)  // rate-limit IMDb
+            }
+        }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { saveImdbCache(context) }
+        imdbTick++
+    }
 
     // Spat: ak hladame, zrus hladanie; inak ak nie sme v root, vrat sa vyssie
     BackHandler(enabled = nav != DvrNav.Root || search.isNotBlank()) {
@@ -162,7 +197,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
                     } else if (s.entries.isEmpty()) {
                         Text(stringResource(R.string.dvr_empty), Modifier.align(Alignment.Center))
                     } else {
-                        androidx.compose.runtime.key(corpusReady) {
+                        androidx.compose.runtime.key(corpusReady, imdbTick) {
                             DvrContent(s.entries, s.channelOrder, s.channelPicons, nav, context, progressTick, onReload = { vm.refresh() }, onNav = { nav = it })
                         }
                     }
@@ -651,6 +686,23 @@ private fun loadCorpusFromAssets(context: Context) {
             code2cat[titles.getString(k)]?.let { map[k] = it }
         }
         DvrClassifier.setCorpus(map)
+    } catch (_: Exception) {
+    }
+}
+
+/** Nacita IMDb cache z filesDir/imdb_cache.json do ImdbLookup. */
+private fun loadImdbCache(context: Context) {
+    try {
+        val f = java.io.File(context.filesDir, "imdb_cache.json")
+        if (f.exists()) ImdbLookup.importJson(f.readText())
+    } catch (_: Exception) {
+    }
+}
+
+/** Ulozi IMDb cache na disk. */
+private fun saveImdbCache(context: Context) {
+    try {
+        java.io.File(context.filesDir, "imdb_cache.json").writeText(ImdbLookup.exportJson())
     } catch (_: Exception) {
     }
 }
