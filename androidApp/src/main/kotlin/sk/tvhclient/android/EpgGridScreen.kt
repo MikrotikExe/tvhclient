@@ -80,6 +80,20 @@ fun EpgGridScreen(
     LaunchedEffect(seed) { seed.forEach { (k, v) -> if (epg[k] == null) epg[k] = v } }
 
     val hScroll = rememberScrollState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
+    // Po otvoreni posun na aktualny cas (pre Dnes), s malym predstihom
+    LaunchedEffect(dayOffset) {
+        val nowMin = if (dayOffset == 0)
+            (((currentTimeSeconds() - dayStart) / 60).toInt()) else 0
+        val startMin = (nowMin - 30).coerceIn(0, DAY_MIN)
+        val targetPx = with(density) { (startMin * PX_PER_MIN).dp.toPx() }.toInt()
+        var tries = 0
+        while (hScroll.maxValue == 0 && tries < 25) {
+            kotlinx.coroutines.delay(20); tries++
+        }
+        hScroll.scrollTo(targetPx.coerceAtMost(hScroll.maxValue))
+    }
 
     Scaffold(
         topBar = {
