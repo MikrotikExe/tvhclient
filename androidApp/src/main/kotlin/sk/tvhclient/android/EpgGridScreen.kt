@@ -107,11 +107,22 @@ fun EpgGridScreen(
     val dvrVm: DvrViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val dvrState by dvrVm.state.collectAsState()
     LaunchedEffect(Unit) { dvrVm.loadIfNeeded() }
+    // Periodicky (kazde 2,5 min) tichy refresh DVR — nove/dokoncene nahravky
+    // sa objavia v mriezke skoro (bez cakania ~15 min na expiraciu)
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(150_000)
+            dvrVm.refresh()
+        }
+    }
     val dvrByChannel = remember(dvrState) {
         (dvrState as? DvrState.Loaded)?.entries?.groupBy { it.channelName } ?: emptyMap()
     }
     val recordingList = remember(dvrState) {
         (dvrState as? DvrState.Loaded)?.recording ?: emptyList()
+    }
+    val inProgressByChannel = remember(recordingList) {
+        recordingList.groupBy { it.channelName }
     }
 
     val hScroll = rememberScrollState()
@@ -225,6 +236,8 @@ fun EpgGridScreen(
                         events = (epg[uuid] ?: emptyList()).filter { it.stop > dayStart && it.start < dayEnd },
                         dvr = (dvrByChannel[row.channel.name] ?: emptyList())
                             .filter { it.stop > dayStart && it.start < dayEnd },
+                        inProgress = (inProgressByChannel[row.channel.name] ?: emptyList())
+                            .filter { it.stop > dayStart && it.start < dayEnd },
                         dayStart = dayStart,
                         now = now,
                         showNow = dayOffset == 0,
@@ -232,14 +245,9 @@ fun EpgGridScreen(
                         visEndMin = visEndMin,
                         hScroll = hScroll,
                         loader = loader,
-                        onClick = { ev ->
-                            val rec = recordingList.firstOrNull {
-                                it.channelName == row.channel.name &&
-                                    it.start < ev.stop && it.stop > ev.start
-                            }
-                            detail = GridDetail.Epg(row, ev, rec)
-                        },
-                        onDvr = { e -> detail = GridDetail.Dvr(e) }
+                        onClick = { ev -> detail = GridDetail.Epg(row, ev) },
+                        onDvr = { e -> detail = GridDetail.Dvr(e) },
+                        onInProgress = { rec -> detail = GridDetail.InProgress(row, rec) }
                     )
                 }
             }
@@ -261,11 +269,13 @@ fun EpgGridScreen(
                         when (d) {
                             is GridDetail.Epg -> playLive(context, d.row, d.ev)
                             is GridDetail.Dvr -> playDvr(context, d.rec)
+                            is GridDetail.InProgress -> playLiveChannel(context, d.row)
                         }
                     },
-                    onPlayFromStart = (d as? GridDetail.Epg)?.inProgress?.let { rec ->
-                        { playDvr(context, rec) }
-                    }
+                    onPlayFromStart = (d as? GridDetail.InProgress)?.let { ip ->
+                        { playDvr(context, ip.rec) }
+                    },
+                    playLabelRes = if (d is GridDetail.InProgress) R.string.play_live else R.string.play
                 )
             }
         }
@@ -273,12 +283,10 @@ fun EpgGridScreen(
 }
 
 private sealed class GridDetail {
-    data class Epg(
-        val row: ChannelRow,
-        val ev: EpgEvent,
-        val inProgress: sk.tvhclient.shared.model.DvrEntry? = null
-    ) : GridDetail()
+    data class Epg(val row: ChannelRow, val ev: EpgEvent) : GridDetail()
     data class Dvr(val rec: sk.tvhclient.shared.model.DvrEntry) : GridDetail()
+    // Prave prebiehajuca nahravka — da sa pustit naživo aj od zaciatku
+    data class InProgress(val row: ChannelRow, val rec: sk.tvhclient.shared.model.DvrEntry) : GridDetail()
 }
 
 @Composable
@@ -287,7 +295,8 @@ private fun GridDetailContent(
     loader: coil.ImageLoader,
     onBack: () -> Unit,
     onPlay: () -> Unit,
-    onPlayFromStart: (() -> Unit)? = null
+    onPlayFromStart: (() -> Unit)? = null,
+    playLabelRes: Int = R.string.play
 ) {
     val context = LocalContext.current
     // Spolocne polia z oboch typov
@@ -318,6 +327,17 @@ private fun GridDetailContent(
             subtitle = detail.rec.dispSubtitle
             channelName = detail.rec.channelName
             piconUrl = null
+            start = detail.rec.start; stop = detail.rec.stop
+            desc = detail.rec.dispDescription
+            ageRating = 0
+            episode = ""
+            recorded = true
+        }
+        is GridDetail.InProgress -> {
+            title = detail.rec.title
+            subtitle = detail.rec.dispSubtitle
+            channelName = detail.row.channel.name
+            piconUrl = detail.row.piconUrl
             start = detail.rec.start; stop = detail.rec.stop
             desc = detail.rec.dispDescription
             ageRating = 0
@@ -397,7 +417,7 @@ private fun GridDetailContent(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        stringResource(R.string.play),
+                        stringResource(playLabelRes),
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -442,6 +462,7 @@ private fun EpgGridRow(
     row: ChannelRow,
     events: List<EpgEvent>,
     dvr: List<sk.tvhclient.shared.model.DvrEntry>,
+    inProgress: List<sk.tvhclient.shared.model.DvrEntry>,
     dayStart: Long,
     now: Long,
     showNow: Boolean,
@@ -450,7 +471,8 @@ private fun EpgGridRow(
     hScroll: androidx.compose.foundation.ScrollState,
     loader: coil.ImageLoader,
     onClick: (EpgEvent) -> Unit,
-    onDvr: (sk.tvhclient.shared.model.DvrEntry) -> Unit
+    onDvr: (sk.tvhclient.shared.model.DvrEntry) -> Unit,
+    onInProgress: (sk.tvhclient.shared.model.DvrEntry) -> Unit
 ) {
     val context = LocalContext.current
     Row(Modifier.height(ROW_H.dp)) {
@@ -498,8 +520,28 @@ private fun EpgGridRow(
                         onClick = { onDvr(rec) }
                     )
                 }
-                // Aktualne a buduce relacie z EPG (tiez cullovane)
-                events.filter { it.stop > now }.forEach { ev ->
+                // Prave prebiehajuce nahravky (● REC) — vyplnia medzeru hned,
+                // klik pusti spravnu nahravku (presne uuid, ziadne fuzzy parovanie)
+                inProgress.forEach { rec ->
+                    val startMin = (((rec.start - dayStart) / 60).toInt()).coerceAtLeast(0)
+                    val endMin = (((rec.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN)
+                    if (endMin <= visStartMin || startMin >= visEndMin) return@forEach
+                    GridBlock(
+                        startMin = startMin,
+                        endMin = endMin,
+                        title = rec.title,
+                        timeLabel = formatTimeHm(rec.start) + " - " + formatTimeHm(rec.stop),
+                        bg = Color(0x33EF5350),       // cervenkavy = prave sa nahrava
+                        recorded = false,
+                        prefix = "\u25CF ",
+                        onClick = { onInProgress(rec) }
+                    )
+                }
+                // Aktualne a buduce relacie z EPG (tiez cullovane); preskoc tie,
+                // ktore prekryva prebiehajuca nahravka (nech nie su dva bloky)
+                events.filter { ev ->
+                    ev.stop > now && inProgress.none { it.start < ev.stop && it.stop > ev.start }
+                }.forEach { ev ->
                     val startMin = (((ev.start - dayStart) / 60).toInt()).coerceAtLeast(0)
                     val endMin = (((ev.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN)
                     if (endMin <= visStartMin || startMin >= visEndMin) return@forEach
@@ -543,6 +585,7 @@ private fun GridBlock(
     bg: Color,
     recorded: Boolean,
     progressMin: Int = 0,
+    prefix: String? = null,
     onClick: () -> Unit
 ) {
     val wMin = endMin - startMin
@@ -568,7 +611,7 @@ private fun GridBlock(
         }
         Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
             Text(
-                (if (recorded) "\u25B6 " else "") + title,
+                (prefix ?: if (recorded) "\u25B6 " else "") + title,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -591,6 +634,15 @@ private fun playLive(context: android.content.Context, row: ChannelRow, ev: EpgE
         putExtra(PlayerActivity.EXTRA_PROG_START, ev.start)
         putExtra(PlayerActivity.EXTRA_PROG_STOP, ev.stop)
         putExtra(PlayerActivity.EXTRA_PROG_TITLE, ev.title)
+    }
+    context.startActivity(intent)
+}
+
+/** Live prehratie kanala bez konkretnej relacie (pre prebiehajucu nahravku). */
+private fun playLiveChannel(context: android.content.Context, row: ChannelRow) {
+    val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
+        putExtra(PlayerActivity.EXTRA_UUID, row.channel.uuid)
+        putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
     }
     context.startActivity(intent)
 }

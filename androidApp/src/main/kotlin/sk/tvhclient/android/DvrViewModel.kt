@@ -43,7 +43,10 @@ class DvrViewModel : ViewModel() {
     }
 
     /** Vynutene obnovenie (napr. tlacidlo) — bez blikania, drzi stare data. */
-    fun refresh() = load(showLoading = false)
+    fun refresh() {
+        Tvh.store.active()?.let { sk.tvhclient.shared.htsp.HtspData.clear(it.id) }
+        load(showLoading = false)
+    }
 
     fun load(showLoading: Boolean = true) {
         val server = Tvh.store.active()
