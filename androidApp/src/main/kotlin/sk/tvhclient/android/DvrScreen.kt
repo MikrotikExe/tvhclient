@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,7 +74,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
 
-    LaunchedEffect(Unit) { vm.load() }
+    LaunchedEffect(Unit) { vm.loadIfNeeded() }
 
     // Spat: ak nie sme v root, vrat sa o uroven vyssie (nie zavri appku)
     BackHandler(enabled = nav != DvrNav.Root) {
@@ -110,6 +112,15 @@ fun DvrScreen(vm: DvrViewModel = viewModel()) {
                 } else {
                     DvrContent(s.entries, s.channelOrder, s.channelPicons, nav, context, progressTick, onNav = { nav = it })
                 }
+            }
+        }
+        // Obnovit nahravky (vytiahne aj nove zo servera)
+        if (state is DvrState.Loaded && nav == DvrNav.Root) {
+            androidx.compose.material3.IconButton(
+                onClick = { vm.refresh() },
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+            ) {
+                androidx.compose.material3.Icon(Icons.Default.Refresh, contentDescription = null)
             }
         }
     }

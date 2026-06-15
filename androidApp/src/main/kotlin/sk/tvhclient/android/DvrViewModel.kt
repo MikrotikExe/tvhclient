@@ -33,13 +33,26 @@ class DvrViewModel : ViewModel() {
     private val _state = MutableStateFlow<DvrState>(DvrState.Loading)
     val state: StateFlow<DvrState> = _state
 
-    fun load() {
+    private var loadedOnce = false
+
+    /** Nacita len ak este nemame data (prezije prepnutie kariet). */
+    fun loadIfNeeded() {
+        if (loadedOnce && _state.value is DvrState.Loaded) return
+        load(showLoading = true)
+    }
+
+    /** Vynutene obnovenie (napr. tlacidlo) — bez blikania, drzi stare data. */
+    fun refresh() = load(showLoading = false)
+
+    fun load(showLoading: Boolean = true) {
         val server = Tvh.store.active()
         if (server == null) {
             _state.value = DvrState.NoServer
             return
         }
-        _state.value = DvrState.Loading
+        if (showLoading && _state.value !is DvrState.Loaded) {
+            _state.value = DvrState.Loading
+        }
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -59,8 +72,11 @@ class DvrViewModel : ViewModel() {
                     }
                 }
                 _state.value = DvrState.Loaded(result.first, result.second, result.third)
+                loadedOnce = true
             } catch (e: Exception) {
-                _state.value = DvrState.Error(e.message ?: "Chyba načítania")
+                if (_state.value !is DvrState.Loaded) {
+                    _state.value = DvrState.Error(e.message ?: "Chyba načítania")
+                }
             }
         }
     }

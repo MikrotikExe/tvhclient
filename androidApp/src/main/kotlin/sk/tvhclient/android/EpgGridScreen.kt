@@ -83,21 +83,13 @@ fun EpgGridScreen(
     val epg = remember { mutableStateMapOf<String, List<EpgEvent>>() }
     LaunchedEffect(seed) { seed.forEach { (k, v) -> if (epg[k] == null) epg[k] = v } }
 
-    // DVR nahravky (minule relacie dozadu) — zoskupene podla nazvu kanala
-    var dvrByChannel by remember {
-        mutableStateOf<Map<String, List<sk.tvhclient.shared.model.DvrEntry>>>(emptyMap())
-    }
-    LaunchedEffect(Unit) {
-        if (server != null) {
-            try {
-                val list = withContext(Dispatchers.IO) {
-                    val api = Tvh.apiFor(server)
-                    try { Tvh.fetchDvrFinished(server, api) } finally { api.close() }
-                }
-                dvrByChannel = list.groupBy { it.channelName }
-            } catch (_: Exception) {
-            }
-        }
+    // DVR nahravky (minule relacie dozadu) — zdielana cache cez DvrViewModel
+    // (prezije prepnutie kariet, nenacitava sa znova zo servera)
+    val dvrVm: DvrViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val dvrState by dvrVm.state.collectAsState()
+    LaunchedEffect(Unit) { dvrVm.loadIfNeeded() }
+    val dvrByChannel = remember(dvrState) {
+        (dvrState as? DvrState.Loaded)?.entries?.groupBy { it.channelName } ?: emptyMap()
     }
 
     val hScroll = rememberScrollState()
@@ -126,6 +118,14 @@ fun EpgGridScreen(
                         modifier = Modifier.padding(8.dp).clickable { onBack() },
                         style = MaterialTheme.typography.titleLarge
                     )
+                },
+                actions = {
+                    androidx.compose.material3.IconButton(onClick = { dvrVm.refresh() }) {
+                        androidx.compose.material3.Icon(
+                            androidx.compose.material.icons.Icons.Default.Refresh,
+                            contentDescription = null
+                        )
+                    }
                 }
             )
         }
