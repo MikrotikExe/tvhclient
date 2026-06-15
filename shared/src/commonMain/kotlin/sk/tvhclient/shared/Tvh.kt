@@ -94,7 +94,9 @@ object Tvh {
         if (server.connectionMode == "htsp")
             sk.tvhclient.shared.htsp.HtspData.dvrRecording(
                 sk.tvhclient.shared.htsp.HtspData.metadata(server, false, currentTimeSeconds()))
-        else emptyList()
+        else api.dvrUpcoming().filter {
+            it.schedStatus == "recording" || it.status == "recording" || it.fileSize > 0
+        }
 
     /** Zoznam nadchadzajucich relacii na kanal (HTSP, pre auto-prechod na zozname). */
     suspend fun fetchEpgUpcoming(server: TvhServer): Map<String, List<sk.tvhclient.shared.model.EpgEvent>> =

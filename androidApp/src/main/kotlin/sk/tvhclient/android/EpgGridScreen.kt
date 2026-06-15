@@ -92,7 +92,14 @@ fun EpgGridScreen(
     val epgLoading by epgVm.loading.collectAsState()
     LaunchedEffect(Unit) { epgVm.loadIfNeeded() }
     val epg = remember(epgFull, seed) {
-        if (epgFull.isNotEmpty()) epgFull else seed
+        // seed (now/next) ako zaklad nech sa hned nieco ukaze; hromadne EPG
+        // (dump) prepise kanaly kde uz mame plne data
+        if (epgFull.isEmpty()) seed
+        else {
+            val m = HashMap<String, List<EpgEvent>>(seed)
+            m.putAll(epgFull)
+            m
+        }
     }
 
     // DVR nahravky (minule relacie dozadu) — zdielana cache cez DvrViewModel

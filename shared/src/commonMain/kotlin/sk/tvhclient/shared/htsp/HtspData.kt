@@ -73,31 +73,21 @@ object HtspData {
         return out
     }
 
-    /** Hromadne EPG pre mriezku: aktualna + viac nasledujucich relacii pre
-     *  KAZDY kanal na JEDNOM spojeni (numFollowing vacsie). Cache 10 min, aby
-     *  bolo skrolovanie v mriezke plynule (bez stahovania po kanaloch). */
+    /** Hromadne EPG pre mriezku cez JEDEN async dump (metadata s EPG) — nie
+     *  591x getEvents. Vyrazne rychlejsie. Cache 10 min. */
     suspend fun epgGridMap(server: TvhServer, nowSec: Long, force: Boolean = false): Map<String, List<EpgEvent>> {
         val gc = gridCache[server.id]
         if (!force && gc != null && nowSec - gc.ts < 600) return gc.map
-        val meta = metadata(server, withEpg = false, nowSec = nowSec)
-        val channelIds = meta.channels.mapNotNull { longOf(it, "channelId") }
-        if (channelIds.isEmpty()) return emptyMap()
-        val client = HtspClient(server.host, server.htspPort, server.username, server.password)
-        client.connect()
-        val out = HashMap<String, List<EpgEvent>>()
-        try {
-            for (cid in channelIds) {
-                val evs = try {
-                    client.getEvents(cid, numFollowing = 40, maxTime = nowSec + 3 * 86400)
-                } catch (e: Exception) { continue }
-                val mapped = evs.mapNotNull { mapEvent(it) }.sortedBy { it.start }
-                if (mapped.isNotEmpty()) out[cid.toString()] = mapped
-            }
-        } finally {
-            client.close()
+        val meta = metadata(server, withEpg = true, nowSec = nowSec, epgMaxDays = 3)
+        val out = HashMap<String, MutableList<EpgEvent>>()
+        for (e in meta.events) {
+            val ev = mapEvent(e) ?: continue
+            val cid = ev.channelUuid ?: continue
+            out.getOrPut(cid) { ArrayList() }.add(ev)
         }
-        gridCache[server.id] = NowCache(nowSec, out)
-        return out
+        val result = out.mapValues { entry -> entry.value.sortedBy { it.start } }
+        gridCache[server.id] = NowCache(nowSec, result)
+        return result
     }
 
     fun clear(serverId: String) { cache.remove(serverId); nowCache.remove(serverId); gridCache.remove(serverId) }
