@@ -83,6 +83,23 @@ fun EpgGridScreen(
     val epg = remember { mutableStateMapOf<String, List<EpgEvent>>() }
     LaunchedEffect(seed) { seed.forEach { (k, v) -> if (epg[k] == null) epg[k] = v } }
 
+    // DVR nahravky (minule relacie dozadu) — zoskupene podla nazvu kanala
+    var dvrByChannel by remember {
+        mutableStateOf<Map<String, List<sk.tvhclient.shared.model.DvrEntry>>>(emptyMap())
+    }
+    LaunchedEffect(Unit) {
+        if (server != null) {
+            try {
+                val list = withContext(Dispatchers.IO) {
+                    val api = Tvh.apiFor(server)
+                    try { Tvh.fetchDvrFinished(server, api) } finally { api.close() }
+                }
+                dvrByChannel = list.groupBy { it.channelName }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     val hScroll = rememberScrollState()
     val density = androidx.compose.ui.platform.LocalDensity.current
 
@@ -114,11 +131,18 @@ fun EpgGridScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            // Vyber dna
+            // Vyber dna (minule -7 az +6); minule dni = nahravky z DVR
+            val offsets = remember { (-7..6).toList() }
+            val dayListState = androidx.compose.foundation.lazy.rememberLazyListState()
+            LaunchedEffect(Unit) {
+                val idx = offsets.indexOf(0).coerceAtLeast(0)
+                dayListState.scrollToItem(idx)
+            }
             LazyRow(
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+                state = dayListState,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                items((0..6).toList()) { off ->
+                items(offsets) { off ->
                     val label = if (off == 0) "Dnes" else formatDayLabel(dayStartSec(off))
                     Box(Modifier.padding(end = 8.dp)) {
                         FilterChip(
@@ -168,12 +192,15 @@ fun EpgGridScreen(
                     EpgGridRow(
                         row = row,
                         events = (epg[uuid] ?: emptyList()).filter { it.stop > dayStart && it.start < dayEnd },
+                        dvr = (dvrByChannel[row.channel.name] ?: emptyList())
+                            .filter { it.stop > dayStart && it.start < dayEnd },
                         dayStart = dayStart,
                         now = now,
                         showNow = dayOffset == 0,
                         hScroll = hScroll,
                         loader = loader,
-                        onClick = { ev -> playLive(context, row, ev) }
+                        onClick = { ev -> playLive(context, row, ev) },
+                        onDvr = { e -> playDvr(context, e) }
                     )
                 }
             }
@@ -185,12 +212,14 @@ fun EpgGridScreen(
 private fun EpgGridRow(
     row: ChannelRow,
     events: List<EpgEvent>,
+    dvr: List<sk.tvhclient.shared.model.DvrEntry>,
     dayStart: Long,
     now: Long,
     showNow: Boolean,
     hScroll: androidx.compose.foundation.ScrollState,
     loader: coil.ImageLoader,
-    onClick: (EpgEvent) -> Unit
+    onClick: (EpgEvent) -> Unit,
+    onDvr: (sk.tvhclient.shared.model.DvrEntry) -> Unit
 ) {
     val context = LocalContext.current
     Row(Modifier.height(ROW_H.dp)) {
@@ -222,67 +251,97 @@ private fun EpgGridRow(
                 .height(ROW_H.dp)
         ) {
             Box(Modifier.width((DAY_MIN * PX_PER_MIN).dp).height(ROW_H.dp)) {
-                events.forEach { ev ->
-                    val startMin = (((ev.start - dayStart) / 60).toInt()).coerceAtLeast(0)
-                    val endMin = (((ev.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN)
-                    val wMin = (endMin - startMin)
-                    if (wMin <= 0) return@forEach
-                    val isNow = ev.start <= now && now < ev.stop
-                    Box(
-                        Modifier
-                            .offset(x = (startMin * PX_PER_MIN).dp)
-                            .width((wMin * PX_PER_MIN).dp)
-                            .height(ROW_H.dp)
-                            .padding(2.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                                else Color(0x22FFFFFF)
-                            )
-                            .clickable { onClick(ev) }
-                    ) {
-                        // Live priebeh bezzhiacej relacie (svetlejsia vypln zlava)
-                        if (isNow) {
-                            val totalMin = ((ev.stop - ev.start) / 60).toInt().coerceAtLeast(1)
-                            val elapsedMin = (((now - ev.start) / 60).toInt()).coerceIn(0, totalMin)
-                            Box(
-                                Modifier
-                                    .width((elapsedMin * PX_PER_MIN).dp)
-                                    .height(ROW_H.dp)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
-                            )
-                        }
-                        Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
-                            Text(
-                                ev.title.ifBlank { "—" },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                formatTimeHm(ev.start) + " - " + formatTimeHm(ev.stop),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
-                            )
-                        }
-                    }
+                // Minule relacie z DVR (prehratelne dozadu) — len co skoncilo
+                dvr.filter { it.stop <= now }.forEach { rec ->
+                    GridBlock(
+                        startMin = (((rec.start - dayStart) / 60).toInt()).coerceAtLeast(0),
+                        endMin = (((rec.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN),
+                        title = rec.title,
+                        timeLabel = formatTimeHm(rec.start) + " - " + formatTimeHm(rec.stop),
+                        bg = Color(0x3366BB6A),       // zelenkavy = nahrate, da sa prehrat
+                        recorded = true,
+                        onClick = { onDvr(rec) }
+                    )
                 }
-                // Zvisla live ciara aktualneho casu (len pre dnes)
+                // Aktualne a buduce relacie z EPG
+                events.filter { it.stop > now }.forEach { ev ->
+                    val isNow = ev.start <= now && now < ev.stop
+                    GridBlock(
+                        startMin = (((ev.start - dayStart) / 60).toInt()).coerceAtLeast(0),
+                        endMin = (((ev.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN),
+                        title = ev.title.ifBlank { "—" },
+                        timeLabel = formatTimeHm(ev.start) + " - " + formatTimeHm(ev.stop),
+                        bg = if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                             else Color(0x22FFFFFF),
+                        recorded = false,
+                        progressMin = if (isNow) ((now - ev.start) / 60).toInt() else 0,
+                        onClick = { onClick(ev) }
+                    )
+                }
+                // Zvisla live ciara aktualneho casu (jemna, ladi s farbou)
                 if (showNow) {
                     val nowMin = ((now - dayStart) / 60).toInt()
                     if (nowMin in 0..DAY_MIN) {
                         Box(
                             Modifier
                                 .offset(x = (nowMin * PX_PER_MIN).dp)
-                                .width(2.dp)
+                                .width(1.5.dp)
                                 .height(ROW_H.dp)
-                                .background(Color(0xFFFF5252))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun GridBlock(
+    startMin: Int,
+    endMin: Int,
+    title: String,
+    timeLabel: String,
+    bg: Color,
+    recorded: Boolean,
+    progressMin: Int = 0,
+    onClick: () -> Unit
+) {
+    val wMin = endMin - startMin
+    if (wMin <= 0) return
+    Box(
+        Modifier
+            .offset(x = (startMin * PX_PER_MIN).dp)
+            .width((wMin * PX_PER_MIN).dp)
+            .height(ROW_H.dp)
+            .padding(2.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(bg)
+            .clickable { onClick() }
+    ) {
+        // Live priebeh (svetlejsia vypln zlava) pre bezzhiacu relaciu
+        if (progressMin > 0) {
+            Box(
+                Modifier
+                    .width((progressMin.coerceAtMost(wMin) * PX_PER_MIN).dp)
+                    .height(ROW_H.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+            )
+        }
+        Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+            Text(
+                (if (recorded) "\u25B6 " else "") + title,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                timeLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
         }
     }
 }
@@ -294,6 +353,19 @@ private fun playLive(context: android.content.Context, row: ChannelRow, ev: EpgE
         putExtra(PlayerActivity.EXTRA_PROG_START, ev.start)
         putExtra(PlayerActivity.EXTRA_PROG_STOP, ev.stop)
         putExtra(PlayerActivity.EXTRA_PROG_TITLE, ev.title)
+    }
+    context.startActivity(intent)
+}
+
+/** Spatne prehratie minulej relacie z DVR nahravky (vratane resume/pozicie). */
+private fun playDvr(context: android.content.Context, rec: sk.tvhclient.shared.model.DvrEntry) {
+    val server = Tvh.store.active() ?: return
+    val url = Tvh.dvrUrl(server, rec.uuid)
+    val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
+        putExtra(PlayerActivity.EXTRA_URL, url)
+        putExtra(PlayerActivity.EXTRA_TITLE, rec.title)
+        putExtra(PlayerActivity.EXTRA_DURATION_MS, rec.durationSec * 1000)
+        putExtra(PlayerActivity.EXTRA_DVR_UUID, rec.uuid)
     }
     context.startActivity(intent)
 }
