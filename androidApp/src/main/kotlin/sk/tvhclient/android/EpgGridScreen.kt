@@ -90,10 +90,10 @@ fun EpgGridScreen(
     val epgVm: EpgGridViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val epgFull by epgVm.epg.collectAsState()
     val epgLoading by epgVm.loading.collectAsState()
-    LaunchedEffect(Unit) { epgVm.loadIfNeeded() }
+    val epgGen by epgVm.gen.collectAsState()
     val epg = remember(epgFull, seed) {
-        // seed (now/next) ako zaklad nech sa hned nieco ukaze; hromadne EPG
-        // (dump) prepise kanaly kde uz mame plne data
+        // seed (now/next) ako zaklad nech sa hned nieco ukaze; per-kanal EPG
+        // (progresivne) prepise kanaly kde uz mame plne data
         if (epgFull.isEmpty()) seed
         else {
             val m = HashMap<String, List<EpgEvent>>(seed)
@@ -218,6 +218,8 @@ fun EpgGridScreen(
             LazyColumn(Modifier.fillMaxSize()) {
                 items(rows, key = { it.channel.uuid }) { row ->
                     val uuid = row.channel.uuid
+                    // Progresivne: nacitaj EPG pre tento kanal ked je riadok viditelny
+                    LaunchedEffect(uuid, epgGen) { epgVm.ensureChannel(uuid) }
                     EpgGridRow(
                         row = row,
                         events = (epg[uuid] ?: emptyList()).filter { it.stop > dayStart && it.start < dayEnd },

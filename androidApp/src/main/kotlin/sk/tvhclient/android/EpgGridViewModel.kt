@@ -11,9 +11,11 @@ import sk.tvhclient.shared.Tvh
 import sk.tvhclient.shared.model.EpgEvent
 
 /**
- * EPG pre mriezku: nacita sa RAZ hromadne (vsetky kanaly na jednom spojeni) a
- * drzi v pamati, takze skrolovanie v TV programe je plynule a neprepina sa
- * stahovanie po kanaloch. Prezije prepnutie kariet (Activity-scoped).
+ * EPG pre mriezku - PROGRESIVNE per-kanal nacitanie: kanal sa stiahne az ked
+ * je jeho riadok viditelny (cez ensureChannel), takze viditelne kanaly sa
+ * objavia rychlo a dalsie pribudaju pri skrolovani. Vysledok sa drzi v cache
+ * (Activity-scoped ViewModel), takze prepnutie kariet ani znovuotvorenie
+ * mriezky uz nestahuje to iste zo servera.
  */
 class EpgGridViewModel : ViewModel() {
 
@@ -23,31 +25,37 @@ class EpgGridViewModel : ViewModel() {
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
-    private var loadedOnce = false
+    // generacia: po refresh sa zvysi a riadky znova spustia ensureChannel
+    private val _gen = MutableStateFlow(0)
+    val gen: StateFlow<Int> = _gen
 
-    fun loadIfNeeded() {
-        if (loadedOnce) return
-        load(force = false)
-    }
+    private val inFlight = HashSet<String>()
 
-    fun refresh() = load(force = true)
-
-    private fun load(force: Boolean) {
+    /** Nacita EPG pre jeden kanal, ak ho este nemame (volane pri zobrazeni riadku). */
+    fun ensureChannel(uuid: String) {
+        if (_epg.value.containsKey(uuid) || inFlight.contains(uuid)) return
         val server = Tvh.store.active() ?: return
-        if (_loading.value) return
+        inFlight.add(uuid)
         _loading.value = true
         viewModelScope.launch {
             try {
-                val map = withContext(Dispatchers.IO) {
+                val evs = withContext(Dispatchers.IO) {
                     val api = Tvh.apiFor(server)
-                    try { Tvh.fetchEpgGrid(server, api, force) } finally { api.close() }
+                    try { Tvh.fetchEpgForChannel(server, api, uuid) } finally { api.close() }
                 }
-                if (map.isNotEmpty()) _epg.value = map
-                loadedOnce = true
+                _epg.value = _epg.value + (uuid to evs)
             } catch (_: Exception) {
             } finally {
-                _loading.value = false
+                inFlight.remove(uuid)
+                if (inFlight.isEmpty()) _loading.value = false
             }
         }
+    }
+
+    /** Vynutene obnovenie - zahodi cache, riadky sa nacitaju nanovo. */
+    fun refresh() {
+        _epg.value = emptyMap()
+        inFlight.clear()
+        _gen.value = _gen.value + 1
     }
 }
