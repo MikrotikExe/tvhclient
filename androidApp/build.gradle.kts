@@ -20,6 +20,18 @@ android {
         compose = true
     }
 
+    // libVLC bundluje natívne .so pre vsetky ABI (~200MB). Rozdelime APK
+    // podla ABI a zahodime x86/x86_64 (len emulator). Vysledok: samostatne
+    // mensie APK pre kazde realne zariadenie (~50-60MB namiesto ~200MB).
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a")
+            isUniversalApk = false
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
