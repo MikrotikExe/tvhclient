@@ -7,6 +7,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
@@ -541,6 +542,17 @@ private fun PlayerUi(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .pointerInput(liveChannels.isNotEmpty()) {
+                if (liveChannels.isEmpty()) return@pointerInput
+                var dx = 0f
+                androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                    onDragStart = { dx = 0f },
+                    onDragEnd = {
+                        if (dx > 100f) showChannelList = true        // potiahnutie doprava -> otvor
+                        else if (dx < -100f) showChannelList = false  // dolava -> zavri
+                    }
+                ) { _, amount -> dx += amount }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
