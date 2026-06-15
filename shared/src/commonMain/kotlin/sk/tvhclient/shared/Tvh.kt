@@ -95,6 +95,20 @@ object Tvh {
             sk.tvhclient.shared.htsp.HtspData.epgUpcomingMap(server, currentTimeSeconds())
         else emptyMap()
 
+    /** Hromadne EPG pre mriezku (vsetky kanaly naraz, plynule skrolovanie). */
+    suspend fun fetchEpgGrid(server: TvhServer, api: TvhApi, force: Boolean = false): Map<String, List<sk.tvhclient.shared.model.EpgEvent>> =
+        if (server.connectionMode == "htsp") {
+            sk.tvhclient.shared.htsp.HtspData.epgGridMap(server, currentTimeSeconds(), force)
+        } else {
+            // HTTP: po kanaloch na jednom kliente (drzane v cache vo ViewModeli)
+            val out = HashMap<String, List<sk.tvhclient.shared.model.EpgEvent>>()
+            for (ch in fetchChannels(server, api)) {
+                val evs = try { api.epgForChannel(ch.uuid) } catch (e: Exception) { emptyList() }
+                if (evs.isNotEmpty()) out[ch.uuid] = evs
+            }
+            out
+        }
+
     /** EPG pre kanal (denny program): HTSP getEvents (rychle) alebo HTTP. */
     suspend fun fetchEpgForChannel(server: TvhServer, api: TvhApi, channelUuid: String): List<sk.tvhclient.shared.model.EpgEvent> =
         if (server.connectionMode == "htsp") {

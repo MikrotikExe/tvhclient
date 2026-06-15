@@ -32,7 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,8 +45,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import sk.tvhclient.shared.Tvh
 import sk.tvhclient.shared.api.ChannelRow
 import sk.tvhclient.shared.currentTimeSeconds
@@ -82,9 +79,15 @@ fun EpgGridScreen(
         while (true) { kotlinx.coroutines.delay(30_000); now = currentTimeSeconds() }
     }
 
-    // Cache EPG per kanal (cele nacitane eventy); seed z now/next ak je
-    val epg = remember { mutableStateMapOf<String, List<EpgEvent>>() }
-    LaunchedEffect(seed) { seed.forEach { (k, v) -> if (epg[k] == null) epg[k] = v } }
+    // EPG hromadne (jednorazovo, plynule skrolovanie) — zdielana cache cez VM.
+    // Seed z now/next pre okamzity prvy obraz, kym dobehne hromadne nacitanie.
+    val epgVm: EpgGridViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val epgFull by epgVm.epg.collectAsState()
+    val epgLoading by epgVm.loading.collectAsState()
+    LaunchedEffect(Unit) { epgVm.loadIfNeeded() }
+    val epg = remember(epgFull, seed) {
+        if (epgFull.isNotEmpty()) epgFull else seed
+    }
 
     // DVR nahravky (minule relacie dozadu) — zdielana cache cez DvrViewModel
     // (prezije prepnutie kariet, nenacitava sa znova zo servera)
@@ -123,7 +126,15 @@ fun EpgGridScreen(
                     )
                 },
                 actions = {
-                    androidx.compose.material3.IconButton(onClick = { dvrVm.refresh() }) {
+                    if (epgLoading) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp).padding(end = 4.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                    androidx.compose.material3.IconButton(onClick = {
+                        epgVm.refresh(); dvrVm.refresh()
+                    }) {
                         androidx.compose.material3.Icon(
                             Icons.Default.Refresh,
                             contentDescription = null
@@ -176,22 +187,6 @@ fun EpgGridScreen(
             LazyColumn(Modifier.fillMaxSize()) {
                 items(rows, key = { it.channel.uuid }) { row ->
                     val uuid = row.channel.uuid
-                    // Lazy nacitanie EPG pre kanal (ak nie je v cache pre dany den)
-                    val events = epg[uuid]
-                    val hasDay = events?.any { it.stop > dayStart && it.start < dayEnd } == true
-                    LaunchedEffect(uuid, dayOffset) {
-                        if (!hasDay && server != null) {
-                            try {
-                                val list = withContext(Dispatchers.IO) {
-                                    val api = Tvh.apiFor(server)
-                                    try { Tvh.fetchEpgForChannel(server, api, uuid) } finally { api.close() }
-                                }
-                                val prev = epg[uuid] ?: emptyList()
-                                epg[uuid] = (prev + list).distinctBy { it.eventId ?: it.start }
-                            } catch (_: Exception) {
-                            }
-                        }
-                    }
                     EpgGridRow(
                         row = row,
                         events = (epg[uuid] ?: emptyList()).filter { it.stop > dayStart && it.start < dayEnd },

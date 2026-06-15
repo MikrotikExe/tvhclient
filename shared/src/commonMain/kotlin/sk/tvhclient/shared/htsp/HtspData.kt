@@ -19,6 +19,7 @@ object HtspData {
     private val cache = HashMap<String, Cache>()
     private data class NowCache(val ts: Long, val map: Map<String, List<EpgEvent>>)
     private val nowCache = HashMap<String, NowCache>()
+    private val gridCache = HashMap<String, NowCache>()
 
     private fun longOf(m: Map<String, Any?>, key: String): Long? = (m[key] as? Long)
     private fun strOf(m: Map<String, Any?>, key: String): String = (m[key] as? String) ?: ""
@@ -72,7 +73,34 @@ object HtspData {
         return out
     }
 
-    fun clear(serverId: String) { cache.remove(serverId); nowCache.remove(serverId) }
+    /** Hromadne EPG pre mriezku: aktualna + viac nasledujucich relacii pre
+     *  KAZDY kanal na JEDNOM spojeni (numFollowing vacsie). Cache 10 min, aby
+     *  bolo skrolovanie v mriezke plynule (bez stahovania po kanaloch). */
+    suspend fun epgGridMap(server: TvhServer, nowSec: Long, force: Boolean = false): Map<String, List<EpgEvent>> {
+        val gc = gridCache[server.id]
+        if (!force && gc != null && nowSec - gc.ts < 600) return gc.map
+        val meta = metadata(server, withEpg = false, nowSec = nowSec)
+        val channelIds = meta.channels.mapNotNull { longOf(it, "channelId") }
+        if (channelIds.isEmpty()) return emptyMap()
+        val client = HtspClient(server.host, server.htspPort, server.username, server.password)
+        client.connect()
+        val out = HashMap<String, List<EpgEvent>>()
+        try {
+            for (cid in channelIds) {
+                val evs = try {
+                    client.getEvents(cid, numFollowing = 40, maxTime = nowSec + 3 * 86400)
+                } catch (e: Exception) { continue }
+                val mapped = evs.mapNotNull { mapEvent(it) }.sortedBy { it.start }
+                if (mapped.isNotEmpty()) out[cid.toString()] = mapped
+            }
+        } finally {
+            client.close()
+        }
+        gridCache[server.id] = NowCache(nowSec, out)
+        return out
+    }
+
+    fun clear(serverId: String) { cache.remove(serverId); nowCache.remove(serverId); gridCache.remove(serverId) }
 
     // ---- mapovanie ----
 
