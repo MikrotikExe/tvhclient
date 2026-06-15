@@ -171,22 +171,23 @@ fun EpgGridScreen(
     val daySwitchPx = with(density) { 90.dp.toPx() }
     val edgeConn = remember(hScroll) {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
-            override fun onPostScroll(
-                consumed: androidx.compose.ui.geometry.Offset,
+            override fun onPreScroll(
                 available: androidx.compose.ui.geometry.Offset,
                 source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
             ): androidx.compose.ui.geometry.Offset {
                 val dx = available.x
-                if (dx != 0f) {
-                    if (hScroll.value <= 0 && dx < 0f && dayOffset > -7) {
-                        edgeAccum += -dx
-                        if (edgeAccum >= daySwitchPx) { edgeAccum = 0f; pendingEdge = "end"; dayOffset-- }
-                    } else if (hScroll.value >= hScroll.maxValue && dx > 0f && dayOffset < 6) {
-                        edgeAccum += dx
-                        if (edgeAccum >= daySwitchPx) { edgeAccum = 0f; pendingEdge = "start"; dayOffset++ }
-                    } else {
-                        edgeAccum = 0f
-                    }
+                if (dx < 0f && hScroll.value <= 0 && dayOffset > -7) {
+                    // na zaciatku dna a tahame dalej dolava -> predosly den
+                    edgeAccum += -dx
+                    if (edgeAccum >= daySwitchPx) { edgeAccum = 0f; pendingEdge = "end"; dayOffset-- }
+                    return androidx.compose.ui.geometry.Offset(dx, 0f)
+                } else if (dx > 0f && hScroll.value >= hScroll.maxValue && dayOffset < 6) {
+                    // na konci dna a tahame dalej doprava -> dalsi den
+                    edgeAccum += dx
+                    if (edgeAccum >= daySwitchPx) { edgeAccum = 0f; pendingEdge = "start"; dayOffset++ }
+                    return androidx.compose.ui.geometry.Offset(dx, 0f)
+                } else if (dx != 0f) {
+                    edgeAccum = 0f
                 }
                 return androidx.compose.ui.geometry.Offset.Zero
             }
