@@ -103,6 +103,9 @@ fun EpgGridScreen(
     val dvrByChannel = remember(dvrState) {
         (dvrState as? DvrState.Loaded)?.entries?.groupBy { it.channelName } ?: emptyMap()
     }
+    val recordingList = remember(dvrState) {
+        (dvrState as? DvrState.Loaded)?.recording ?: emptyList()
+    }
 
     val hScroll = rememberScrollState()
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -220,7 +223,13 @@ fun EpgGridScreen(
                         visEndMin = visEndMin,
                         hScroll = hScroll,
                         loader = loader,
-                        onClick = { ev -> detail = GridDetail.Epg(row, ev) },
+                        onClick = { ev ->
+                            val rec = recordingList.firstOrNull {
+                                it.channelName == row.channel.name &&
+                                    it.start < ev.stop && it.stop > ev.start
+                            }
+                            detail = GridDetail.Epg(row, ev, rec)
+                        },
                         onDvr = { e -> detail = GridDetail.Dvr(e) }
                     )
                 }
@@ -244,6 +253,9 @@ fun EpgGridScreen(
                             is GridDetail.Epg -> playLive(context, d.row, d.ev)
                             is GridDetail.Dvr -> playDvr(context, d.rec)
                         }
+                    },
+                    onPlayFromStart = (d as? GridDetail.Epg)?.inProgress?.let { rec ->
+                        { playDvr(context, rec) }
                     }
                 )
             }
@@ -252,7 +264,11 @@ fun EpgGridScreen(
 }
 
 private sealed class GridDetail {
-    data class Epg(val row: ChannelRow, val ev: EpgEvent) : GridDetail()
+    data class Epg(
+        val row: ChannelRow,
+        val ev: EpgEvent,
+        val inProgress: sk.tvhclient.shared.model.DvrEntry? = null
+    ) : GridDetail()
     data class Dvr(val rec: sk.tvhclient.shared.model.DvrEntry) : GridDetail()
 }
 
@@ -261,7 +277,8 @@ private fun GridDetailContent(
     detail: GridDetail,
     loader: coil.ImageLoader,
     onBack: () -> Unit,
-    onPlay: () -> Unit
+    onPlay: () -> Unit,
+    onPlayFromStart: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     // Spolocne polia z oboch typov
@@ -374,6 +391,24 @@ private fun GridDetailContent(
                         stringResource(R.string.play),
                         style = MaterialTheme.typography.titleMedium
                     )
+                }
+                // Prebiehajuca nahravka — prehrat od zaciatku (dobehnes zaciatok)
+                if (onPlayFromStart != null) {
+                    Spacer(Modifier.height(8.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onPlayFromStart,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        androidx.compose.material3.Icon(
+                            androidx.compose.material.icons.Icons.Default.PlayArrow,
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.play_from_start),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
                 }
             } else {
                 Text(

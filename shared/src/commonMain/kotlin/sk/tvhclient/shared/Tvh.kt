@@ -89,6 +89,13 @@ object Tvh {
                 sk.tvhclient.shared.htsp.HtspData.metadata(server, false, currentTimeSeconds()))
         else api.dvrFinished()
 
+    /** Prebiehajuce nahravky (state recording) — prehratelne od zaciatku. */
+    suspend fun fetchDvrInProgress(server: TvhServer, api: TvhApi): List<sk.tvhclient.shared.model.DvrEntry> =
+        if (server.connectionMode == "htsp")
+            sk.tvhclient.shared.htsp.HtspData.dvrRecording(
+                sk.tvhclient.shared.htsp.HtspData.metadata(server, false, currentTimeSeconds()))
+        else emptyList()
+
     /** Zoznam nadchadzajucich relacii na kanal (HTSP, pre auto-prechod na zozname). */
     suspend fun fetchEpgUpcoming(server: TvhServer): Map<String, List<sk.tvhclient.shared.model.EpgEvent>> =
         if (server.connectionMode == "htsp")

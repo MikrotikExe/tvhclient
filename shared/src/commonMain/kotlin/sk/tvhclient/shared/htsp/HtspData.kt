@@ -135,25 +135,37 @@ object HtspData {
         meta.dvr.mapNotNull { d ->
             val state = strOf(d, "state")
             if (state.isNotBlank() && state != "completed") return@mapNotNull null
-            val id = longOf(d, "id") ?: return@mapNotNull null
-            // /dvrfile potrebuje hex uuid; HTSP ho dáva v "uuid" (ak je), inak id
-            val uuid = (d["uuid"] as? String)?.ifBlank { null } ?: id.toString()
-            val start = longOf(d, "start") ?: 0
-            val stop = longOf(d, "stop") ?: 0
-            DvrEntry(
-                uuid = uuid,
-                dispTitle = strOf(d, "title"),
-                dispSubtitle = strOf(d, "subtitle"),
-                dispDescription = strOf(d, "description").ifBlank { strOf(d, "summary") },
-                channelName = strOf(d, "channelName"),
-                start = start,
-                stop = stop,
-                duration = if (stop > start) stop - start else 0,
-                fileSize = longOf(d, "dataSize") ?: 0,
-                status = state,
-                contentType = longOf(d, "contentType")?.toInt() ?: 0
-            )
+            mapDvrEntry(d)
         }
+
+    /** Prebiehajuce nahravky (state == "recording") — prehratelne od zaciatku
+     *  po nahratu hranu cez /dvrfile/<uuid>. */
+    fun dvrRecording(meta: HtspClient.Metadata): List<DvrEntry> =
+        meta.dvr.mapNotNull { d ->
+            if (strOf(d, "state") != "recording") return@mapNotNull null
+            mapDvrEntry(d)
+        }
+
+    private fun mapDvrEntry(d: Map<String, Any?>): DvrEntry? {
+        val id = longOf(d, "id") ?: return null
+        // /dvrfile potrebuje hex uuid; HTSP ho dava v "uuid" (ak je), inak id
+        val uuid = (d["uuid"] as? String)?.ifBlank { null } ?: id.toString()
+        val start = longOf(d, "start") ?: 0
+        val stop = longOf(d, "stop") ?: 0
+        return DvrEntry(
+            uuid = uuid,
+            dispTitle = strOf(d, "title"),
+            dispSubtitle = strOf(d, "subtitle"),
+            dispDescription = strOf(d, "description").ifBlank { strOf(d, "summary") },
+            channelName = strOf(d, "channelName"),
+            start = start,
+            stop = stop,
+            duration = if (stop > start) stop - start else 0,
+            fileSize = longOf(d, "dataSize") ?: 0,
+            status = strOf(d, "state"),
+            contentType = longOf(d, "contentType")?.toInt() ?: 0
+        )
+    }
 
     /** Všetky EPG eventy (len ak meta načítané withEpg). */
     fun events(meta: HtspClient.Metadata): List<EpgEvent> =

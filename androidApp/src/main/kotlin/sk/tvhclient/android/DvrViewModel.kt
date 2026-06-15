@@ -18,7 +18,8 @@ sealed class DvrState {
     data class Loaded(
         val entries: List<DvrEntry>,
         val channelOrder: Map<String, Int>,
-        val channelPicons: Map<String, String?>
+        val channelPicons: Map<String, String?>,
+        val recording: List<DvrEntry> = emptyList()
     ) : DvrState()
     data class Error(val message: String) : DvrState()
 }
@@ -59,6 +60,7 @@ class DvrViewModel : ViewModel() {
                     val api = Tvh.apiFor(server)
                     try {
                         val e = Tvh.fetchDvrFinished(server, api)
+                        val rec = Tvh.fetchDvrInProgress(server, api)
                         val channels = Tvh.fetchChannels(server, api)
                         val order = channels
                             .filter { it.number != null }
@@ -66,12 +68,18 @@ class DvrViewModel : ViewModel() {
                         val picons = channels.associate {
                             it.name to Tvh.piconUrl(server, it.iconPublicUrl)
                         }
-                        Triple(e, order, picons)
+                        listOf(e, order, picons, rec)
                     } finally {
                         api.close()
                     }
                 }
-                _state.value = DvrState.Loaded(result.first, result.second, result.third)
+                @Suppress("UNCHECKED_CAST")
+                _state.value = DvrState.Loaded(
+                    result[0] as List<DvrEntry>,
+                    result[1] as Map<String, Int>,
+                    result[2] as Map<String, String?>,
+                    result[3] as List<DvrEntry>
+                )
                 loadedOnce = true
             } catch (e: Exception) {
                 if (_state.value !is DvrState.Loaded) {
