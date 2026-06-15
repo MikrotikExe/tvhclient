@@ -81,8 +81,8 @@ object DvrClassifier {
         Regex("""\b(futbal|hokej|tenis|golf|formula|f1|oktagon|liga|majstrov|rally|cyklist|atletik|box|wrestlin|biatlon|lyzovan|sjazd|mma|ufc|pml)""") to SPORT,
         Regex("""\b(spravodajstvo|spravy|spravi|udalosti|aktualn|reporter|noviny tv|tv noviny|pocasi|uvodnik)""") to NEWS,
         Regex("""\b(rozpravk|pohadk|pre deti|pro deti|pre najmens|kreslen|animovan|loutkov|fidlibum|miniatel|trpaslic|labkova patrol)""") to CHILDREN,
-        Regex("""\b(koncert|hudba|hudobn|hudebni|spevok|zpevak|spevak|piesn|pisni|klasick)""") to MUSIC,
-        Regex("""\b(magazin|talk show|talkshow|show|soutez|sutaz|reality|farmer|farma|zabavn|estrada|kucharsk|masterchef|top gear|recept)""") to SHOW,
+        Regex("""\b(koncert|hudba|hudobn|hudebni|spevok|zpevak|spevak|piesn|pisni|klasick|jazzfest|jazz fest)""") to MUSIC,
+        Regex("""\b(magazin|talk show|talkshow|show|soutez|sutaz|reality|farmer|farma|zabavn|estrada|kucharsk|masterchef|top gear|recept|policie v akci|particka|zamena manzeliek|vymena manzeliek|ano sefe|prostreno|inkognito|nebezpecne vztahy|moja mama vari|s pravdou von|zachranari|na chalupe)""") to SHOW,
         Regex("""\b(byvani|byvanie|zahrad|zahradka|navrhar|dizajn|design interier|remeselni|stolarsk|truhlarsk|rybarsk)""") to HOBBY,
         Regex("""\b(dokument|documentary|prirod|history|vesmir|national geographic|discovery)""") to DOCUMENTARY
     )

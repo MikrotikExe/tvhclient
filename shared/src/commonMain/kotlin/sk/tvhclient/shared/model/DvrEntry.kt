@@ -31,6 +31,13 @@ data class DvrEntry(
     val durationSec: Long
         get() = if (duration > 0) duration else (if (stop > start) stop - start else 0)
 
-    /** DVB top nibble z content_type pre klasifikator. */
-    val dvbGenreTop: Int get() = if (contentType > 0) contentType / 16 else 0
+    /** DVB top nibble z content_type pre klasifikator.
+     *  HTTP API (grid_finished) vracia uz horny nibble (0-11), HTSP vracia
+     *  plny DVB bajt (major<<4 | minor). Normalizujeme oboje: <=15 je uz
+     *  nibble, vacsie je plny bajt -> /16. */
+    val dvbGenreTop: Int get() = when {
+        contentType <= 0 -> 0
+        contentType <= 15 -> contentType
+        else -> contentType / 16
+    }
 }
