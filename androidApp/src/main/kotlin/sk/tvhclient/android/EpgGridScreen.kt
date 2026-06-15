@@ -559,22 +559,27 @@ private fun EpgGridRow(
                         onClick = { onInProgress(rec) }
                     )
                 }
-                // Aktualne a buduce relacie z EPG (tiez cullovane); preskoc tie,
-                // ktore prekryva prebiehajuca nahravka (nech nie su dva bloky)
+                // Relacie z EPG vratane minulych (historia); preskoc tie, ktore uz
+                // ukazuje blok nahravky (DVR alebo prave prebiehajuca), nech nie su dva bloky
                 events.filter { ev ->
-                    ev.stop > now && inProgress.none { it.start < ev.stop && it.stop > ev.start }
+                    inProgress.none { it.start < ev.stop && it.stop > ev.start } &&
+                        dvr.none { it.stop <= now && it.start < ev.stop && it.stop > ev.start }
                 }.forEach { ev ->
                     val startMin = (((ev.start - dayStart) / 60).toInt()).coerceAtLeast(0)
                     val endMin = (((ev.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN)
                     if (endMin <= visStartMin || startMin >= visEndMin) return@forEach
                     val isNow = ev.start <= now && now < ev.stop
+                    val isPast = ev.stop <= now
                     GridBlock(
                         startMin = startMin,
                         endMin = endMin,
                         title = ev.title.ifBlank { "—" },
                         timeLabel = formatTimeHm(ev.start) + " - " + formatTimeHm(ev.stop),
-                        bg = if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                             else Color(0x22FFFFFF),
+                        bg = when {
+                            isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                            isPast -> Color(0x14FFFFFF)   // minule = jemnejsie
+                            else -> Color(0x22FFFFFF)
+                        },
                         recorded = false,
                         progressMin = if (isNow) ((now - ev.start) / 60).toInt() else 0,
                         onClick = { onClick(ev) }
