@@ -100,6 +100,20 @@ fun EpgGridScreen(
 
     val hScroll = rememberScrollState()
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+
+    // Viditeľné časové okno (v minútach) — riadky vykreslia len bloky v okolí,
+    // nie všetkých ~40. Bucketujeme po 30 min, aby sa neprekresľovalo pri každom
+    // pixeli horizontálneho skrolu. To rieši zaseky pri zvislom posúvaní.
+    val pxPerMinPx = with(density) { PX_PER_MIN.dp.toPx() }
+    val screenWMin = remember(configuration.screenWidthDp) {
+        (with(density) { configuration.screenWidthDp.dp.toPx() } / pxPerMinPx).toInt()
+    }
+    val winBucket by remember {
+        androidx.compose.runtime.derivedStateOf { (hScroll.value / pxPerMinPx / 30f).toInt() }
+    }
+    val visStartMin = winBucket * 30 - screenWMin
+    val visEndMin = winBucket * 30 + screenWMin * 2 + 30
 
     // Po otvoreni posun na aktualny cas (pre Dnes), s malym predstihom
     LaunchedEffect(dayOffset) {
@@ -195,6 +209,8 @@ fun EpgGridScreen(
                         dayStart = dayStart,
                         now = now,
                         showNow = dayOffset == 0,
+                        visStartMin = visStartMin,
+                        visEndMin = visEndMin,
                         hScroll = hScroll,
                         loader = loader,
                         onClick = { ev -> playLive(context, row, ev) },
@@ -214,6 +230,8 @@ private fun EpgGridRow(
     dayStart: Long,
     now: Long,
     showNow: Boolean,
+    visStartMin: Int,
+    visEndMin: Int,
     hScroll: androidx.compose.foundation.ScrollState,
     loader: coil.ImageLoader,
     onClick: (EpgEvent) -> Unit,
@@ -249,11 +267,15 @@ private fun EpgGridRow(
                 .height(ROW_H.dp)
         ) {
             Box(Modifier.width((DAY_MIN * PX_PER_MIN).dp).height(ROW_H.dp)) {
-                // Minule relacie z DVR (prehratelne dozadu) — len co skoncilo
+                // Minule relacie z DVR (prehratelne dozadu) — len co skoncilo;
+                // vykreslime iba bloky v okolnom viditeľnom okne (cullovanie)
                 dvr.filter { it.stop <= now }.forEach { rec ->
+                    val startMin = (((rec.start - dayStart) / 60).toInt()).coerceAtLeast(0)
+                    val endMin = (((rec.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN)
+                    if (endMin <= visStartMin || startMin >= visEndMin) return@forEach
                     GridBlock(
-                        startMin = (((rec.start - dayStart) / 60).toInt()).coerceAtLeast(0),
-                        endMin = (((rec.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN),
+                        startMin = startMin,
+                        endMin = endMin,
                         title = rec.title,
                         timeLabel = formatTimeHm(rec.start) + " - " + formatTimeHm(rec.stop),
                         bg = Color(0x3366BB6A),       // zelenkavy = nahrate, da sa prehrat
@@ -261,12 +283,15 @@ private fun EpgGridRow(
                         onClick = { onDvr(rec) }
                     )
                 }
-                // Aktualne a buduce relacie z EPG
+                // Aktualne a buduce relacie z EPG (tiez cullovane)
                 events.filter { it.stop > now }.forEach { ev ->
+                    val startMin = (((ev.start - dayStart) / 60).toInt()).coerceAtLeast(0)
+                    val endMin = (((ev.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN)
+                    if (endMin <= visStartMin || startMin >= visEndMin) return@forEach
                     val isNow = ev.start <= now && now < ev.stop
                     GridBlock(
-                        startMin = (((ev.start - dayStart) / 60).toInt()).coerceAtLeast(0),
-                        endMin = (((ev.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN),
+                        startMin = startMin,
+                        endMin = endMin,
                         title = ev.title.ifBlank { "—" },
                         timeLabel = formatTimeHm(ev.start) + " - " + formatTimeHm(ev.stop),
                         bg = if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
