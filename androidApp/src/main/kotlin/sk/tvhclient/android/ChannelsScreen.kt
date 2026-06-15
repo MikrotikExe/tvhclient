@@ -69,6 +69,13 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
     var profileFor by remember { mutableStateOf<ChannelRow?>(null) }
     var favTick by remember { mutableStateOf(0) }
     var showGrid by remember { mutableStateOf(false) }
+    // Zdielany DvrViewModel — vieme ktore kanaly sa prave nahravaju
+    val dvrVm: DvrViewModel = viewModel()
+    val dvrState by dvrVm.state.collectAsState()
+    val recordingByChannel = remember(dvrState) {
+        (dvrState as? DvrState.Loaded)?.recording?.associateBy { it.channelName } ?: emptyMap()
+    }
+    var recChoice by remember { mutableStateOf<Pair<ChannelRow, sk.tvhclient.shared.model.DvrEntry>?>(null) }
     val ctx = LocalContext.current
     val serverId = remember { Tvh.store.active()?.id }
     // Scroll pozicie prezivaju odskok do EPG a spat (remember v scope obrazovky)
@@ -76,6 +83,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
     val listStateSearch = androidx.compose.foundation.lazy.rememberLazyListState()
 
     LaunchedEffect(Unit) { vm.loadIfNeeded() }
+    LaunchedEffect(Unit) { dvrVm.loadIfNeeded() }
 
     // tikajuci cas pre live ciaru priebehu (prekreslenie kazdych 30s)
     var nowTick by remember { mutableStateOf(System.currentTimeMillis() / 1000) }
@@ -177,7 +185,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                     // Vyhladavanie: plochy filtrovany zoznam
                     val q = query.trim().lowercase()
                     val results = s.allRows.filter { it.channel.name.lowercase().contains(q) }
-                    ChannelView(viewMode, results, listStateSearch, nowTick, epgMap) { contextRow = it }
+                    ChannelView(viewMode, results, listStateSearch, nowTick, epgMap, recordingByChannel, onRecordingTap = { r, rec -> recChoice = r to rec }) { contextRow = it }
                 } else {
                     // Filtre podla tagov
                     val tags = s.categories.mapNotNull { it.tag }
@@ -215,10 +223,31 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                         else ->
                             s.categories.firstOrNull { it.tag?.uuid == selectedTag }?.rows ?: emptyList()
                     }
-                    ChannelView(viewMode, rows, listStateMain, nowTick, epgMap) { contextRow = it }
+                    ChannelView(viewMode, rows, listStateMain, nowTick, epgMap, recordingByChannel, onRecordingTap = { r, rec -> recChoice = r to rec }) { contextRow = it }
                 }
             }
         }
+    }
+
+    // Kanal sa nahrava — vyber: naživo alebo od zaciatku (prebiehajuca nahravka)
+    val rc = recChoice
+    if (rc != null) {
+        val (rcRow, rcRec) = rc
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { recChoice = null },
+            title = { Text(rcRow.channel.name) },
+            text = { Text(rcRec.title) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    playChannel(ctx, rcRow, null, 0, 0); recChoice = null
+                }) { Text(stringResource(R.string.play_live)) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    playDvrFile(ctx, rcRec); recChoice = null
+                }) { Text(stringResource(R.string.play_from_start)) }
+            }
+        )
     }
 
     // Kontextove menu kanala (dlhy klik): Program / Oblubene / Profil
@@ -352,6 +381,19 @@ private fun playChannel(
     context.startActivity(intent)
 }
 
+/** Prehratie prebiehajucej/dokoncenej nahravky od zaciatku cez /dvrfile/<uuid>. */
+private fun playDvrFile(context: android.content.Context, rec: sk.tvhclient.shared.model.DvrEntry) {
+    val server = Tvh.store.active() ?: return
+    val url = Tvh.dvrUrl(server, rec.uuid)
+    val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
+        putExtra(PlayerActivity.EXTRA_URL, url)
+        putExtra(PlayerActivity.EXTRA_TITLE, rec.title)
+        putExtra(PlayerActivity.EXTRA_DURATION_MS, rec.durationSec * 1000)
+        putExtra(PlayerActivity.EXTRA_DVR_UUID, rec.uuid)
+    }
+    context.startActivity(intent)
+}
+
 /** Aktualna relacia z HTSP zoznamu (auto-prechod) alebo z row (HTTP). */
 private fun currentNow(
     row: ChannelRow,
@@ -373,12 +415,14 @@ private fun ChannelView(
     listState: androidx.compose.foundation.lazy.LazyListState,
     nowSec: Long,
     epgMap: Map<String, List<sk.tvhclient.shared.model.EpgEvent>>,
+    recordingByChannel: Map<String, sk.tvhclient.shared.model.DvrEntry>,
+    onRecordingTap: (ChannelRow, sk.tvhclient.shared.model.DvrEntry) -> Unit,
     onShowEpg: (ChannelRow) -> Unit
 ) {
     when (mode) {
-        ChannelViewMode.LIST -> ChannelList(rows, listState, nowSec, epgMap, onShowEpg)
-        ChannelViewMode.GRID -> ChannelGrid(rows, nowSec, epgMap, columns = 2, onShowEpg)
-        ChannelViewMode.TILES -> ChannelGrid(rows, nowSec, epgMap, columns = 4, onShowEpg)
+        ChannelViewMode.LIST -> ChannelList(rows, listState, nowSec, epgMap, recordingByChannel, onRecordingTap, onShowEpg)
+        ChannelViewMode.GRID -> ChannelGrid(rows, nowSec, epgMap, columns = 2, recordingByChannel, onRecordingTap, onShowEpg)
+        ChannelViewMode.TILES -> ChannelGrid(rows, nowSec, epgMap, columns = 4, recordingByChannel, onRecordingTap, onShowEpg)
     }
 }
 
@@ -389,6 +433,8 @@ private fun ChannelGrid(
     nowSec: Long,
     epgMap: Map<String, List<sk.tvhclient.shared.model.EpgEvent>>,
     columns: Int,
+    recordingByChannel: Map<String, sk.tvhclient.shared.model.DvrEntry>,
+    onRecordingTap: (ChannelRow, sk.tvhclient.shared.model.DvrEntry) -> Unit,
     onShowEpg: (ChannelRow) -> Unit
 ) {
     val context = LocalContext.current
@@ -406,13 +452,17 @@ private fun ChannelGrid(
     ) {
         gridItems(rows, key = { it.channel.uuid }) { row ->
             val (nowTitle, nowStart, nowStop) = currentNow(row, epgMap[row.channel.uuid], nowSec)
+            val rec = recordingByChannel[row.channel.name]
             Column(
                 Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0x14FFFFFF))
                     .dpadFocusable()
                     .combinedClickable(
-                        onClick = { playChannel(context, row, nowTitle, nowStart, nowStop) },
+                        onClick = {
+                            if (rec != null) onRecordingTap(row, rec)
+                            else playChannel(context, row, nowTitle, nowStart, nowStop)
+                        },
                         onLongClick = { onShowEpg(row) }
                     )
                     .padding(8.dp),
@@ -433,6 +483,15 @@ private fun ChannelGrid(
                     } else {
                         Text(row.channel.name.take(3).uppercase(),
                             style = MaterialTheme.typography.titleMedium)
+                    }
+                    if (rec != null) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .size(10.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(Color(0xFFE53935))
+                        )
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -473,6 +532,8 @@ private fun ChannelList(
     listState: androidx.compose.foundation.lazy.LazyListState,
     nowSec: Long,
     epgMap: Map<String, List<sk.tvhclient.shared.model.EpgEvent>>,
+    recordingByChannel: Map<String, sk.tvhclient.shared.model.DvrEntry>,
+    onRecordingTap: (ChannelRow, sk.tvhclient.shared.model.DvrEntry) -> Unit,
     onShowEpg: (ChannelRow) -> Unit
 ) {
     val context = LocalContext.current
@@ -485,7 +546,8 @@ private fun ChannelList(
     }
     LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(rows, key = { it.channel.uuid }) { row ->
-            ChannelItem(row, loader, context, nowSec, epgMap[row.channel.uuid], onShowEpg)
+            ChannelItem(row, loader, context, nowSec, epgMap[row.channel.uuid],
+                recordingByChannel[row.channel.name], onRecordingTap, onShowEpg)
         }
     }
 }
@@ -498,6 +560,8 @@ private fun ChannelItem(
     context: android.content.Context,
     nowSec: Long,
     epgList: List<sk.tvhclient.shared.model.EpgEvent>?,
+    recording: sk.tvhclient.shared.model.DvrEntry?,
+    onRecordingTap: (ChannelRow, sk.tvhclient.shared.model.DvrEntry) -> Unit,
     onShowEpg: (ChannelRow) -> Unit
 ) {
     val (curTitle, curStart, curStop) = currentNow(row, epgList, nowSec)
@@ -507,7 +571,10 @@ private fun ChannelItem(
             .clip(RoundedCornerShape(8.dp))
             .dpadFocusable()
             .combinedClickable(
-                onClick = { playChannel(context, row, curTitle, curStart, curStop) },
+                onClick = {
+                    if (recording != null) onRecordingTap(row, recording)
+                    else playChannel(context, row, curTitle, curStart, curStop)
+                },
                 onLongClick = { onShowEpg(row) }
             )
             .padding(8.dp),
@@ -551,6 +618,15 @@ private fun ChannelItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (recording != null) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        Modifier
+                            .size(9.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(Color(0xFFE53935))
+                    )
+                }
             }
             // Aktualna relacia uz vypocitana hore (curTitle/curStart/curStop)
             if (curTitle != null) {
