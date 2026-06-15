@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.CalendarViewDay
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.ViewModule
@@ -67,6 +68,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
     var contextRow by remember { mutableStateOf<ChannelRow?>(null) }
     var profileFor by remember { mutableStateOf<ChannelRow?>(null) }
     var favTick by remember { mutableStateOf(0) }
+    var showGrid by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     val serverId = remember { Tvh.store.active()?.id }
     // Scroll pozicie prezivaju odskok do EPG a spat (remember v scope obrazovky)
@@ -94,6 +96,12 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
         return
     }
 
+    val st0 = state
+    if (showGrid && st0 is ChannelsState.Loaded) {
+        EpgGridScreen(rows = st0.allRows, seed = epgMap, onBack = { showGrid = false })
+        return
+    }
+
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
@@ -103,6 +111,12 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel()) {
                 singleLine = true,
                 modifier = Modifier.weight(1f)
             )
+            androidx.compose.material3.IconButton(onClick = { showGrid = true }) {
+                androidx.compose.material3.Icon(
+                    Icons.Default.CalendarViewDay,
+                    contentDescription = stringResource(R.string.tv_guide)
+                )
+            }
             androidx.compose.material3.IconButton(onClick = { vm.load(true) }) {
                 androidx.compose.material3.Icon(
                     Icons.Default.Refresh,
