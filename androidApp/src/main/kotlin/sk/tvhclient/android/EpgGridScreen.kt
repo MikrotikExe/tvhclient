@@ -7,7 +7,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -165,49 +168,13 @@ fun EpgGridScreen(
     val visStartMin = winBucket * 30 - screenWMin
     val visEndMin = winBucket * 30 + screenWMin * 2 + 30
 
-    // Plynule skrolovanie cez hranicu dna: na okraji casovej osi prepni den
+    // Plynule skrolovanie cez hranicu dna: na okraji casovej osi prepni den.
+    // Detekcia mimo nested-scroll: pozorujeme pohyb prsta priamo (Initial pass,
+    // bez konzumovania), takze horizontalScroll funguje normalne. Ked hScroll
+    // stoji na okraji (0 alebo maxValue) a prst tahá dalej tym smerom, po prahu
+    // prepneme den. Toto je spolahlivejsie ako citanie pretecenia cez onPostScroll
+    // (to fling faza vacsinou prehltla -> okraj sa neprepol).
     var pendingEdge by remember { mutableStateOf<String?>(null) }
-    var edgeAccum by remember { mutableStateOf(0f) }
-    val daySwitchPx = with(density) { 70.dp.toPx() }
-    val edgeConn = remember(hScroll) {
-        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
-            var preDx = 0f
-            var preValue = 0
-            override fun onPreScroll(
-                available: androidx.compose.ui.geometry.Offset,
-                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
-            ): androidx.compose.ui.geometry.Offset {
-                preDx = available.x
-                preValue = hScroll.value
-                return androidx.compose.ui.geometry.Offset.Zero
-            }
-
-            override fun onPostScroll(
-                consumed: androidx.compose.ui.geometry.Offset,
-                available: androidx.compose.ui.geometry.Offset,
-                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
-            ): androidx.compose.ui.geometry.Offset {
-                val dx = preDx
-                // riadok sa horizontalne nepohol napriek tahu -> pretiahnutie za okraj
-                if (dx != 0f && hScroll.value == preValue) {
-                    if (preValue <= 0 && dayOffset > -7) {
-                        // zaciatok dna -> predosly den
-                        edgeAccum += kotlin.math.abs(dx)
-                        if (edgeAccum >= daySwitchPx) { edgeAccum = 0f; pendingEdge = "end"; dayOffset-- }
-                    } else if (preValue >= hScroll.maxValue && dayOffset < 6) {
-                        // koniec dna -> dalsi den
-                        edgeAccum += kotlin.math.abs(dx)
-                        if (edgeAccum >= daySwitchPx) { edgeAccum = 0f; pendingEdge = "start"; dayOffset++ }
-                    } else {
-                        edgeAccum = 0f
-                    }
-                } else {
-                    edgeAccum = 0f
-                }
-                return androidx.compose.ui.geometry.Offset.Zero
-            }
-        }
-    }
 
     // Po prepnuti/otvoreni nastav poziciu: kontinuita cez polnoc, inak aktualny cas
     LaunchedEffect(dayOffset) {
@@ -269,6 +236,10 @@ fun EpgGridScreen(
                 val idx = offsets.indexOf(0).coerceAtLeast(0)
                 dayListState.scrollToItem(idx)
             }
+            LaunchedEffect(dayOffset) {
+                val idx = offsets.indexOf(dayOffset).coerceAtLeast(0)
+                dayListState.animateScrollToItem(idx)
+            }
             LazyRow(
                 state = dayListState,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
@@ -301,7 +272,37 @@ fun EpgGridScreen(
             }
 
             // Riadky kanalov
-            LazyColumn(Modifier.fillMaxSize()) {
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        val edgePx = 64.dp.toPx()
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            var accum = 0f
+                            var switched = false
+                            while (true) {
+                                val ev = awaitPointerEvent(PointerEventPass.Initial)
+                                val ch = ev.changes.firstOrNull() ?: break
+                                if (!ch.pressed) break
+                                val dx = ch.position.x - ch.previousPosition.x
+                                val atStart = hScroll.value <= 0
+                                val atEnd = hScroll.maxValue > 0 && hScroll.value >= hScroll.maxValue
+                                if (!switched && atStart && dx > 0f && dayOffset > -7) {
+                                    // zaciatok dna, tahám doprava (do minulosti) -> predosly den
+                                    accum += dx
+                                    if (accum >= edgePx) { pendingEdge = "end"; dayOffset--; switched = true }
+                                } else if (!switched && atEnd && dx < 0f && dayOffset < 6) {
+                                    // koniec dna, tahám dolava (do buducnosti) -> dalsi den
+                                    accum += -dx
+                                    if (accum >= edgePx) { pendingEdge = "start"; dayOffset++; switched = true }
+                                } else if (!atStart && !atEnd) {
+                                    accum = 0f
+                                }
+                            }
+                        }
+                    }
+            ) {
                 items(rows, key = { it.channel.uuid }) { row ->
                     val uuid = row.channel.uuid
                     // Progresivne: nacitaj EPG pre tento kanal ked je riadok viditelny
@@ -319,7 +320,6 @@ fun EpgGridScreen(
                         visStartMin = visStartMin,
                         visEndMin = visEndMin,
                         hScroll = hScroll,
-                        edgeConn = edgeConn,
                         loader = loader,
                         onClick = { ev -> detail = GridDetail.Epg(row, ev) },
                         onDvr = { e -> detail = GridDetail.Dvr(e) },
@@ -545,7 +545,6 @@ private fun EpgGridRow(
     visStartMin: Int,
     visEndMin: Int,
     hScroll: androidx.compose.foundation.ScrollState,
-    edgeConn: androidx.compose.ui.input.nestedscroll.NestedScrollConnection,
     loader: coil.ImageLoader,
     onClick: (EpgEvent) -> Unit,
     onDvr: (sk.tvhclient.shared.model.DvrEntry) -> Unit,
@@ -577,7 +576,6 @@ private fun EpgGridRow(
         // Programova plocha (skroluje horizontalne)
         Box(
             Modifier
-                .nestedScroll(edgeConn)
                 .horizontalScroll(hScroll)
                 .height(ROW_H.dp)
         ) {
