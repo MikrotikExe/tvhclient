@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -164,17 +165,53 @@ fun EpgGridScreen(
     val visStartMin = winBucket * 30 - screenWMin
     val visEndMin = winBucket * 30 + screenWMin * 2 + 30
 
-    // Po otvoreni posun na aktualny cas (pre Dnes), s malym predstihom
+    // Plynule skrolovanie cez hranicu dna: na okraji casovej osi prepni den
+    var pendingEdge by remember { mutableStateOf<String?>(null) }
+    var edgeAccum by remember { mutableStateOf(0f) }
+    val daySwitchPx = with(density) { 90.dp.toPx() }
+    val edgeConn = remember(hScroll) {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: androidx.compose.ui.geometry.Offset,
+                available: androidx.compose.ui.geometry.Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+            ): androidx.compose.ui.geometry.Offset {
+                val dx = available.x
+                if (dx != 0f) {
+                    if (hScroll.value <= 0 && dx < 0f && dayOffset > -7) {
+                        edgeAccum += -dx
+                        if (edgeAccum >= daySwitchPx) { edgeAccum = 0f; pendingEdge = "end"; dayOffset-- }
+                    } else if (hScroll.value >= hScroll.maxValue && dx > 0f && dayOffset < 6) {
+                        edgeAccum += dx
+                        if (edgeAccum >= daySwitchPx) { edgeAccum = 0f; pendingEdge = "start"; dayOffset++ }
+                    } else {
+                        edgeAccum = 0f
+                    }
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+
+    // Po prepnuti/otvoreni nastav poziciu: kontinuita cez polnoc, inak aktualny cas
     LaunchedEffect(dayOffset) {
-        val nowMin = if (dayOffset == 0)
-            (((currentTimeSeconds() - dayStart) / 60).toInt()) else 0
-        val startMin = (nowMin - 30).coerceIn(0, DAY_MIN)
-        val targetPx = with(density) { (startMin * PX_PER_MIN).dp.toPx() }.toInt()
         var tries = 0
         while (hScroll.maxValue == 0 && tries < 25) {
             kotlinx.coroutines.delay(20); tries++
         }
-        hScroll.scrollTo(targetPx.coerceAtMost(hScroll.maxValue))
+        val targetPx = when (pendingEdge) {
+            "end" -> hScroll.maxValue
+            "start" -> 0
+            else -> {
+                val nowMin = if (dayOffset == 0)
+                    (((currentTimeSeconds() - dayStart) / 60).toInt()) else 0
+                val startMin = (nowMin - 30).coerceIn(0, DAY_MIN)
+                with(density) { (startMin * PX_PER_MIN).dp.toPx() }.toInt()
+                    .coerceAtMost(hScroll.maxValue)
+            }
+        }
+        hScroll.scrollTo(targetPx)
+        pendingEdge = null
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -248,7 +285,7 @@ fun EpgGridScreen(
             }
 
             // Riadky kanalov
-            LazyColumn(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize().nestedScroll(edgeConn)) {
                 items(rows, key = { it.channel.uuid }) { row ->
                     val uuid = row.channel.uuid
                     // Progresivne: nacitaj EPG pre tento kanal ked je riadok viditelny
