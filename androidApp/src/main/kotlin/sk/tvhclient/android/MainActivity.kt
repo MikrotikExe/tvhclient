@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -71,6 +72,52 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun App() {
+    val serversVm: ServersViewModel = viewModel()
+    val servers by serversVm.servers.collectAsState()
+    // Ziadny server -> uvitacia obrazovka; inak hlavne taby
+    if (servers.isEmpty()) WelcomeScreen(serversVm) else AppMain()
+}
+
+@Composable
+fun WelcomeScreen(vm: ServersViewModel) {
+    var showForm by remember { mutableStateOf(false) }
+    if (showForm) {
+        ServerForm(vm = vm, existing = null, onClose = { showForm = false; vm.resetTest() })
+        return
+    }
+    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            androidx.compose.material3.Icon(
+                Icons.Default.LiveTv,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(72.dp)
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                stringResource(R.string.welcome_title),
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.welcome_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(Modifier.height(28.dp))
+            Button(onClick = { showForm = true }) {
+                Text(stringResource(R.string.add_server))
+            }
+        }
+    }
+}
+
+@Composable
+fun AppMain() {
     var tab by remember { mutableStateOf(0) }
     Scaffold(
         bottomBar = {
