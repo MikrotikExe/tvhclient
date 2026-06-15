@@ -20,6 +20,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,6 +49,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
@@ -63,6 +71,62 @@ class PlayerActivity : ComponentActivity() {
 
     private lateinit var libVlc: LibVLC
     private lateinit var mediaPlayer: MediaPlayer
+
+    // Live zapping (prepinanie kanalov v prehravaci)
+    private var liveUuids: List<String> = emptyList()
+    private var liveNames: List<String> = emptyList()
+    private var liveIndex: Int = -1
+    private var liveServer: sk.tvhclient.shared.model.TvhServer? = null
+    private val liveTitleState = androidx.compose.runtime.mutableStateOf("")
+    private val liveUuidState = androidx.compose.runtime.mutableStateOf<String?>(null)
+    private val liveProgStartState = androidx.compose.runtime.mutableStateOf(0L)
+    private val liveProgStopState = androidx.compose.runtime.mutableStateOf(0L)
+    private val liveProgTitleState = androidx.compose.runtime.mutableStateOf("")
+    private val liveIndexState = androidx.compose.runtime.mutableStateOf(-1)
+
+    /** Prepne na konkretny kanal podla indexu, prebuduje URL a nacita. */
+    private fun switchToIndex(i: Int) {
+        if (i < 0 || i >= liveUuids.size) return
+        val srv = liveServer ?: return
+        liveIndex = i
+        liveIndexState.value = i
+        val uuid = liveUuids[i]
+        val name = liveNames.getOrElse(i) { "" }
+        liveTitleState.value = name
+        liveUuidState.value = uuid
+        // novy kanal = neznama relacia; skry progress bar starej relacie
+        val ch = LivePlaylist.channels.getOrNull(i)
+        liveProgStartState.value = ch?.nowStart ?: 0L
+        liveProgStopState.value = ch?.nowStop ?: 0L
+        liveProgTitleState.value = ch?.nowTitle ?: ""
+        val prof = ChannelPrefs.getProfile(this, srv.id, uuid)
+            .ifBlank { srv.profile.ifBlank { "pass" } }
+        val url = Tvh.liveUrl(srv, uuid, name, prof)
+        val media = Media(libVlc, Uri.parse(url))
+        media.setHWDecoderEnabled(true, false)
+        mediaPlayer.media = media
+        media.release()
+        mediaPlayer.play()
+    }
+
+    /** Prepne na susedny live kanal (delta +1 / -1). */
+    private fun switchLive(delta: Int) {
+        if (liveUuids.size < 2 || liveIndex < 0) return
+        val n = liveUuids.size
+        switchToIndex(((liveIndex + delta) % n + n) % n)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        when (keyCode) {
+            android.view.KeyEvent.KEYCODE_CHANNEL_UP -> {
+                if (liveUuids.size > 1) { switchLive(+1); return true }
+            }
+            android.view.KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                if (liveUuids.size > 1) { switchLive(-1); return true }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
 
     // DVR progress (sledovanie pozicie pre archiv)
     private var dvrUuid: String? = null
@@ -155,17 +219,33 @@ class PlayerActivity : ComponentActivity() {
             chProfile.ifBlank { server.profile.ifBlank { "pass" } }
         )
 
+        // Live zapping: priprav zoznam susednych kanalov
+        if (directUrl == null && channelUuid != null && LivePlaylist.channels.isNotEmpty()) {
+            liveUuids = LivePlaylist.channels.map { it.uuid }
+            liveNames = LivePlaylist.channels.map { it.name }
+            liveIndex = LivePlaylist.index.takeIf { it in liveUuids.indices }
+                ?: liveUuids.indexOf(channelUuid)
+            liveServer = server
+        }
+        liveIndexState.value = liveIndex
+        liveTitleState.value = channelTitle
+        liveUuidState.value = channelUuid
+        liveProgStartState.value = progStart
+        liveProgStopState.value = progStop
+        liveProgTitleState.value = progTitle
+        val canZap = directUrl == null && liveUuids.size > 1
+
         setContent {
             PlayerUi(
-                title = channelTitle,
+                title = liveTitleState.value,
                 player = mediaPlayer,
                 seekable = directUrl != null,  // DVR nahravka = da sa pretacat; live nie
                 knownDurationMs = durationMs,  // dlzka z DVR entry (TS subor ju nenese)
-                progStartSec = progStart,
-                progStopSec = progStop,
-                progTitleArg = progTitle,
+                progStartSec = liveProgStartState.value,
+                progStopSec = liveProgStopState.value,
+                progTitleArg = liveProgTitleState.value,
                 server = server,
-                liveChannelUuid = if (directUrl == null) channelUuid else null,
+                liveChannelUuid = if (directUrl == null) liveUuidState.value else null,
                 preferredAudio = AudioPref.get(this),
                 resumeMs = resumeMs,
                 dvrUuid = dvrUuid,
@@ -178,6 +258,11 @@ class PlayerActivity : ComponentActivity() {
                     media.release()
                     mediaPlayer.play()
                 },
+                onPrevChannel = if (canZap) ({ switchLive(-1) }) else null,
+                onNextChannel = if (canZap) ({ switchLive(+1) }) else null,
+                liveChannels = if (canZap) LivePlaylist.channels else emptyList(),
+                liveCurrentIndex = liveIndexState.value,
+                onSelectChannel = { idx -> switchToIndex(idx) },
                 onClose = { finish() }
             )
         }
@@ -242,9 +327,15 @@ private fun PlayerUi(
     serverId: String? = null,
     onAttach: (VLCVideoLayout) -> Unit,
     onStart: () -> Unit,
+    onPrevChannel: (() -> Unit)? = null,
+    onNextChannel: (() -> Unit)? = null,
+    liveChannels: List<LivePlaylist.LiveChannel> = emptyList(),
+    liveCurrentIndex: Int = -1,
+    onSelectChannel: (Int) -> Unit = {},
     onClose: () -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(true) }
+    var showChannelList by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(true) }
     var orientationLocked by remember { mutableStateOf(false) }
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
@@ -377,6 +468,8 @@ private fun PlayerUi(
         }
     }
 
+    androidx.activity.compose.BackHandler(enabled = showChannelList) { showChannelList = false }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -433,6 +526,14 @@ private fun PlayerUi(
                             )
                         }
                     }
+                    // Zoznam kanalov (overlay)
+                    if (liveChannels.isNotEmpty()) {
+                        CircleButton(
+                            label = "\u2630",
+                            onClick = { showChannelList = true; controlsVisible = false }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     // Zamok orientacie: zamknuty = aktualna poloha, odomknuty = podla telefonu
                     CircleButton(
                         label = if (orientationLocked) "\uD83D\uDD12" else "\uD83D\uDD13",
@@ -446,19 +547,31 @@ private fun PlayerUi(
                     )
                 }
 
-                // Stred: play/pause
-                CircleButton(
-                    label = if (isPlaying) "\u23F8" else "\u25B6",
-                    big = true,
-                    onClick = {
-                        if (player.isPlaying) {
-                            player.pause(); isPlaying = false
-                        } else {
-                            player.play(); isPlaying = true
+                // Stred: (prev kanal) play/pause (next kanal)
+                Row(
+                    Modifier.align(Alignment.Center),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (onPrevChannel != null) {
+                        CircleButton(label = "\u23EE", onClick = onPrevChannel)
+                        Spacer(Modifier.width(28.dp))
+                    }
+                    CircleButton(
+                        label = if (isPlaying) "\u23F8" else "\u25B6",
+                        big = true,
+                        onClick = {
+                            if (player.isPlaying) {
+                                player.pause(); isPlaying = false
+                            } else {
+                                player.play(); isPlaying = true
+                            }
                         }
-                    },
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                    )
+                    if (onNextChannel != null) {
+                        Spacer(Modifier.width(28.dp))
+                        CircleButton(label = "\u23ED", onClick = onNextChannel)
+                    }
+                }
 
                 // Dolna cast: seek lista (len DVR) + audio/titulky
                 Column(
@@ -511,6 +624,108 @@ private fun PlayerUi(
                         TextChip("\uD83D\uDCAC Titulky") { menu = if (menu == "spu") null else "spu" }
                     }
                 }
+            }
+        }
+
+        // Overlay: zoznam kanalov priamo v prehravaci (klik prepne)
+        if (showChannelList && liveChannels.isNotEmpty()) {
+            val loader = remember(server?.id) { PiconImageLoader.get(ctx, server) }
+            val listState = rememberLazyListState(
+                initialFirstVisibleItemIndex = liveCurrentIndex.coerceAtLeast(0)
+            )
+            Row(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.52f)
+                        .background(Color(0xDD0A0A0A))
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { showChannelList = false }
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("\u2039", color = Color.White, fontSize = 24.sp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.player_channel_list),
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                    LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+                        itemsIndexed(liveChannels) { idx, ch ->
+                            val selected = idx == liveCurrentIndex
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(if (selected) Color(0x553B82F6) else Color.Transparent)
+                                    .clickable { onSelectChannel(idx); showChannelList = false }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    if (ch.number > 0) ch.number.toString() else "",
+                                    color = if (selected) Color.White else Color(0xFF6699FF),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.width(34.dp)
+                                )
+                                if (ch.piconUrl != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(ctx).data(ch.piconUrl).build(),
+                                        contentDescription = null,
+                                        imageLoader = loader,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                } else {
+                                    Spacer(Modifier.width(10.dp))
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        ch.name,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (ch.nowTitle.isNotBlank()) {
+                                        Text(
+                                            ch.nowTitle,
+                                            color = Color(0xCCFFFFFF),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (ch.nowStop > ch.nowStart) {
+                                            val total = (ch.nowStop - ch.nowStart).coerceAtLeast(1)
+                                            val frac = (liveNowSec - ch.nowStart)
+                                                .coerceIn(0, total).toFloat() / total
+                                            androidx.compose.material3.LinearProgressIndicator(
+                                                progress = { frac },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 4.dp),
+                                                trackColor = Color(0x55FFFFFF)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // prava cast: klik mimo zoznam zavrie
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { showChannelList = false }
+                )
             }
         }
 

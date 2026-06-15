@@ -85,6 +85,26 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0) {
     LaunchedEffect(Unit) { vm.loadIfNeeded() }
     LaunchedEffect(Unit) { dvrVm.loadIfNeeded() }
 
+    // Zoznam kanalov pre zapping a zoznam v prehravaci (CH+/CH-, overlay)
+    LaunchedEffect(state, epgMap) {
+        val srv = Tvh.store.active()
+        (state as? ChannelsState.Loaded)?.let { st ->
+            val nowS = System.currentTimeMillis() / 1000
+            LivePlaylist.channels = st.allRows.map { r ->
+                val cur = epgMap[r.channel.uuid]?.firstOrNull { it.start <= nowS && nowS < it.stop }
+                LivePlaylist.LiveChannel(
+                    uuid = r.channel.uuid,
+                    name = r.channel.name,
+                    number = r.channel.number ?: 0,
+                    piconUrl = r.piconUrl,
+                    nowTitle = cur?.title ?: "",
+                    nowStart = cur?.start ?: 0L,
+                    nowStop = cur?.stop ?: 0L
+                )
+            }
+        }
+    }
+
     // Klik na tab Kanaly (aj uz vybrany) vrati obrazovku na zaciatok
     LaunchedEffect(resetSignal) {
         epgFor = null
@@ -390,6 +410,7 @@ private fun playChannel(
         putExtra(PlayerActivity.EXTRA_PROG_STOP, stop)
         putExtra(PlayerActivity.EXTRA_PROG_TITLE, title ?: "")
     }
+    LivePlaylist.setIndexForUuid(row.channel.uuid)
     context.startActivity(intent)
 }
 

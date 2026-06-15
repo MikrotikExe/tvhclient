@@ -71,6 +71,23 @@ fun EpgGridScreen(
     BackHandler { onBack() }
     val context = LocalContext.current
     val server = remember { Tvh.store.active() }
+    // Zoznam kanalov pre zapping a zoznam v prehravaci (CH+/CH-, overlay)
+    LaunchedEffect(rows) {
+        val srv = Tvh.store.active()
+        val nowS = System.currentTimeMillis() / 1000
+        LivePlaylist.channels = rows.map { r ->
+            val cur = seed[r.channel.uuid]?.firstOrNull { it.start <= nowS && nowS < it.stop }
+            LivePlaylist.LiveChannel(
+                uuid = r.channel.uuid,
+                name = r.channel.name,
+                number = r.channel.number ?: 0,
+                piconUrl = r.piconUrl,
+                nowTitle = cur?.title ?: "",
+                nowStart = cur?.start ?: 0L,
+                nowStop = cur?.stop ?: 0L
+            )
+        }
+    }
     val loader = remember(server?.id) { PiconImageLoader.get(context, server) }
 
     // Detail relacie/nahravky (prekryva mriezku); klik na blok ho otvori
@@ -637,6 +654,7 @@ private fun playLive(context: android.content.Context, row: ChannelRow, ev: EpgE
         putExtra(PlayerActivity.EXTRA_PROG_STOP, ev.stop)
         putExtra(PlayerActivity.EXTRA_PROG_TITLE, ev.title)
     }
+    LivePlaylist.setIndexForUuid(row.channel.uuid)
     context.startActivity(intent)
 }
 
@@ -646,6 +664,7 @@ private fun playLiveChannel(context: android.content.Context, row: ChannelRow) {
         putExtra(PlayerActivity.EXTRA_UUID, row.channel.uuid)
         putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
     }
+    LivePlaylist.setIndexForUuid(row.channel.uuid)
     context.startActivity(intent)
 }
 

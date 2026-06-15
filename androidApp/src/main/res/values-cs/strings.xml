@@ -180,4 +180,5 @@
     <string name="dvr_search">Hledat nahrávky</string>
     <string name="dvr_search_results">Výsledky</string>
     <string name="dvr_search_empty">Nic nenalezeno</string>
+    <string name="player_channel_list">Všechny kanály</string>
 </resources>
