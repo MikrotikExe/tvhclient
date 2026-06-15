@@ -301,10 +301,10 @@ object DvrClassifier {
     val newsSubOrder = listOf(NW_HLAVNE, NW_POLITIKA, NW_KRIMI, NW_MAGAZINY, NW_POCASIE, NW_INE)
     private val newsKeyword: List<Pair<Regex, String>> = listOf(
         Regex("""\b(pocasi|predpoved|predpovid)""") to NW_POCASIE,
-        Regex("""\b(krimi noviny|reporter|reportaz|investigativ|tajomstv|kriminal)""") to NW_KRIMI,
+        Regex("""\b(krimi noviny|reporter|reportaz|investigativ|tajomstv|kriminal|policie|policajt|na stope|cerne ovce)""") to NW_KRIMI,
         Regex("""\b(politik|diskusia|diskuse|debata|otazky vaclava|studio 6|polemika|interview plus|partia)""") to NW_POLITIKA,
-        Regex("""\b(spravodajsky magazin|reflex|7 dni|plus 7|fokus|profil|lifestyle)""") to NW_MAGAZINY,
-        Regex("""\b(noviny|spravy|spravi|udalosti|hlavni sprav|hlavne sprav|tv noviny|telerano|spravodajstv)""") to NW_HLAVNE
+        Regex("""\b(spravodajsky magazin|reflex|7 dni|plus 7|fokus|profil|lifestyle|smotanka|exkluziv|damsky klub|showtime|zoom in)""") to NW_MAGAZINY,
+        Regex("""\b(noviny|spravy|spravi|zprav|udalosti|hlavni sprav|hlavne sprav|tv noviny|telerano|spravodajstv)""") to NW_HLAVNE
     )
 
     // -- Sou sub-zanre --
@@ -446,7 +446,7 @@ object DvrClassifier {
             }
         }
         val text = stripAccentsLower(
-            listOf(entry.dispTitle, entry.dispSubtitle, entry.dispDescription)
+            listOf(entry.dispTitle, entry.dispSubtitle, entry.dispDescription, entry.channelName)
                 .filter { it.isNotBlank() }.joinToString(" ")
         )
         if (text.isNotBlank()) {
@@ -457,8 +457,18 @@ object DvrClassifier {
             val titleOnly = stripAccentsLower(entry.dispTitle)
             if (titleOnly.isNotBlank() && horrorTitle.containsMatchIn(titleOnly)) return MV_HOROR
         }
+        // detske: na detsko-animovanych kanaloch (jojko, minimax...) je obsah
+        // takmer vzdy animovany — default na Animovane namiesto Ostatne
+        if (topCat == CHILDREN) {
+            val ch = stripAccentsLower(entry.channelName)
+            if (ch.isNotBlank() && kidsChannel.containsMatchIn(ch)) return CH_ANIMAK
+        }
         return cfg.third
     }
+
+    private val kidsChannel = Regex(
+        """(jojko|minimax|cartoon|nickelodeon|nick jr|disney|boomerang|duck ?tv|baby tv|decko|ct :?d|megamax|jim jam)"""
+    )
 
     /** Kanonicky nazov programu (bez epizodneho sufixu a tech markerov) na
      *  zoskupenie. "Otec Brown IV (1)" -> "Otec Brown IV",
