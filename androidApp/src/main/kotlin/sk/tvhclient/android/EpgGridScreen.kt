@@ -73,7 +73,11 @@ fun EpgGridScreen(
     var dayOffset by remember { mutableStateOf(0) }
     val dayStart = remember(dayOffset) { dayStartSec(dayOffset) }
     val dayEnd = dayStart + DAY_MIN * 60
-    val now = currentTimeSeconds()
+    // Tikajuci cas (live ciara a priebeh) — prekreslenie kazdych 30s
+    var now by remember { mutableStateOf(currentTimeSeconds()) }
+    LaunchedEffect(Unit) {
+        while (true) { kotlinx.coroutines.delay(30_000); now = currentTimeSeconds() }
+    }
 
     // Cache EPG per kanal (cele nacitane eventy); seed z now/next ak je
     val epg = remember { mutableStateMapOf<String, List<EpgEvent>>() }
@@ -166,6 +170,7 @@ fun EpgGridScreen(
                         events = (epg[uuid] ?: emptyList()).filter { it.stop > dayStart && it.start < dayEnd },
                         dayStart = dayStart,
                         now = now,
+                        showNow = dayOffset == 0,
                         hScroll = hScroll,
                         loader = loader,
                         onClick = { ev -> playLive(context, row, ev) }
@@ -182,6 +187,7 @@ private fun EpgGridRow(
     events: List<EpgEvent>,
     dayStart: Long,
     now: Long,
+    showNow: Boolean,
     hScroll: androidx.compose.foundation.ScrollState,
     loader: coil.ImageLoader,
     onClick: (EpgEvent) -> Unit
@@ -230,29 +236,50 @@ private fun EpgGridRow(
                             .padding(2.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(
-                                if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                                if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
                                 else Color(0x22FFFFFF)
                             )
                             .clickable { onClick(ev) }
-                            .padding(horizontal = 6.dp, vertical = 4.dp)
                     ) {
-                        Column {
+                        // Live priebeh bezzhiacej relacie (svetlejsia vypln zlava)
+                        if (isNow) {
+                            val totalMin = ((ev.stop - ev.start) / 60).toInt().coerceAtLeast(1)
+                            val elapsedMin = (((now - ev.start) / 60).toInt()).coerceIn(0, totalMin)
+                            Box(
+                                Modifier
+                                    .width((elapsedMin * PX_PER_MIN).dp)
+                                    .height(ROW_H.dp)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+                            )
+                        }
+                        Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                             Text(
                                 ev.title.ifBlank { "—" },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (isNow) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurface,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 formatTimeHm(ev.start) + " - " + formatTimeHm(ev.stop),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isNow) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1
                             )
                         }
+                    }
+                }
+                // Zvisla live ciara aktualneho casu (len pre dnes)
+                if (showNow) {
+                    val nowMin = ((now - dayStart) / 60).toInt()
+                    if (nowMin in 0..DAY_MIN) {
+                        Box(
+                            Modifier
+                                .offset(x = (nowMin * PX_PER_MIN).dp)
+                                .width(2.dp)
+                                .height(ROW_H.dp)
+                                .background(Color(0xFFFF5252))
+                        )
                     }
                 }
             }
