@@ -90,6 +90,45 @@ class PlayerActivity : ComponentActivity() {
     private val liveChannelsState =
         androidx.compose.runtime.mutableStateOf<List<LivePlaylist.LiveChannel>>(emptyList())
 
+    // D-pad / diaľkové: signál na zobrazenie ovládania, info pre seek a sw dekóder
+    private val controlsPokeState = androidx.compose.runtime.mutableStateOf(0)
+    private val softwareDecodeState = androidx.compose.runtime.mutableStateOf(false)
+    private var seekablePlayback = false
+    private var currentStreamUrl: String? = null
+
+    /** Vytvori Media s HW/SW dekoderom podla preferencie (lacne boxy = SW). */
+    private fun buildMedia(url: String): Media {
+        val m = Media(libVlc, Uri.parse(url))
+        m.setHWDecoderEnabled(!DecoderPref.get(this), false)
+        return m
+    }
+
+    private fun pokeControls() { controlsPokeState.value = controlsPokeState.value + 1 }
+
+    private fun togglePlayPause() {
+        if (!::mediaPlayer.isInitialized) return
+        if (mediaPlayer.isPlaying) mediaPlayer.pause() else mediaPlayer.play()
+    }
+
+    /** Pretacanie pre DVR (live TS sa pretacat neda). */
+    private fun seekRelative(deltaMs: Long) {
+        if (!::mediaPlayer.isInitialized || !seekablePlayback) return
+        val len = mediaPlayer.length
+        if (len <= 0) return
+        val target = (mediaPlayer.time + deltaMs).coerceIn(0, len)
+        mediaPlayer.time = target
+    }
+
+    /** Znovu spusti aktualny stream (po zmene dekodera). */
+    private fun restartPlayback() {
+        val url = currentStreamUrl ?: return
+        if (!::mediaPlayer.isInitialized) return
+        val m = buildMedia(url)
+        mediaPlayer.media = m
+        m.release()
+        mediaPlayer.play()
+    }
+
     /** Obnovi now/next pre vsetky kanaly v zozname (kym je otvoreny). */
     private suspend fun refreshOverlayEpg() {
         val srv = liveServer ?: return
@@ -155,8 +194,8 @@ class PlayerActivity : ComponentActivity() {
         val prof = ChannelPrefs.getProfile(this, srv.id, uuid)
             .ifBlank { srv.profile.ifBlank { "pass" } }
         val url = Tvh.liveUrl(srv, uuid, name, prof)
-        val media = Media(libVlc, Uri.parse(url))
-        media.setHWDecoderEnabled(true, false)
+        currentStreamUrl = url
+        val media = buildMedia(url)
         mediaPlayer.media = media
         media.release()
         mediaPlayer.play()
@@ -169,16 +208,41 @@ class PlayerActivity : ComponentActivity() {
         switchToIndex(((liveIndex + delta) % n + n) % n)
     }
 
-    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
-        when (keyCode) {
-            android.view.KeyEvent.KEYCODE_CHANNEL_UP -> {
-                if (liveUuids.size > 1) { switchLive(+1); return true }
-            }
-            android.view.KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                if (liveUuids.size > 1) { switchLive(-1); return true }
+    // true = je otvorene prekrytie (menu stop / zoznam kanalov) -> D-pad nechame Compose
+    private var overlayOpen = false
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && !overlayOpen &&
+            ::mediaPlayer.isInitialized
+        ) {
+            val canZap = liveUuids.size > 1
+            when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_CHANNEL_UP -> {
+                    if (canZap) { switchLive(+1); pokeControls(); return true }
+                }
+                android.view.KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                    if (canZap) { switchLive(-1); pokeControls(); return true }
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    if (canZap) { switchLive(-1); pokeControls(); return true }
+                    if (seekablePlayback) { seekRelative(-15_000); pokeControls(); return true }
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (canZap) { switchLive(+1); pokeControls(); return true }
+                    if (seekablePlayback) { seekRelative(+30_000); pokeControls(); return true }
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                android.view.KeyEvent.KEYCODE_ENTER,
+                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    togglePlayPause(); pokeControls(); return true
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_UP,
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    pokeControls(); return true
+                }
             }
         }
-        return super.onKeyDown(keyCode, event)
+        return super.dispatchKeyEvent(event)
     }
 
     // DVR progress (sledovanie pozicie pre archiv)
@@ -288,6 +352,9 @@ class PlayerActivity : ComponentActivity() {
         liveProgStopState.value = progStop
         liveProgTitleState.value = progTitle
         val canZap = directUrl == null && liveUuids.size > 1
+        seekablePlayback = directUrl != null
+        currentStreamUrl = streamUrl
+        softwareDecodeState.value = DecoderPref.get(this)
 
         setContent {
             PlayerUi(
@@ -306,12 +373,21 @@ class PlayerActivity : ComponentActivity() {
                 serverId = server.id,
                 onAttach = { layout -> mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
-                    val media = Media(libVlc, Uri.parse(streamUrl))
-                    media.setHWDecoderEnabled(true, false)
+                    currentStreamUrl = streamUrl
+                    val media = buildMedia(streamUrl)
                     mediaPlayer.media = media
                     media.release()
                     mediaPlayer.play()
                 },
+                controlsPoke = controlsPokeState.value,
+                softwareDecode = softwareDecodeState.value,
+                onToggleSoftwareDecode = {
+                    val newVal = !DecoderPref.get(this)
+                    DecoderPref.set(this, newVal)
+                    softwareDecodeState.value = newVal
+                    restartPlayback()
+                },
+                onOverlayChange = { overlayOpen = it },
                 onPrevChannel = if (canZap) ({ switchLive(-1) }) else null,
                 onNextChannel = if (canZap) ({ switchLive(+1) }) else null,
                 liveChannels = if (canZap) liveChannelsState.value else emptyList(),
@@ -390,6 +466,10 @@ private fun PlayerUi(
     liveCurrentIndex: Int = -1,
     onSelectChannel: (Int) -> Unit = {},
     onRefreshEpg: () -> Unit = {},
+    controlsPoke: Int = 0,
+    softwareDecode: Boolean = false,
+    onToggleSoftwareDecode: () -> Unit = {},
+    onOverlayChange: (Boolean) -> Unit = {},
     onClose: () -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(true) }
@@ -400,6 +480,15 @@ private fun PlayerUi(
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // menu: null = ziadne, "audio" = audio stopy, "spu" = titulky
     var menu by remember { mutableStateOf<String?>(null) }
+
+    // D-pad / dialkove poslalo signal -> zobraz ovladanie
+    LaunchedEffect(controlsPoke) {
+        if (controlsPoke > 0) controlsVisible = true
+    }
+    // oznam Activity ci je otvorene prekrytie (menu/zoznam) -> tam D-pad riesi Compose
+    LaunchedEffect(menu, showChannelList) {
+        onOverlayChange(menu != null || showChannelList)
+    }
     // seek stav (len pre DVR). TS subor nenese dlzku, takze pouzivame:
     //  - dlzku z DVR entry (knownDurationMs), fallback player.length
     //  - position (zlomok 0..1) na zobrazenie aj pretacanie (na TS spolahlivejsie nez setTime)
@@ -702,6 +791,9 @@ private fun PlayerUi(
                     ) {
                         TextChip("\uD83D\uDD0A Audio") { menu = if (menu == "audio") null else "audio" }
                         TextChip("\uD83D\uDCAC Titulky") { menu = if (menu == "spu") null else "spu" }
+                        TextChip(if (softwareDecode) "\u2699 SW dekód: ZAP" else "\u2699 SW dekód: VYP") {
+                            onToggleSoftwareDecode()
+                        }
                     }
                 }
             }
