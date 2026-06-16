@@ -193,7 +193,9 @@ fun EpgGridScreen(
                     .coerceAtMost(hScroll.maxValue)
             }
         }
-        hScroll.scrollTo(targetPx)
+        hScroll.scroll(androidx.compose.foundation.MutatePriority.PreventUserInput) {
+            scrollBy((targetPx - hScroll.value).toFloat())
+        }
         pendingEdge = null
     }
 
@@ -249,7 +251,7 @@ fun EpgGridScreen(
                     Box(Modifier.padding(end = 8.dp)) {
                         FilterChip(
                             selected = off == dayOffset,
-                            onClick = { dayOffset = off },
+                            onClick = { pendingEdge = null; dayOffset = off },
                             label = { Text(label) }
                         )
                     }
