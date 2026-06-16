@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import coil.compose.AsyncImage
@@ -1341,11 +1343,20 @@ private fun PlayerUi(
                     Spacer(Modifier.height((6 * k).dp))
                     // Tlacidla: zavriet, zoznam, prev, play, next, audio, titulky, sw
                     val bk = (0.78f * k)
-                    Row(
+                    // Posuvny riadok tlacidiel: na uzkom (vyska telefonu) sa zmesti,
+                    // vybrane tlacidlo (D-pad) sa samo doskroluje do zorneho pola.
+                    val btnRowState = rememberLazyListState()
+                    LaunchedEffect(controlNavIndex, order.size) {
+                        val idx = controlNavIndex.coerceIn(0, (order.size - 1).coerceAtLeast(0))
+                        runCatching { btnRowState.animateScrollToItem(idx) }
+                    }
+                    LazyRow(
+                        state = btnRowState,
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy((8 * k).dp)
+                        horizontalArrangement = Arrangement.spacedBy((8 * k).dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        order.forEach { c ->
+                        items(order) { c ->
                             when (c) {
                                 "close" -> CircleButton("\u2715", selected = selCtrl == "close", scale = bk, onClick = onClose)
                                 "list" -> if (liveChannels.isNotEmpty()) CircleButton(
