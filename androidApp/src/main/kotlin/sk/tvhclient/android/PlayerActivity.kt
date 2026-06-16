@@ -323,11 +323,13 @@ class PlayerActivity : ComponentActivity() {
         // 4) Bezne prehravanie
         if (::mediaPlayer.isInitialized) {
             val canZap = liveUuids.size > 1
-            // dedikovane channel tlacidla = zap vzdy
+            // dedikovane channel tlacidla + Page+/- = zap vzdy
             when (kc) {
-                android.view.KeyEvent.KEYCODE_CHANNEL_UP ->
+                android.view.KeyEvent.KEYCODE_CHANNEL_UP,
+                android.view.KeyEvent.KEYCODE_PAGE_UP ->
                     if (down && canZap) { switchLive(+1); pokeControls(); return true }
-                android.view.KeyEvent.KEYCODE_CHANNEL_DOWN ->
+                android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
+                android.view.KeyEvent.KEYCODE_PAGE_DOWN ->
                     if (down && canZap) { switchLive(-1); pokeControls(); return true }
             }
             // ovladanie zobrazene -> sipky naviguju panel (Compose focus), OK spusti
@@ -340,8 +342,20 @@ class PlayerActivity : ComponentActivity() {
             when (kc) {
                 android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                 android.view.KeyEvent.KEYCODE_ENTER,
-                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER ->
-                    if (down) { togglePlayPause(); pokeControls(); return true }
+                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    // kratke OK = play/pause + zobraz ovladanie; dlhe podrzanie OK = zoznam kanalov
+                    if (down) {
+                        if (event.repeatCount == 0) { okDownAt = System.currentTimeMillis(); okLongFired = false }
+                        else if (!okLongFired && canZap &&
+                            System.currentTimeMillis() - okDownAt >= 500
+                        ) { okLongFired = true; openChannelList() }
+                        return true
+                    } else {
+                        if (!okLongFired) { togglePlayPause(); pokeControls() }
+                        okLongFired = false
+                        return true
+                    }
+                }
                 android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
                     if (seekablePlayback) { seekRelative(-15_000); return true }
                     pokeControls(); return true
