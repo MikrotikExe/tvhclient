@@ -127,8 +127,11 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
         }
     }
 
-    // Klik na tab Kanaly (aj uz vybrany) vrati obrazovku na zaciatok
+    // Klik na tab Kanaly (aj uz vybrany) vrati obrazovku na zaciatok.
+    // Prve (inicialne) spustenie preskocime, nech sa nezhasne mriezka otvorena cez EPG.
+    var resetInitDone by remember { mutableStateOf(false) }
     LaunchedEffect(resetSignal) {
+        if (!resetInitDone) { resetInitDone = true; return@LaunchedEffect }
         epgFor = null
         showGrid = false
         selectedTag = null

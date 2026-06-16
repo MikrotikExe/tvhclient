@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (intent?.getBooleanExtra("open_epg", false) == true) {
-            TabController.request(0); TabController.openEpgGrid()
+            TabController.openEpgGrid()
         }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra("open_epg", false)) {
-            TabController.request(0); TabController.openEpgGrid()
+            TabController.openEpgGrid()
         }
     }
 
@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
                 // EPG / TV program kláves (ikona vlavo od 0)
                 android.view.KeyEvent.KEYCODE_GUIDE,
                 android.view.KeyEvent.KEYCODE_TV_DATA_SERVICE -> {
-                    TabController.request(0); TabController.openEpgGrid(); return true
+                    TabController.openEpgGrid(); return true
                 }
                 // INFO kláves (ikona vpravo od 0)
                 android.view.KeyEvent.KEYCODE_INFO -> { TabController.pressInfo(); return true }
@@ -367,6 +367,10 @@ fun AppMain() {
             TabController.requested.value = -1
         }
     }
+
+    // EPG kláves -> prepni na Kanaly (bez resetu, nech zostane mriezka otvorena)
+    val epgSig by TabController.epgGrid
+    LaunchedEffect(epgSig) { if (epgSig > 0) tab = 0 }
 
     // Spat: z ineho tabu spat na Kanaly; na Kanaloch -> potvrdenie ukoncenia.
     // (Vnutorne obrazovky maju vlastny BackHandler, ten ma prednost.)
