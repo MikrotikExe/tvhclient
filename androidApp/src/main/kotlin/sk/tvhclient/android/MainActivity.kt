@@ -584,6 +584,20 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.autostart_enable))
             }
+            var autostartWake by remember { mutableStateOf(AutostartPref.isWakeEnabled(ctx)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = autostartWake,
+                    onCheckedChange = { on -> autostartWake = on; AutostartPref.setWakeEnabled(ctx, on) }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.autostart_wake))
+            }
+            Text(
+                stringResource(R.string.autostart_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(16.dp))
             if (servers.isEmpty()) {
                 Text(stringResource(R.string.no_servers))

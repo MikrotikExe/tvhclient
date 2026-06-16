@@ -204,4 +204,6 @@
     <string name="exit_no">Cancel</string>
     <string name="autostart_title">Autostart</string>
     <string name="autostart_enable">Start app after device boot</string>
+    <string name="autostart_wake">Start app on wake from sleep</string>
+    <string name="autostart_note">May not work on all devices</string>
 </resources>

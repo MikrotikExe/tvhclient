@@ -8,10 +8,16 @@ import android.content.Intent
 object AutostartPref {
     private const val PREFS = "app_prefs"
     private const val KEY = "autostart_enabled"
+    private const val KEY_WAKE = "autostart_wake"
     fun isEnabled(c: Context): Boolean =
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
     fun setEnabled(c: Context, on: Boolean) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply()
+    }
+    fun isWakeEnabled(c: Context): Boolean =
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_WAKE, false)
+    fun setWakeEnabled(c: Context, on: Boolean) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_WAKE, on).apply()
     }
 }
 

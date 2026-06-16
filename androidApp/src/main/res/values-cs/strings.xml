@@ -204,4 +204,6 @@
     <string name="exit_no">Zrušit</string>
     <string name="autostart_title">Automatické spuštění</string>
     <string name="autostart_enable">Spustit aplikaci po zapnutí zařízení</string>
+    <string name="autostart_wake">Automatické spuštění při probuzení z režimu spánku</string>
+    <string name="autostart_note">Nemusí fungovat na všech zařízeních</string>
 </resources>

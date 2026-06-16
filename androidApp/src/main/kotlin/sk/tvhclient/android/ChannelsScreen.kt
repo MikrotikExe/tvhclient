@@ -107,6 +107,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
             val hidden = HiddenChannels.all(ctx, srv?.id)
             LivePlaylist.channels = st.allRows.filter { it.channel.uuid !in hidden }.map { r ->
                 val (nt, ns, ne) = currentNow(r, epgMap[r.channel.uuid], nowS)
+                val nx = epgMap[r.channel.uuid]?.firstOrNull { it.start >= (if (ne > 0) ne else nowS) }
                 LivePlaylist.LiveChannel(
                     uuid = r.channel.uuid,
                     name = r.channel.name,
@@ -114,7 +115,10 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                     piconUrl = r.piconUrl,
                     nowTitle = nt ?: "",
                     nowStart = ns,
-                    nowStop = ne
+                    nowStop = ne,
+                    nextTitle = nx?.title ?: "",
+                    nextStart = nx?.start ?: 0,
+                    nextStop = nx?.stop ?: 0
                 )
             }
         }

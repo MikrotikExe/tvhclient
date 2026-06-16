@@ -12,7 +12,10 @@ object LivePlaylist {
         val piconUrl: String?,
         val nowTitle: String,
         val nowStart: Long,
-        val nowStop: Long
+        val nowStop: Long,
+        val nextTitle: String = "",
+        val nextStart: Long = 0,
+        val nextStop: Long = 0
     )
 
     @Volatile

@@ -87,6 +87,10 @@ class PlayerActivity : ComponentActivity() {
     private val liveProgStartState = androidx.compose.runtime.mutableStateOf(0L)
     private val liveProgStopState = androidx.compose.runtime.mutableStateOf(0L)
     private val liveProgTitleState = androidx.compose.runtime.mutableStateOf("")
+    private val liveNextTitleState = androidx.compose.runtime.mutableStateOf("")
+    private val liveNextStartState = androidx.compose.runtime.mutableStateOf(0L)
+    private val liveNextStopState = androidx.compose.runtime.mutableStateOf(0L)
+    private val zapPokeState = androidx.compose.runtime.mutableStateOf(0)
     private val liveIndexState = androidx.compose.runtime.mutableStateOf(-1)
     private val liveChannelsState =
         androidx.compose.runtime.mutableStateOf<List<LivePlaylist.LiveChannel>>(emptyList())
@@ -219,6 +223,10 @@ class PlayerActivity : ComponentActivity() {
         liveProgStartState.value = ch?.nowStart ?: 0L
         liveProgStopState.value = ch?.nowStop ?: 0L
         liveProgTitleState.value = ch?.nowTitle ?: ""
+        liveNextTitleState.value = ch?.nextTitle ?: ""
+        liveNextStartState.value = ch?.nextStart ?: 0L
+        liveNextStopState.value = ch?.nextStop ?: 0L
+        zapPokeState.value = zapPokeState.value + 1
         val prof = ChannelPrefs.getProfile(this, srv.id, uuid)
             .ifBlank { srv.profile.ifBlank { "pass" } }
         val url = Tvh.liveUrl(srv, uuid, name, prof)
@@ -786,6 +794,10 @@ class PlayerActivity : ComponentActivity() {
                 pinLen = pinEntryState.value.length,
                 pinError = pinErrorState.value,
                 scrubFrac = scrubFractionState.value,
+                progNextTitle = liveNextTitleState.value,
+                progNextStart = liveNextStartState.value,
+                progNextStop = liveNextStopState.value,
+                zapPoke = zapPokeState.value,
                 onClose = { finish() }
             )
         }
@@ -881,6 +893,10 @@ private fun PlayerUi(
     pinLen: Int = 0,
     pinError: Boolean = false,
     scrubFrac: Float = 0f,
+    progNextTitle: String = "",
+    progNextStart: Long = 0,
+    progNextStop: Long = 0,
+    zapPoke: Int = 0,
     onClose: () -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(false) }
@@ -896,6 +912,15 @@ private fun PlayerUi(
     // D-pad / dialkove poslalo signal -> zobraz ovladanie (navigaciu panela riesi Activity)
     LaunchedEffect(controlsPoke) {
         if (controlsPoke > 0) controlsVisible = true
+    }
+    // Info pruh kanala po prepnuti (zap) — zobraz a po ~6s skry
+    var zapBanner by remember { mutableStateOf(false) }
+    LaunchedEffect(zapPoke) {
+        if (zapPoke > 0) {
+            zapBanner = true
+            kotlinx.coroutines.delay(6000)
+            zapBanner = false
+        }
     }
     // oznam Activity ci je ovladanie zobrazene (vtedy D-pad navigaciu riesi Activity)
     LaunchedEffect(controlsVisible) { onControlsVisibleChange(controlsVisible) }
@@ -1112,6 +1137,112 @@ private fun PlayerUi(
                     .padding(horizontal = 28.dp, vertical = 14.dp)
             ) {
                 Text(numberEntry, color = Color.White, fontSize = 48.sp)
+            }
+        }
+
+        // Info pruh kanala po prepnuti (zap): cislo + logo + nazov + teraz/dalej
+        androidx.compose.animation.AnimatedVisibility(
+            visible = zapBanner && !controlsVisible && menu == null && !showChannelList && !showOptions,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart)
+        ) {
+            val curCh = liveChannels.getOrNull(liveCurrentIndex)
+            val bannerLoader = remember(server?.id) { PiconImageLoader.get(ctx, server) }
+            fun clock(sec: Long): String {
+                if (sec <= 0) return ""
+                return java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(sec * 1000))
+            }
+            val hasNow = progStart > 0 && progStop > progStart
+            val frac = if (hasNow)
+                ((liveNowSec - progStart).toFloat() / (progStop - progStart)).coerceIn(0f, 1f)
+            else 0f
+            val remainMin = if (hasNow) ((progStop - liveNowSec) / 60).coerceAtLeast(0) else 0
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xE6000000))
+                    .systemBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.width(72.dp)
+                ) {
+                    if ((curCh?.number ?: 0) > 0) {
+                        Text(
+                            "${curCh?.number}",
+                            color = Color.White,
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                    }
+                    if (curCh?.piconUrl != null) {
+                        Spacer(Modifier.height(4.dp))
+                        AsyncImage(
+                            model = ImageRequest.Builder(ctx).data(curCh.piconUrl).build(),
+                            contentDescription = null,
+                            imageLoader = bannerLoader,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            modifier = Modifier.size(64.dp, 40.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1
+                    )
+                    if (progTitle.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (hasNow) {
+                                Text(
+                                    clock(progStart) + " \u2013 " + clock(progStop),
+                                    color = Color(0xCCFFFFFF),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(
+                                progTitle,
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                        if (hasNow) {
+                            Spacer(Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.LinearProgressIndicator(
+                                    progress = { frac },
+                                    modifier = Modifier.weight(1f).height(3.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "$remainMin min",
+                                    color = Color(0xCCFFFFFF),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                    if (progNextTitle.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            clock(progNextStart) + " \u2013 " + clock(progNextStop) + "  " + progNextTitle,
+                            color = Color(0x99FFFFFF),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
 
