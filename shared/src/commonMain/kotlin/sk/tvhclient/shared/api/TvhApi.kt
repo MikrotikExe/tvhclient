@@ -21,7 +21,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import sk.tvhclient.shared.model.Channel
 import sk.tvhclient.shared.model.ChannelTag
 import sk.tvhclient.shared.model.EpgEvent
@@ -148,6 +147,14 @@ class TvhApi(private val server: TvhServer) {
         return entries
     }
 
+    /** Odstrani duplicitne DVR zaznamy podla uuid (stranky grid_* sa
+     *  vedia prekryvat -> ta ista nahravka pride viackrat). Prazdne uuid
+     *  nechame tak (nemame podla coho deduplikovat). */
+    private fun List<sk.tvhclient.shared.model.DvrEntry>.dedupByUuid(): List<sk.tvhclient.shared.model.DvrEntry> {
+        val seen = HashSet<String>()
+        return filter { it.uuid.isBlank() || seen.add(it.uuid) }
+    }
+
     private inline fun <reified T> decode(obj: JsonObject): T =
         json.decodeFromJsonElement<T>(obj)
 
@@ -220,13 +227,13 @@ class TvhApi(private val server: TvhServer) {
     suspend fun dvrFinished(): List<sk.tvhclient.shared.model.DvrEntry> =
         apiGetAll("api/dvr/entry/grid_finished", pageLimit = 500).mapNotNull {
             runCatching { decode<sk.tvhclient.shared.model.DvrEntry>(it) }.getOrNull()
-        }
+        }.dedupByUuid()
 
     /** Naplanovane/prebiehajuce nahravky (grid_upcoming). */
     suspend fun dvrUpcoming(): List<sk.tvhclient.shared.model.DvrEntry> =
         apiGetAll("api/dvr/entry/grid_upcoming", pageLimit = 500).mapNotNull {
             runCatching { decode<sk.tvhclient.shared.model.DvrEntry>(it) }.getOrNull()
-        }
+        }.dedupByUuid()
 
     /** Zmaze nahravku aj subor (api/dvr/entry/remove). */
     suspend fun dvrRemove(uuid: String): Boolean = runCatching {

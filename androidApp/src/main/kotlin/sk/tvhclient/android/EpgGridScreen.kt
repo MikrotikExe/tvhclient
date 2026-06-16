@@ -64,6 +64,12 @@ private const val HOUR_W = 60 * PX_PER_MIN // 240 dp
 private const val DAY_MIN = 24 * 60
 private const val PICON_COL = 64           // sirka stlpca s piconom
 private const val ROW_H = 64
+private const val DAY_SWITCH_DP = 64       // prah pretiahnutia za okraj na prepnutie dna
+private const val NOW_TICK_MS = 30_000L    // ako casto prekreslit live ciaru/priebeh
+private const val DVR_REFRESH_MS = 150_000L // tichy refresh DVR (nove/dokoncene nahravky)
+
+// Kam doskocit po prepnuti dna gestom: na koniec (predosly den) alebo zaciatok (dalsi den)
+private enum class DayJump { END, START }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,7 +112,7 @@ fun EpgGridScreen(
     // Tikajuci cas (live ciara a priebeh) — prekreslenie kazdych 30s
     var now by remember { mutableStateOf(currentTimeSeconds()) }
     LaunchedEffect(Unit) {
-        while (true) { kotlinx.coroutines.delay(30_000); now = currentTimeSeconds() }
+        while (true) { kotlinx.coroutines.delay(NOW_TICK_MS); now = currentTimeSeconds() }
     }
 
     // EPG hromadne (jednorazovo, plynule skrolovanie) — zdielana cache cez VM.
@@ -137,7 +143,7 @@ fun EpgGridScreen(
     // sa objavia v mriezke skoro (bez cakania ~15 min na expiraciu)
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(150_000)
+            kotlinx.coroutines.delay(DVR_REFRESH_MS)
             dvrVm.refresh()
         }
     }
@@ -174,7 +180,7 @@ fun EpgGridScreen(
     // stoji na okraji (0 alebo maxValue) a prst tahá dalej tym smerom, po prahu
     // prepneme den. Toto je spolahlivejsie ako citanie pretecenia cez onPostScroll
     // (to fling faza vacsinou prehltla -> okraj sa neprepol).
-    var pendingEdge by remember { mutableStateOf<String?>(null) }
+    var pendingJump by remember { mutableStateOf<DayJump?>(null) }
 
     // Po prepnuti/otvoreni nastav poziciu: kontinuita cez polnoc, inak aktualny cas
     LaunchedEffect(dayOffset) {
@@ -182,10 +188,10 @@ fun EpgGridScreen(
         while (hScroll.maxValue == 0 && tries < 25) {
             kotlinx.coroutines.delay(20); tries++
         }
-        val targetPx = when (pendingEdge) {
-            "end" -> hScroll.maxValue
-            "start" -> 0
-            else -> {
+        val targetPx = when (pendingJump) {
+            DayJump.END -> hScroll.maxValue
+            DayJump.START -> 0
+            null -> {
                 val nowMin = if (dayOffset == 0)
                     (((currentTimeSeconds() - dayStart) / 60).toInt()) else 0
                 val startMin = (nowMin - 30).coerceIn(0, DAY_MIN)
@@ -196,7 +202,7 @@ fun EpgGridScreen(
         hScroll.scroll(androidx.compose.foundation.MutatePriority.PreventUserInput) {
             scrollBy((targetPx - hScroll.value).toFloat())
         }
-        pendingEdge = null
+        pendingJump = null
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -251,7 +257,7 @@ fun EpgGridScreen(
                     Box(Modifier.padding(end = 8.dp)) {
                         FilterChip(
                             selected = off == dayOffset,
-                            onClick = { pendingEdge = null; dayOffset = off },
+                            onClick = { pendingJump = null; dayOffset = off },
                             label = { Text(label) }
                         )
                     }
@@ -278,7 +284,7 @@ fun EpgGridScreen(
                 Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
-                        val edgePx = 64.dp.toPx()
+                        val edgePx = DAY_SWITCH_DP.dp.toPx()
                         awaitEachGesture {
                             awaitFirstDown(requireUnconsumed = false)
                             var accum = 0f
@@ -293,11 +299,11 @@ fun EpgGridScreen(
                                 if (!switched && atStart && dx > 0f && dayOffset > -7) {
                                     // zaciatok dna, tahám doprava (do minulosti) -> predosly den
                                     accum += dx
-                                    if (accum >= edgePx) { pendingEdge = "end"; dayOffset--; switched = true }
+                                    if (accum >= edgePx) { pendingJump = DayJump.END; dayOffset--; switched = true }
                                 } else if (!switched && atEnd && dx < 0f && dayOffset < 6) {
                                     // koniec dna, tahám dolava (do buducnosti) -> dalsi den
                                     accum += -dx
-                                    if (accum >= edgePx) { pendingEdge = "start"; dayOffset++; switched = true }
+                                    if (accum >= edgePx) { pendingJump = DayJump.START; dayOffset++; switched = true }
                                 } else if (!atStart && !atEnd) {
                                     accum = 0f
                                 }
