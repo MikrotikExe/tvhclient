@@ -148,7 +148,17 @@ fun EpgGridScreen(
         }
     }
     val dvrByChannel = remember(dvrState) {
-        (dvrState as? DvrState.Loaded)?.entries?.groupBy { it.channelName } ?: emptyMap()
+        // V mriezke chceme jeden blok na relaciu. Ta ista relacia moze byt
+        // nahrata viackrat (rozne uuid, rovnaky cas+nazov) -> skolabujeme ich
+        // a necháme tu s najvacsim suborom (najkompletnejsia kopia na prehratie).
+        // Archiv (DvrScreen) zostava nedotknuty — tam vidno vsetky nahravky.
+        (dvrState as? DvrState.Loaded)?.entries
+            ?.groupBy { it.channelName }
+            ?.mapValues { (_, list) ->
+                list.groupBy { Triple(it.start, it.stop, it.title) }
+                    .map { (_, dups) -> dups.maxByOrNull { it.fileSize } ?: dups.first() }
+            }
+            ?: emptyMap()
     }
     val recordingList = remember(dvrState) {
         (dvrState as? DvrState.Loaded)?.recording ?: emptyList()
