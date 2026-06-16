@@ -1164,6 +1164,9 @@ private fun PlayerUi(
                 val elapsed = (liveNowSec - progStart).coerceIn(0, total)
                 val fracNow = elapsed.toFloat() / total.toFloat()
                 val remainMin = if (hasNow) ((progStop - liveNowSec) / 60).coerceAtLeast(0) else 0
+                // skalovanie podla rozlisenia boxu (citatelnost z gauca)
+                val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+                val k = (cfg.screenWidthDp / 480f).coerceIn(1f, 1.9f)
 
                 // Jeden spolocny info+ovladaci pruh dole
                 Column(
@@ -1177,13 +1180,14 @@ private fun PlayerUi(
                         // cislo + logo + nazov kanala
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(86.dp)
+                            modifier = Modifier.width((86 * k).dp)
                         ) {
                             if ((curCh?.number ?: 0) > 0) {
                                 Text(
                                     "${curCh?.number}",
                                     color = Color.White,
-                                    style = MaterialTheme.typography.headlineMedium
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = (30 * k).sp
                                 )
                             }
                             if (curCh?.piconUrl != null) {
@@ -1193,13 +1197,13 @@ private fun PlayerUi(
                                     contentDescription = null,
                                     imageLoader = infoLoader,
                                     contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                    modifier = Modifier.size(72.dp, 40.dp)
+                                    modifier = Modifier.size((72 * k).dp, (40 * k).dp)
                                 )
                             }
                             Text(
                                 title,
                                 color = Color(0xCCFFFFFF),
-                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = (12 * k).sp,
                                 maxLines = 2,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -1212,8 +1216,8 @@ private fun PlayerUi(
                                 Text(
                                     progTitle,
                                     color = Color.White,
-                                    style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
+                                    fontSize = (19 * k).sp,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
@@ -1224,19 +1228,19 @@ private fun PlayerUi(
                                     Text(
                                         clock(progStart) + " \u2013 " + clock(progStop),
                                         color = Color(0xCCFFFFFF),
-                                        style = MaterialTheme.typography.bodySmall
+                                        fontSize = (13 * k).sp
                                     )
                                     androidx.compose.material3.LinearProgressIndicator(
                                         progress = { fracNow },
                                         modifier = Modifier
-                                            .width(120.dp)
+                                            .width((120 * k).dp)
                                             .padding(horizontal = 10.dp),
                                         trackColor = Color(0x55FFFFFF)
                                     )
                                     Text(
                                         "$remainMin min",
                                         color = Color(0xCCFFFFFF),
-                                        style = MaterialTheme.typography.bodySmall
+                                        fontSize = (13 * k).sp
                                     )
                                 }
                             }
@@ -1281,7 +1285,7 @@ private fun PlayerUi(
                                 Text(
                                     progDesc,
                                     color = Color(0xBBFFFFFF),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = (13 * k).sp,
                                     maxLines = 2,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
@@ -1291,7 +1295,7 @@ private fun PlayerUi(
                                 Text(
                                     clock(nextStart) + " \u2013 " + clock(nextStop) + "  " + nextTitle,
                                     color = Color(0x99FFFFFF),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = (13 * k).sp,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
@@ -1301,46 +1305,50 @@ private fun PlayerUi(
                         Text(
                             dateTime,
                             color = Color(0xCCFFFFFF),
-                            style = MaterialTheme.typography.bodySmall
+                            fontSize = (13 * k).sp
                         )
                     }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height((10 * k).dp))
                     // Tlacidla: zavriet, zoznam, prev, play, next, audio, titulky, sw
+                    val bk = 1f + (k - 1f) * 0.5f
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy((10 * k).dp)
                     ) {
                         order.forEach { c ->
                             when (c) {
-                                "close" -> CircleButton("\u2715", selected = selCtrl == "close", onClick = onClose)
+                                "close" -> CircleButton("\u2715", selected = selCtrl == "close", scale = bk, onClick = onClose)
                                 "list" -> if (liveChannels.isNotEmpty()) CircleButton(
                                     label = "\u2630",
                                     selected = selCtrl == "list",
+                                    scale = bk,
                                     onClick = { showChannelList = true; controlsVisible = false }
                                 )
                                 "prev" -> if (onPrevChannel != null) CircleButton(
-                                    label = "\u23EE", selected = selCtrl == "prev", onClick = onPrevChannel
+                                    label = "\u23EE", selected = selCtrl == "prev", scale = bk, onClick = onPrevChannel
                                 )
                                 "play" -> PlayPauseButton(
                                     isPlaying = isPlaying,
                                     selected = selCtrl == "play",
+                                    scale = bk,
                                     onClick = {
                                         if (player.isPlaying) { player.pause(); isPlaying = false }
                                         else { player.play(); isPlaying = true }
                                     }
                                 )
                                 "next" -> if (onNextChannel != null) CircleButton(
-                                    label = "\u23ED", selected = selCtrl == "next", onClick = onNextChannel
+                                    label = "\u23ED", selected = selCtrl == "next", scale = bk, onClick = onNextChannel
                                 )
-                                "audio" -> TextChip("\uD83D\uDD0A Audio", selected = selCtrl == "audio") {
+                                "audio" -> TextChip("\uD83D\uDD0A Audio", selected = selCtrl == "audio", scale = bk) {
                                     menu = if (menu == "audio") null else "audio"
                                 }
-                                "subs" -> TextChip("\uD83D\uDCAC Titulky", selected = selCtrl == "subs") {
+                                "subs" -> TextChip("\uD83D\uDCAC Titulky", selected = selCtrl == "subs", scale = bk) {
                                     menu = if (menu == "spu") null else "spu"
                                 }
                                 "sw" -> TextChip(
                                     if (softwareDecode) "\u2699 SW dek\u00f3d: ZAP" else "\u2699 SW dek\u00f3d: VYP",
-                                    selected = selCtrl == "sw"
+                                    selected = selCtrl == "sw",
+                                    scale = bk
                                 ) { onToggleSoftwareDecode() }
                             }
                         }
@@ -1699,7 +1707,7 @@ private fun TrackRow(label: String, selected: Boolean, highlighted: Boolean = fa
 }
 
 @Composable
-private fun TextChip(label: String, selected: Boolean = false, onClick: () -> Unit) {
+private fun TextChip(label: String, selected: Boolean = false, scale: Float = 1f, onClick: () -> Unit) {
     val shape = RoundedCornerShape(20.dp)
     Box(
         Modifier
@@ -1707,26 +1715,26 @@ private fun TextChip(label: String, selected: Boolean = false, onClick: () -> Un
             .background(if (selected) Color(0xCC1E88E5) else Color(0x88000000))
             .then(if (selected) Modifier.border(3.dp, Color.White, shape) else Modifier)
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = (16.dp * scale), vertical = (10.dp * scale))
     ) {
-        Text(label, color = Color.White)
+        Text(label, color = Color.White, fontSize = 14.sp * scale)
     }
 }
 
 // Velke stredove tlacidlo play/pauza. Ikonu kreslime cez Canvas, aby
 // pauza nemala farebny "emoji" (VLC) vzhlad a sedela so stylom play trojuholnika.
 @Composable
-private fun PlayPauseButton(isPlaying: Boolean, selected: Boolean, onClick: () -> Unit) {
+private fun PlayPauseButton(isPlaying: Boolean, selected: Boolean, scale: Float = 1f, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(76.dp)
+            .size(76.dp * scale)
             .clip(CircleShape)
             .background(if (selected) Color(0xCC1E88E5) else Color(0x88000000))
             .then(if (selected) Modifier.border(3.dp, Color.White, CircleShape) else Modifier)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.foundation.Canvas(Modifier.size(30.dp)) {
+        androidx.compose.foundation.Canvas(Modifier.size(30.dp * scale)) {
             val w = size.width
             val h = size.height
             if (isPlaying) {
@@ -1763,9 +1771,10 @@ private fun CircleButton(
     onClick: () -> Unit,
     big: Boolean = false,
     selected: Boolean = false,
+    scale: Float = 1f,
     modifier: Modifier = Modifier
 ) {
-    val s = if (big) 76.dp else 44.dp
+    val s = (if (big) 76 else 44).dp * scale
     Box(
         modifier
             .size(s)
@@ -1779,7 +1788,7 @@ private fun CircleButton(
             label,
             color = Color.White,
             textAlign = TextAlign.Center,
-            fontSize = if (big) 34.sp else 20.sp
+            fontSize = (if (big) 34f else 20f).sp * scale
         )
     }
 }
