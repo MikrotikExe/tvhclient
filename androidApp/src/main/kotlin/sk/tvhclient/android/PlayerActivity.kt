@@ -268,7 +268,6 @@ class PlayerActivity : ComponentActivity() {
     private val trackNavState = androidx.compose.runtime.mutableStateOf(0)
     private val closeMenuState = androidx.compose.runtime.mutableStateOf(0)
     private var trackMenuKind = "audio"
-    private var okDownAt = 0L
     private var okLongFired = false
 
     private fun openChannelList() {
@@ -423,14 +422,16 @@ class PlayerActivity : ComponentActivity() {
         // 4) Bezne prehravanie
         if (::mediaPlayer.isInitialized) {
             val canZap = !seekablePlayback && liveUuids.size > 1
-            // dedikovane channel tlacidla + Page+/- = zap vzdy
+            // prepinanie kanalov: Channel+/-, Page+/-, aj sipky hore/dole = zap
             when (kc) {
                 android.view.KeyEvent.KEYCODE_CHANNEL_UP,
-                android.view.KeyEvent.KEYCODE_PAGE_UP ->
-                    if (down && canZap) { switchLive(+1); pokeControls(); return true }
+                android.view.KeyEvent.KEYCODE_PAGE_UP,
+                android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                    if (down && canZap && event.repeatCount == 0) { switchLive(+1); pokeControls(); return true }
                 android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
-                android.view.KeyEvent.KEYCODE_PAGE_DOWN ->
-                    if (down && canZap) { switchLive(-1); pokeControls(); return true }
+                android.view.KeyEvent.KEYCODE_PAGE_DOWN,
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+                    if (down && canZap && event.repeatCount == 0) { switchLive(-1); pokeControls(); return true }
             }
             // cislice 0-9 (aj numericka klavesnica) = volba kanala cislom
             run {
@@ -443,59 +444,40 @@ class PlayerActivity : ComponentActivity() {
                 }
                 if (digit >= 0) { if (down) onChannelDigit(digit); return true }
             }
-            // ovladanie zobrazene -> sipky naviguju panel (riadime my), OK aktivuje
-            // zvyrazneny prvok; dlhe podrzanie OK = zoznam kanalov
+            // ovladanie zobrazene -> vlavo/vpravo naviguju panel, OK aktivuje
+            // zvyrazneny prvok (hore/dole prepinaju kanal vyssie)
             if (controlsShown) {
                 val order = playerControlOrder(canZap)
                 val n = order.size
                 when (kc) {
-                    android.view.KeyEvent.KEYCODE_DPAD_LEFT,
-                    android.view.KeyEvent.KEYCODE_DPAD_UP -> if (down) {
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
                         controlNavState.value = (controlNavState.value - 1 + n) % n
                         pokeControls(); return true
                     }
-                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
-                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (down) {
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
                         controlNavState.value = (controlNavState.value + 1) % n
                         pokeControls(); return true
                     }
                     android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                     android.view.KeyEvent.KEYCODE_ENTER,
                     android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        if (down) {
-                            if (event.repeatCount == 0) { okDownAt = System.currentTimeMillis(); okLongFired = false }
-                            else if (!okLongFired && canZap &&
-                                System.currentTimeMillis() - okDownAt >= 500
-                            ) { okLongFired = true; openChannelList() }
-                            return true
-                        } else {
-                            if (!okLongFired) activateControl(order.getOrNull(controlNavState.value))
-                            okLongFired = false
-                            return true
-                        }
+                        if (down && event.repeatCount == 0) activateControl(order.getOrNull(controlNavState.value))
+                        return true
                     }
                 }
                 // BACK necháme Compose BackHandler (skryje ovladanie); volume/ostatne tiez
                 return super.dispatchKeyEvent(event)
             }
-            // ovladanie skryte -> klavesa ho zobrazi a da focus na panel
+            // ovladanie skryte
             when (kc) {
                 android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                 android.view.KeyEvent.KEYCODE_ENTER,
-                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                    // kratke OK = play/pause + zobraz ovladanie; dlhe podrzanie OK = zoznam kanalov
-                    if (down) {
-                        if (event.repeatCount == 0) { okDownAt = System.currentTimeMillis(); okLongFired = false }
-                        else if (!okLongFired && canZap &&
-                            System.currentTimeMillis() - okDownAt >= 500
-                        ) { okLongFired = true; openChannelList() }
-                        return true
-                    } else {
-                        if (!okLongFired) { togglePlayPause(); showControlsFocused() }
-                        okLongFired = false
-                        return true
-                    }
-                }
+                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> if (down && event.repeatCount == 0) {
+                    // OK pri zivom = zoznam kanalov; pri DVR (bez zoznamu) = play/pause
+                    if (seekablePlayback) { togglePlayPause(); showControlsFocused() }
+                    else { okLongFired = true; openChannelList() }  // okLongFired prehltne nasledne OK-up
+                    return true
+                } else if (down) return true
                 android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
                     if (seekablePlayback) { seekRelative(-15_000); return true }
                     showControlsFocused(); return true
@@ -504,6 +486,7 @@ class PlayerActivity : ComponentActivity() {
                     if (seekablePlayback) { seekRelative(+30_000); return true }
                     showControlsFocused(); return true
                 }
+                // hore/dole sem prides len ak sa neda zapovat (napr. DVR) -> otvor panel
                 android.view.KeyEvent.KEYCODE_DPAD_UP,
                 android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
                     if (down) { showControlsFocused(); return true }
