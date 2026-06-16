@@ -693,15 +693,17 @@ private fun ChannelList(
             val keyMod = focusMod.onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.nativeKeyEvent.keyCode) {
-                    android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                        if (idx == 0) { jumpTarget = last; true } else false
-                    android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                        if (idx == last) { jumpTarget = 0; true } else false
+                    // Hore/dole nechavame normalne: na 1. kanali hore vyjde na
+                    // vyhladavanie/kategorie, na poslednom dole na spodne menu.
                     android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        jumpTarget = (idx - 5).coerceAtLeast(0); true
+                        // -5; ak uz si na zaciatku, skoc na koniec (wrap)
+                        jumpTarget = if (idx == 0) last else (idx - 5).coerceAtLeast(0)
+                        true
                     }
                     android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        jumpTarget = (idx + 5).coerceAtMost(last); true
+                        // +5; ak uz si na konci, skoc na zaciatok (wrap)
+                        jumpTarget = if (idx == last) 0 else (idx + 5).coerceAtMost(last)
+                        true
                     }
                     else -> false
                 }
