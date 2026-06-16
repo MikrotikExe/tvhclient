@@ -124,13 +124,15 @@ class PlayerActivity : ComponentActivity() {
         if (mediaPlayer.isPlaying) mediaPlayer.pause() else mediaPlayer.play()
     }
 
-    /** Pretacanie pre DVR (live TS sa pretacat neda). */
+    /** Pretacanie pre DVR (live TS sa pretacat neda). TS subor nenese dlzku,
+     *  preto pouzivame dlzku z DVR entry a poziciu ako zlomok (na TS spolahlive). */
     private fun seekRelative(deltaMs: Long) {
         if (!::mediaPlayer.isInitialized || !seekablePlayback) return
-        val len = mediaPlayer.length
-        if (len <= 0) return
-        val target = (mediaPlayer.time + deltaMs).coerceIn(0, len)
-        mediaPlayer.time = target
+        val dur = if (dvrDurationMs > 0) dvrDurationMs else mediaPlayer.length
+        if (dur <= 0) return
+        val curMs = (mediaPlayer.position.coerceIn(0f, 1f) * dur).toLong()
+        val targetMs = (curMs + deltaMs).coerceIn(0, dur)
+        mediaPlayer.position = (targetMs.toFloat() / dur).coerceIn(0f, 1f)
     }
 
     /** Znovu spusti aktualny stream (po zmene dekodera). */
@@ -449,20 +451,47 @@ class PlayerActivity : ComponentActivity() {
             if (controlsShown) {
                 val order = playerControlOrder(canZap)
                 val n = order.size
-                when (kc) {
-                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
-                        controlNavState.value = (controlNavState.value - 1 + n) % n
-                        pokeControls(); return true
+                if (seekablePlayback) {
+                    // DVR: vlavo/vpravo = pretacanie, hore/dole = navigacia panela
+                    when (kc) {
+                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
+                            seekRelative(-15_000); pokeControls(); return true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
+                            seekRelative(+30_000); pokeControls(); return true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_UP -> if (down) {
+                            controlNavState.value = (controlNavState.value - 1 + n) % n
+                            pokeControls(); return true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (down) {
+                            controlNavState.value = (controlNavState.value + 1) % n
+                            pokeControls(); return true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                        android.view.KeyEvent.KEYCODE_ENTER,
+                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            if (down && event.repeatCount == 0) activateControl(order.getOrNull(controlNavState.value))
+                            return true
+                        }
                     }
-                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
-                        controlNavState.value = (controlNavState.value + 1) % n
-                        pokeControls(); return true
-                    }
-                    android.view.KeyEvent.KEYCODE_DPAD_CENTER,
-                    android.view.KeyEvent.KEYCODE_ENTER,
-                    android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        if (down && event.repeatCount == 0) activateControl(order.getOrNull(controlNavState.value))
-                        return true
+                } else {
+                    // live: vlavo/vpravo naviguju panel (hore/dole prepinaju kanal vyssie)
+                    when (kc) {
+                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
+                            controlNavState.value = (controlNavState.value - 1 + n) % n
+                            pokeControls(); return true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
+                            controlNavState.value = (controlNavState.value + 1) % n
+                            pokeControls(); return true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                        android.view.KeyEvent.KEYCODE_ENTER,
+                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            if (down && event.repeatCount == 0) activateControl(order.getOrNull(controlNavState.value))
+                            return true
+                        }
                     }
                 }
                 // BACK necháme Compose BackHandler (skryje ovladanie); volume/ostatne tiez
@@ -479,11 +508,11 @@ class PlayerActivity : ComponentActivity() {
                     return true
                 } else if (down) return true
                 android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
-                    if (seekablePlayback) { seekRelative(-15_000); return true }
+                    if (seekablePlayback) { seekRelative(-15_000); pokeControls(); return true }
                     showControlsFocused(); return true
                 }
                 android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
-                    if (seekablePlayback) { seekRelative(+30_000); return true }
+                    if (seekablePlayback) { seekRelative(+30_000); pokeControls(); return true }
                     showControlsFocused(); return true
                 }
                 // hore/dole sem prides len ak sa neda zapovat (napr. DVR) -> otvor panel
