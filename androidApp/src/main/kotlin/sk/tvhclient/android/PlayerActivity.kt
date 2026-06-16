@@ -1164,9 +1164,9 @@ private fun PlayerUi(
                 val elapsed = (liveNowSec - progStart).coerceIn(0, total)
                 val fracNow = elapsed.toFloat() / total.toFloat()
                 val remainMin = if (hasNow) ((progStop - liveNowSec) / 60).coerceAtLeast(0) else 0
-                // skalovanie podla rozlisenia boxu (citatelnost z gauca)
+                // skalovanie podla rozlisenia boxu (kompaktny, citatelny pruh)
                 val cfg = androidx.compose.ui.platform.LocalConfiguration.current
-                val k = (cfg.screenWidthDp / 480f).coerceIn(1f, 1.9f)
+                val k = (cfg.screenWidthDp / 640f).coerceIn(0.9f, 1.25f)
 
                 // Jeden spolocny info+ovladaci pruh dole
                 Column(
@@ -1174,42 +1174,42 @@ private fun PlayerUi(
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
                         .background(Color(0xE6000000))
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.Top) {
                         // cislo + logo + nazov kanala
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width((86 * k).dp)
+                            modifier = Modifier.width((76 * k).dp)
                         ) {
                             if ((curCh?.number ?: 0) > 0) {
                                 Text(
                                     "${curCh?.number}",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = (30 * k).sp
+                                    fontSize = (24 * k).sp
                                 )
                             }
                             if (curCh?.piconUrl != null) {
-                                Spacer(Modifier.height(4.dp))
+                                Spacer(Modifier.height(2.dp))
                                 AsyncImage(
                                     model = ImageRequest.Builder(ctx).data(curCh.piconUrl).build(),
                                     contentDescription = null,
                                     imageLoader = infoLoader,
                                     contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                    modifier = Modifier.size((72 * k).dp, (40 * k).dp)
+                                    modifier = Modifier.size((56 * k).dp, (32 * k).dp)
                                 )
                             }
                             Text(
                                 title,
                                 color = Color(0xCCFFFFFF),
-                                fontSize = (12 * k).sp,
-                                maxLines = 2,
+                                fontSize = (11 * k).sp,
+                                maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
-                        Spacer(Modifier.width(16.dp))
+                        Spacer(Modifier.width(14.dp))
                         // popis relacie: nazov, cas, priebeh, popis, dalej
                         Column(Modifier.weight(1f)) {
                             if (progTitle.isNotBlank()) {
@@ -1217,30 +1217,29 @@ private fun PlayerUi(
                                     progTitle,
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = (19 * k).sp,
+                                    fontSize = (16 * k).sp,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                             }
                             if (hasNow) {
-                                Spacer(Modifier.height(2.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         clock(progStart) + " \u2013 " + clock(progStop),
                                         color = Color(0xCCFFFFFF),
-                                        fontSize = (13 * k).sp
+                                        fontSize = (12 * k).sp
                                     )
                                     androidx.compose.material3.LinearProgressIndicator(
                                         progress = { fracNow },
                                         modifier = Modifier
-                                            .width((120 * k).dp)
-                                            .padding(horizontal = 10.dp),
+                                            .width((90 * k).dp)
+                                            .padding(horizontal = 8.dp),
                                         trackColor = Color(0x55FFFFFF)
                                     )
                                     Text(
                                         "$remainMin min",
                                         color = Color(0xCCFFFFFF),
-                                        fontSize = (13 * k).sp
+                                        fontSize = (12 * k).sp
                                     )
                                 }
                             }
@@ -1281,21 +1280,19 @@ private fun PlayerUi(
                                 }
                             }
                             if (progDesc.isNotBlank()) {
-                                Spacer(Modifier.height(3.dp))
                                 Text(
                                     progDesc,
                                     color = Color(0xBBFFFFFF),
-                                    fontSize = (13 * k).sp,
-                                    maxLines = 2,
+                                    fontSize = (12 * k).sp,
+                                    maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                             }
                             if (nextTitle.isNotBlank()) {
-                                Spacer(Modifier.height(3.dp))
                                 Text(
                                     clock(nextStart) + " \u2013 " + clock(nextStop) + "  " + nextTitle,
                                     color = Color(0x99FFFFFF),
-                                    fontSize = (13 * k).sp,
+                                    fontSize = (12 * k).sp,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
@@ -1305,15 +1302,15 @@ private fun PlayerUi(
                         Text(
                             dateTime,
                             color = Color(0xCCFFFFFF),
-                            fontSize = (13 * k).sp
+                            fontSize = (12 * k).sp
                         )
                     }
-                    Spacer(Modifier.height((10 * k).dp))
+                    Spacer(Modifier.height((6 * k).dp))
                     // Tlacidla: zavriet, zoznam, prev, play, next, audio, titulky, sw
-                    val bk = 1f + (k - 1f) * 0.5f
+                    val bk = (0.78f * k)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy((10 * k).dp)
+                        horizontalArrangement = Arrangement.spacedBy((8 * k).dp)
                     ) {
                         order.forEach { c ->
                             when (c) {

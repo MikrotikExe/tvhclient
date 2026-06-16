@@ -625,24 +625,6 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            OutlinedButton(
-                onClick = { requestOverlay() },
-                modifier = Modifier.padding(top = 4.dp)
-            ) {
-                Text(stringResource(R.string.autostart_overlay))
-            }
-            OutlinedButton(
-                onClick = {
-                    val i = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", ctx.packageName, null)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    runCatching { ctx.startActivity(i) }
-                },
-                modifier = Modifier.padding(top = 4.dp)
-            ) {
-                Text(stringResource(R.string.autostart_open_settings))
-            }
             Spacer(Modifier.height(16.dp))
             if (servers.isEmpty()) {
                 Text(stringResource(R.string.no_servers))
