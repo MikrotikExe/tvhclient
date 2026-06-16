@@ -262,7 +262,7 @@ class PlayerActivity : ComponentActivity() {
         numEntryState.value = ""
         if (typed == null) return
         val idx = LivePlaylist.channels.indexOfFirst { it.number == typed }
-        if (idx in liveUuids.indices) { switchToIndex(idx); pokeControls() }
+        if (idx in liveUuids.indices) { switchToIndex(idx) }
     }
 
     // stav prekryti (z Compose) — kym je otvorene, D-pad riesime my (zoznam) alebo Compose (menu)
@@ -503,11 +503,11 @@ class PlayerActivity : ComponentActivity() {
                 android.view.KeyEvent.KEYCODE_CHANNEL_UP,
                 android.view.KeyEvent.KEYCODE_PAGE_UP,
                 android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                    if (down && canZap && event.repeatCount == 0) { switchLive(+1); pokeControls(); return true }
+                    if (down && canZap && event.repeatCount == 0) { switchLive(+1); return true }
                 android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
                 android.view.KeyEvent.KEYCODE_PAGE_DOWN,
                 android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                    if (down && canZap && event.repeatCount == 0) { switchLive(-1); pokeControls(); return true }
+                    if (down && canZap && event.repeatCount == 0) { switchLive(-1); return true }
             }
             // cislice 0-9 (aj numericka klavesnica) = volba kanala cislom
             run {
