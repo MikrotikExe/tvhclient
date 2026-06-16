@@ -206,4 +206,5 @@
     <string name="autostart_enable">Start app after device boot</string>
     <string name="autostart_wake">Start app on wake from sleep</string>
     <string name="autostart_note">May not work on all devices</string>
+    <string name="autostart_open_settings">App permissions (system settings)</string>
 </resources>
