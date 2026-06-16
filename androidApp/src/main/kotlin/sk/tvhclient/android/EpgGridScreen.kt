@@ -71,6 +71,38 @@ private const val DVR_REFRESH_MS = 150_000L // tichy refresh DVR (nove/dokoncene
 // Kam doskocit po prepnuti dna gestom: na koniec (predosly den) alebo zaciatok (dalsi den)
 private enum class DayJump { END, START }
 
+/**
+ * Zluci viacnasobne nahravky tej istej relacie do jedneho bloku pre mriezku.
+ * Ta ista relacia byva nahrata viackrat s mierne odlisnym casom (padding),
+ * takze nestaci presna zhoda casu. Zoskupime podla nazvu a v ramci nazvu
+ * spojime zaznamy, ktore sa casovo prekryvaju; z kazdeho zhluku ponechame
+ * ten s najvacsim suborom (najkompletnejsia kopia na prehratie).
+ * Rozne vysielania toho isteho nazvu (neprekryvaju sa) zostavaju oddelene.
+ */
+private fun collapseDvrOverlaps(
+    list: List<sk.tvhclient.shared.model.DvrEntry>
+): List<sk.tvhclient.shared.model.DvrEntry> {
+    val out = ArrayList<sk.tvhclient.shared.model.DvrEntry>()
+    for ((_, group) in list.groupBy { it.title }) {
+        val sorted = group.sortedBy { it.start }
+        val cluster = ArrayList<sk.tvhclient.shared.model.DvrEntry>()
+        var clusterEnd = Long.MIN_VALUE
+        for (e in sorted) {
+            if (cluster.isEmpty() || e.start < clusterEnd) {
+                cluster.add(e)
+                if (e.stop > clusterEnd) clusterEnd = e.stop
+            } else {
+                out.add(cluster.maxByOrNull { it.fileSize } ?: cluster.first())
+                cluster.clear()
+                cluster.add(e)
+                clusterEnd = e.stop
+            }
+        }
+        if (cluster.isNotEmpty()) out.add(cluster.maxByOrNull { it.fileSize } ?: cluster.first())
+    }
+    return out
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EpgGridScreen(
@@ -149,15 +181,13 @@ fun EpgGridScreen(
     }
     val dvrByChannel = remember(dvrState) {
         // V mriezke chceme jeden blok na relaciu. Ta ista relacia moze byt
-        // nahrata viackrat (rozne uuid, rovnaky cas+nazov) -> skolabujeme ich
-        // a necháme tu s najvacsim suborom (najkompletnejsia kopia na prehratie).
+        // nahrata viackrat s mierne odlisnym casom (padding) -> zlucime
+        // nahravky s rovnakym nazvom, ktore sa casovo prekryvaju, a necháme
+        // tu s najvacsim suborom (najkompletnejsia kopia na prehratie).
         // Archiv (DvrScreen) zostava nedotknuty — tam vidno vsetky nahravky.
         (dvrState as? DvrState.Loaded)?.entries
             ?.groupBy { it.channelName }
-            ?.mapValues { (_, list) ->
-                list.groupBy { Triple(it.start, it.stop, it.title) }
-                    .map { (_, dups) -> dups.maxByOrNull { it.fileSize } ?: dups.first() }
-            }
+            ?.mapValues { (_, list) -> collapseDvrOverlaps(list) }
             ?: emptyMap()
     }
     val recordingList = remember(dvrState) {
