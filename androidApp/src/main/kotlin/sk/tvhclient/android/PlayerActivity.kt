@@ -226,6 +226,7 @@ class PlayerActivity : ComponentActivity() {
     private val closeChannelListState = androidx.compose.runtime.mutableStateOf(0)
     // Moznosti (Zvuk / Titulky / SW dekod) — vertikalne overlay, navigujeme z Activity
     private var optionsOpen = false
+    private var controlsShown = false
     private val openOptionsState = androidx.compose.runtime.mutableStateOf(0)
     private val closeOptionsState = androidx.compose.runtime.mutableStateOf(0)
     private val optionsNavState = androidx.compose.runtime.mutableStateOf(0)
@@ -322,38 +323,38 @@ class PlayerActivity : ComponentActivity() {
         // 4) Bezne prehravanie
         if (::mediaPlayer.isInitialized) {
             val canZap = liveUuids.size > 1
+            // dedikovane channel tlacidla = zap vzdy
             when (kc) {
                 android.view.KeyEvent.KEYCODE_CHANNEL_UP ->
                     if (down && canZap) { switchLive(+1); pokeControls(); return true }
                 android.view.KeyEvent.KEYCODE_CHANNEL_DOWN ->
                     if (down && canZap) { switchLive(-1); pokeControls(); return true }
-                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
-                    if (canZap) { switchLive(-1); pokeControls(); return true }
-                    if (seekablePlayback) { seekRelative(-15_000); pokeControls(); return true }
-                }
-                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
-                    if (canZap) { switchLive(+1); pokeControls(); return true }
-                    if (seekablePlayback) { seekRelative(+30_000); pokeControls(); return true }
-                }
-                android.view.KeyEvent.KEYCODE_DPAD_UP -> if (down) { pokeControls(); return true }
-                android.view.KeyEvent.KEYCODE_DPAD_DOWN,
-                android.view.KeyEvent.KEYCODE_MENU -> if (down) { openOptions(); return true }
+            }
+            // ovladanie zobrazene -> sipky naviguju panel (Compose focus), OK spusti
+            // zvyraznene tlacidlo; len obnovime auto-hide casovac
+            if (controlsShown) {
+                if (down) pokeControls()
+                return super.dispatchKeyEvent(event)
+            }
+            // ovladanie skryte -> klavesa ho zobrazi a da focus na panel
+            when (kc) {
                 android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                 android.view.KeyEvent.KEYCODE_ENTER,
-                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                    // kratke OK = play/pause, dlhe podrzanie OK = zoznam kanalov
-                    if (down) {
-                        if (event.repeatCount == 0) { okDownAt = System.currentTimeMillis(); okLongFired = false }
-                        else if (!okLongFired && canZap &&
-                            System.currentTimeMillis() - okDownAt >= 500
-                        ) { okLongFired = true; openChannelList() }
-                        return true
-                    } else {
-                        if (!okLongFired) { togglePlayPause(); pokeControls() }
-                        okLongFired = false
-                        return true
-                    }
+                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER ->
+                    if (down) { togglePlayPause(); pokeControls(); return true }
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
+                    if (seekablePlayback) { seekRelative(-15_000); return true }
+                    pokeControls(); return true
                 }
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
+                    if (seekablePlayback) { seekRelative(+30_000); return true }
+                    pokeControls(); return true
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_UP,
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+                    if (down) { pokeControls(); return true }
+                android.view.KeyEvent.KEYCODE_MENU ->
+                    if (down) { openOptions(); return true }
             }
         }
         return super.dispatchKeyEvent(event)
@@ -515,6 +516,7 @@ class PlayerActivity : ComponentActivity() {
                 openAudioSignal = openAudioMenuState.value,
                 openSpuSignal = openSpuMenuState.value,
                 onOptionsChange = { optionsOpen = it },
+                onControlsVisibleChange = { controlsShown = it },
                 onPrevChannel = if (canZap) ({ switchLive(-1) }) else null,
                 onNextChannel = if (canZap) ({ switchLive(+1) }) else null,
                 liveChannels = if (canZap) liveChannelsState.value else emptyList(),
@@ -608,6 +610,7 @@ private fun PlayerUi(
     openAudioSignal: Int = 0,
     openSpuSignal: Int = 0,
     onOptionsChange: (Boolean) -> Unit = {},
+    onControlsVisibleChange: (Boolean) -> Unit = {},
     onClose: () -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(true) }
@@ -619,11 +622,20 @@ private fun PlayerUi(
     // menu: null = ziadne, "audio" = audio stopy, "spu" = titulky
     var menu by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
+    // focus na hlavne tlacidlo (play/pause) ked sa ovladanie zobrazi klavesom -> D-pad navigacia
+    val playFocus = remember { androidx.compose.ui.focus.FocusRequester() }
 
-    // D-pad / dialkove poslalo signal -> zobraz ovladanie
+    // D-pad / dialkove poslalo signal -> zobraz ovladanie; focus na panel daj len ked
+    // sa ovladanie objavi zo skryteho stavu (inak by kurzor odskakoval pri navigacii)
     LaunchedEffect(controlsPoke) {
-        if (controlsPoke > 0) controlsVisible = true
+        if (controlsPoke > 0) {
+            val wasHidden = !controlsVisible
+            controlsVisible = true
+            if (wasHidden) runCatching { playFocus.requestFocus() }
+        }
     }
+    // oznam Activity ci je ovladanie zobrazene (vtedy D-pad navigaciu riesi Compose focus)
+    LaunchedEffect(controlsVisible) { onControlsVisibleChange(controlsVisible) }
     // oznam Activity stav prekryti (kvoli D-pad smerovaniu)
     LaunchedEffect(menu) { onTrackMenuChange(menu != null) }
     LaunchedEffect(showChannelList) { onChannelListChange(showChannelList) }
@@ -765,7 +777,7 @@ private fun PlayerUi(
         }
     }
 
-    LaunchedEffect(controlsVisible, menu) {
+    LaunchedEffect(controlsVisible, menu, controlsPoke) {
         if (controlsVisible && menu == null) {
             kotlinx.coroutines.delay(4000)
             controlsVisible = false
@@ -774,6 +786,9 @@ private fun PlayerUi(
 
     androidx.activity.compose.BackHandler(enabled = showChannelList) { showChannelList = false }
     androidx.activity.compose.BackHandler(enabled = menu != null) { menu = null }
+    androidx.activity.compose.BackHandler(
+        enabled = controlsVisible && menu == null && !showChannelList && !showOptions
+    ) { controlsVisible = false }
 
     // Kym je zoznam kanalov otvoreny, obnovuj EPG (now/next) aby relacie
     // postupne prechadzali na dalsie
@@ -886,6 +901,7 @@ private fun PlayerUi(
                     CircleButton(
                         label = if (isPlaying) "\u23F8" else "\u25B6",
                         big = true,
+                        modifier = Modifier.focusRequester(playFocus),
                         onClick = {
                             if (player.isPlaying) {
                                 player.pause(); isPlaying = false
