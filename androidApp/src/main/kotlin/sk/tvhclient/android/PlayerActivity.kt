@@ -114,7 +114,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun pokeControls() { controlsPokeState.value = controlsPokeState.value + 1 }
     private fun showControlsFocused() {
-        val order = playerControlOrder(!seekablePlayback && liveUuids.size > 1)
+        val order = playerControlOrder(!seekablePlayback && liveUuids.size > 1, seekablePlayback)
         controlNavState.value = order.indexOf("play").coerceAtLeast(0)
         pokeControls()
     }
@@ -283,6 +283,13 @@ class PlayerActivity : ComponentActivity() {
     private val pinErrorState = androidx.compose.runtime.mutableStateOf(false)
     private var pinOnSuccess: (() -> Unit)? = null
     private var pinOnCancel: (() -> Unit)? = null
+
+    // DVR scrub focus: nahlad pozicie pri vybere casu sipkami (potvrdenie OK)
+    private val scrubFractionState = androidx.compose.runtime.mutableStateOf(0f)
+    private fun initScrub() {
+        scrubFractionState.value = if (::mediaPlayer.isInitialized)
+            mediaPlayer.position.coerceIn(0f, 1f) else 0f
+    }
 
     private fun requestPin(onOk: () -> Unit, onCancel: () -> Unit) {
         pinOnSuccess = onOk; pinOnCancel = onCancel
@@ -508,29 +515,42 @@ class PlayerActivity : ComponentActivity() {
             // ovladanie zobrazene -> vlavo/vpravo naviguju panel, OK aktivuje
             // zvyrazneny prvok (hore/dole prepinaju kanal vyssie)
             if (controlsShown) {
-                val order = playerControlOrder(canZap)
+                val order = playerControlOrder(canZap, seekablePlayback)
                 val n = order.size
                 if (seekablePlayback) {
-                    // DVR: vlavo/vpravo = pretacanie, hore/dole = navigacia panela
+                    val onSeek = order.getOrNull(controlNavState.value) == "seek"
+                    val dur = if (dvrDurationMs > 0) dvrDurationMs else mediaPlayer.length
+                    val stepFrac = if (dur > 0) 30_000f / dur else 0.02f
                     when (kc) {
-                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
-                            seekRelative(-15_000); pokeControls(); return true
-                        }
-                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
-                            seekRelative(+30_000); pokeControls(); return true
-                        }
                         android.view.KeyEvent.KEYCODE_DPAD_UP -> if (down) {
                             controlNavState.value = (controlNavState.value - 1 + n) % n
+                            if (order.getOrNull(controlNavState.value) == "seek") initScrub()
                             pokeControls(); return true
                         }
                         android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (down) {
                             controlNavState.value = (controlNavState.value + 1) % n
+                            if (order.getOrNull(controlNavState.value) == "seek") initScrub()
+                            pokeControls(); return true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
+                            if (onSeek) scrubFractionState.value = (scrubFractionState.value - stepFrac).coerceIn(0f, 1f)
+                            else seekRelative(-15_000)
+                            pokeControls(); return true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
+                            if (onSeek) scrubFractionState.value = (scrubFractionState.value + stepFrac).coerceIn(0f, 1f)
+                            else seekRelative(+30_000)
                             pokeControls(); return true
                         }
                         android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                         android.view.KeyEvent.KEYCODE_ENTER,
                         android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            if (down && event.repeatCount == 0) activateControl(order.getOrNull(controlNavState.value))
+                            if (down && event.repeatCount == 0) {
+                                if (onSeek) {
+                                    if (::mediaPlayer.isInitialized) mediaPlayer.position = scrubFractionState.value
+                                    pokeControls()
+                                } else activateControl(order.getOrNull(controlNavState.value))
+                            }
                             return true
                         }
                     }
@@ -699,7 +719,7 @@ class PlayerActivity : ComponentActivity() {
         val canZap = directUrl == null && liveUuids.size > 1
         seekablePlayback = directUrl != null
         // predvolene zvyraznenie ovladacieho panela = play (nie krizik)
-        controlNavState.value = playerControlOrder(canZap).indexOf("play").coerceAtLeast(0)
+        controlNavState.value = playerControlOrder(canZap, seekablePlayback).indexOf("play").coerceAtLeast(0)
         currentStreamUrl = streamUrl
         softwareDecodeState.value = DecoderPref.get(this)
 
@@ -720,7 +740,7 @@ class PlayerActivity : ComponentActivity() {
                 serverId = server.id,
                 onAttach = { layout -> mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
-                    val doPlay = {
+                    val doPlay: () -> Unit = {
                         currentStreamUrl = streamUrl
                         val media = buildMedia(streamUrl)
                         mediaPlayer.media = media
@@ -765,6 +785,7 @@ class PlayerActivity : ComponentActivity() {
                 pinPrompt = pinPromptState.value,
                 pinLen = pinEntryState.value.length,
                 pinError = pinErrorState.value,
+                scrubFrac = scrubFractionState.value,
                 onClose = { finish() }
             )
         }
@@ -859,6 +880,7 @@ private fun PlayerUi(
     pinPrompt: Boolean = false,
     pinLen: Int = 0,
     pinError: Boolean = false,
+    scrubFrac: Float = 0f,
     onClose: () -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(false) }
@@ -1100,7 +1122,7 @@ private fun PlayerUi(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(Modifier.fillMaxSize().systemBarsPadding().background(Color(0x66000000))) {
-                val selCtrl = playerControlOrder(onPrevChannel != null).getOrNull(controlNavIndex)
+                val selCtrl = playerControlOrder(onPrevChannel != null, seekable).getOrNull(controlNavIndex)
                 // Horny pruh: zavriet + nazov
                 Row(
                     Modifier.fillMaxWidth().padding(12.dp),
@@ -1197,9 +1219,24 @@ private fun PlayerUi(
                         }
                     }
                     if (seekable && lengthMs > 0) {
-                        val frac = if (dragging) dragValue else posFraction
+                        val seekFocused = selCtrl == "seek"
+                        val frac = when {
+                            seekFocused -> scrubFrac
+                            dragging -> dragValue
+                            else -> posFraction
+                        }
                         val cur = (frac * lengthMs).toLong()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .then(
+                                    if (seekFocused) Modifier.border(
+                                        2.dp, Color.White, RoundedCornerShape(8.dp)
+                                    ) else Modifier
+                                )
+                                .padding(horizontal = 4.dp)
+                        ) {
                             Text(fmtMs(cur), color = Color.White,
                                 style = MaterialTheme.typography.bodySmall)
                             androidx.compose.material3.Slider(
@@ -1667,11 +1704,12 @@ private fun CircleButton(
 
 // Poradie ovladacich prvkov v paneli prehravaca pre D-pad navigaciu (Activity ich navriguje).
 // Musi sediet s vykreslenim v PlayerUi (rovnaka podmienka canZap).
-private fun playerControlOrder(canZap: Boolean): List<String> = buildList {
+private fun playerControlOrder(canZap: Boolean, seekable: Boolean = false): List<String> = buildList {
     add("close")
     if (canZap) { add("list"); add("prev") }
     add("play")
     if (canZap) add("next")
+    if (seekable) add("seek")
     add("audio"); add("subs"); add("sw")
 }
 

@@ -313,7 +313,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0) {
             onProfile = { profileFor = cr; contextRow = null },
             onToggleLock = {
                 val uuid = cr.channel.uuid
-                val doToggle = {
+                val doToggle: () -> Unit = {
                     ParentalLock.setChannelLocked(ctx, serverId, uuid, !isLocked); lockTick++
                 }
                 contextRow = null
