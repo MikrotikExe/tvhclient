@@ -70,6 +70,9 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0) {
     var contextRow by remember { mutableStateOf<ChannelRow?>(null) }
     var profileFor by remember { mutableStateOf<ChannelRow?>(null) }
     var favTick by remember { mutableStateOf(0) }
+    var lockTick by remember { mutableStateOf(0) }
+    // Pri zamknutom kanali / nastaveniach: akcia, ktora sa vykona po spravnom PINe
+    var pinAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showGrid by remember { mutableStateOf(false) }
     // Zdielany DvrViewModel — vieme ktore kanaly sa prave nahravaju
     val dvrVm: DvrViewModel = viewModel()
@@ -292,19 +295,48 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0) {
         )
     }
 
-    // Kontextove menu kanala (dlhy klik): Program / Oblubene / Profil
+    // Kontextove menu kanala (dlhy klik): Program / Oblubene / Profil / Zamok
     val cr = contextRow
     if (cr != null && serverId != null) {
         val isFav = remember(favTick) { Favorites.isFav(ctx, serverId, cr.channel.uuid) }
+        val isLocked = remember(lockTick) {
+            ParentalLock.isChannelLocked(ctx, serverId, cr.channel.uuid)
+        }
         ChannelActionDialog(
             channelName = cr.channel.name,
             isFav = isFav,
+            isLocked = isLocked,
             onProgram = { epgFor = cr; contextRow = null },
             onToggleFav = {
                 Favorites.toggle(ctx, serverId, cr.channel.uuid); favTick++; contextRow = null
             },
             onProfile = { profileFor = cr; contextRow = null },
+            onToggleLock = {
+                val uuid = cr.channel.uuid
+                val doToggle = {
+                    ParentalLock.setChannelLocked(ctx, serverId, uuid, !isLocked); lockTick++
+                }
+                contextRow = null
+                if (ParentalLock.needsPin(ctx)) pinAction = doToggle else doToggle()
+            },
             onDismiss = { contextRow = null }
+        )
+    }
+
+    // PIN dialog (zamykanie kanala / odomknutie pred chranenou akciou)
+    val pa = pinAction
+    if (pa != null) {
+        PinDialog(
+            title = stringResource(R.string.plock_enter),
+            onDismiss = { pinAction = null },
+            onComplete = { pin ->
+                if (ParentalLock.checkPin(ctx, pin)) {
+                    ParentalLock.markUnlocked(ctx)
+                    pinAction = null
+                    pa()
+                    true
+                } else false
+            }
         )
     }
 
@@ -327,9 +359,11 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0) {
 private fun ChannelActionDialog(
     channelName: String,
     isFav: Boolean,
+    isLocked: Boolean,
     onProgram: () -> Unit,
     onToggleFav: () -> Unit,
     onProfile: () -> Unit,
+    onToggleLock: () -> Unit,
     onDismiss: () -> Unit
 ) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
@@ -349,6 +383,10 @@ private fun ChannelActionDialog(
                     onToggleFav
                 )
                 ActionRow(stringResource(R.string.ch_profile), onProfile)
+                ActionRow(
+                    if (isLocked) stringResource(R.string.plock_unlock) else stringResource(R.string.plock_lock),
+                    onToggleLock
+                )
             }
         }
     }
@@ -419,6 +457,10 @@ private fun playChannel(
         putExtra(PlayerActivity.EXTRA_PROG_START, start)
         putExtra(PlayerActivity.EXTRA_PROG_STOP, stop)
         putExtra(PlayerActivity.EXTRA_PROG_TITLE, title ?: "")
+        putExtra(
+            PlayerActivity.EXTRA_REQUIRE_PIN,
+            ParentalLock.channelNeedsPin(context, Tvh.store.active()?.id, row.channel.uuid)
+        )
     }
     LivePlaylist.setIndexForUuid(row.channel.uuid)
     LastChannel.set(context, Tvh.store.active()?.id, row.channel.uuid)

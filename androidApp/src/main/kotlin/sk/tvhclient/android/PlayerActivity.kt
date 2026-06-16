@@ -203,9 +203,14 @@ class PlayerActivity : ComponentActivity() {
     private fun switchToIndex(i: Int) {
         if (i < 0 || i >= liveUuids.size) return
         val srv = liveServer ?: return
+        val uuid = liveUuids[i]
+        // rodicovsky zamok: zamknuty kanal mimo 5-min okna -> vypytaj PIN
+        if (ParentalLock.channelNeedsPin(this, srv.id, uuid)) {
+            requestPin(onOk = { switchToIndex(i) }, onCancel = { })
+            return
+        }
         liveIndex = i
         liveIndexState.value = i
-        val uuid = liveUuids[i]
         val name = liveNames.getOrElse(i) { "" }
         liveTitleState.value = name
         liveUuidState.value = uuid
@@ -272,6 +277,39 @@ class PlayerActivity : ComponentActivity() {
     private var trackMenuKind = "audio"
     private var okLongFired = false
 
+    // Rodicovsky zamok (PIN) — Activity-driven overlay
+    private val pinPromptState = androidx.compose.runtime.mutableStateOf(false)
+    private val pinEntryState = androidx.compose.runtime.mutableStateOf("")
+    private val pinErrorState = androidx.compose.runtime.mutableStateOf(false)
+    private var pinOnSuccess: (() -> Unit)? = null
+    private var pinOnCancel: (() -> Unit)? = null
+
+    private fun requestPin(onOk: () -> Unit, onCancel: () -> Unit) {
+        pinOnSuccess = onOk; pinOnCancel = onCancel
+        pinEntryState.value = ""; pinErrorState.value = false
+        pinPromptState.value = true
+    }
+    private fun closePin() {
+        pinPromptState.value = false; pinEntryState.value = ""; pinErrorState.value = false
+        pinOnSuccess = null; pinOnCancel = null
+    }
+    private fun pinDigit(d: Int) {
+        if (pinEntryState.value.length >= 4) return
+        pinEntryState.value += d
+        pinErrorState.value = false
+        if (pinEntryState.value.length == 4) {
+            if (ParentalLock.checkPin(this, pinEntryState.value)) {
+                ParentalLock.markUnlocked(this)
+                val ok = pinOnSuccess
+                closePin(); ok?.invoke()
+            } else { pinErrorState.value = true; pinEntryState.value = "" }
+        }
+    }
+    private fun cancelPin() {
+        val c = pinOnCancel
+        closePin(); c?.invoke()
+    }
+
     private fun openChannelList() {
         if (liveUuids.size < 2) return
         navChannelIndexState.value = liveIndex.coerceAtLeast(0)
@@ -331,6 +369,27 @@ class PlayerActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         val down = event.action == android.view.KeyEvent.ACTION_DOWN
         val kc = event.keyCode
+
+        // 0) PIN rodicovskeho zamku -> cislice zadavame my
+        if (pinPromptState.value) {
+            if (down) {
+                val digit = when (kc) {
+                    in android.view.KeyEvent.KEYCODE_0..android.view.KeyEvent.KEYCODE_9 ->
+                        kc - android.view.KeyEvent.KEYCODE_0
+                    in android.view.KeyEvent.KEYCODE_NUMPAD_0..android.view.KeyEvent.KEYCODE_NUMPAD_9 ->
+                        kc - android.view.KeyEvent.KEYCODE_NUMPAD_0
+                    else -> -1
+                }
+                when {
+                    digit >= 0 -> { pinDigit(digit); return true }
+                    kc == android.view.KeyEvent.KEYCODE_DEL ->
+                        { if (pinEntryState.value.isNotEmpty()) pinEntryState.value = pinEntryState.value.dropLast(1); return true }
+                    kc == android.view.KeyEvent.KEYCODE_BACK ||
+                        kc == android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { cancelPin(); return true }
+                }
+            }
+            return true
+        }
 
         // 1) Otvoreny zoznam kanalov -> navigujeme my
         if (channelListOpen) {
@@ -569,6 +628,7 @@ class PlayerActivity : ComponentActivity() {
         val progTitle = intent.getStringExtra(EXTRA_PROG_TITLE) ?: ""
         dvrUuid = intent.getStringExtra(EXTRA_DVR_UUID)
         dvrDurationMs = durationMs
+        val requirePin = intent.getBooleanExtra(EXTRA_REQUIRE_PIN, false)
 
         val server = Tvh.store.active()
         if (server == null || (channelUuid == null && directUrl == null)) {
@@ -660,11 +720,16 @@ class PlayerActivity : ComponentActivity() {
                 serverId = server.id,
                 onAttach = { layout -> mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
-                    currentStreamUrl = streamUrl
-                    val media = buildMedia(streamUrl)
-                    mediaPlayer.media = media
-                    media.release()
-                    mediaPlayer.play()
+                    val doPlay = {
+                        currentStreamUrl = streamUrl
+                        val media = buildMedia(streamUrl)
+                        mediaPlayer.media = media
+                        media.release()
+                        mediaPlayer.play()
+                    }
+                    if (requirePin && ParentalLock.needsPin(this)) {
+                        requestPin(onOk = doPlay, onCancel = { finish() })
+                    } else doPlay()
                 },
                 controlsPoke = controlsPokeState.value,
                 softwareDecode = softwareDecodeState.value,
@@ -697,6 +762,9 @@ class PlayerActivity : ComponentActivity() {
                     lifecycleScope.launch { refreshOverlayEpg() }
                 },
                 numberEntry = numEntryState.value,
+                pinPrompt = pinPromptState.value,
+                pinLen = pinEntryState.value.length,
+                pinError = pinErrorState.value,
                 onClose = { finish() }
             )
         }
@@ -732,6 +800,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_PROG_STOP = "prog_stop"
         const val EXTRA_PROG_TITLE = "prog_title"
         const val EXTRA_DVR_UUID = "dvr_uuid"
+        const val EXTRA_REQUIRE_PIN = "require_pin"
     }
 }
 
@@ -787,6 +856,9 @@ private fun PlayerUi(
     openSpuSignal: Int = 0,
     onOptionsChange: (Boolean) -> Unit = {},
     onControlsVisibleChange: (Boolean) -> Unit = {},
+    pinPrompt: Boolean = false,
+    pinLen: Int = 0,
+    pinError: Boolean = false,
     onClose: () -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(false) }
@@ -1391,6 +1463,45 @@ private fun PlayerUi(
                             askResume = false
                         }
                     }
+                }
+            }
+        }
+
+        // Rodicovsky zamok: zadanie PIN (cislice z dialkoveho riesi Activity)
+        if (pinPrompt) {
+            Box(
+                Modifier.fillMaxSize().background(Color(0xCC000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        androidx.compose.ui.res.stringResource(R.string.plock_enter),
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        repeat(4) { i ->
+                            Box(
+                                Modifier.size(20.dp).clip(CircleShape).background(
+                                    if (i < pinLen) Color(0xFF3B82F6) else Color(0x44FFFFFF)
+                                )
+                            )
+                        }
+                    }
+                    if (pinError) {
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.plock_wrong),
+                            color = Color(0xFFFF6B6B)
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        androidx.compose.ui.res.stringResource(R.string.plock_hint),
+                        color = Color(0xAAFFFFFF),
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }

@@ -181,4 +181,18 @@
     <string name="dvr_search_results">Results</string>
     <string name="dvr_search_empty">Nothing found</string>
     <string name="player_channel_list">All channels</string>
+    <string name="plock_wrong">Wrong PIN</string>
+    <string name="plock_title">Parental lock</string>
+    <string name="plock_enable">Parental lock (PIN)</string>
+    <string name="plock_set_pin">Set PIN</string>
+    <string name="plock_change_pin">Change PIN</string>
+    <string name="plock_enter_new">Enter new PIN</string>
+    <string name="plock_confirm">Confirm PIN</string>
+    <string name="plock_enter">Enter PIN</string>
+    <string name="plock_mismatch">PIN does not match</string>
+    <string name="plock_lock">Lock channel (PIN)</string>
+    <string name="plock_unlock">Unlock channel (PIN)</string>
+    <string name="plock_unlock_settings">Enter PIN to open settings</string>
+    <string name="plock_hint">4 digits (0000-9999)</string>
+    <string name="plock_no_pin">Set a PIN first</string>
 </resources>

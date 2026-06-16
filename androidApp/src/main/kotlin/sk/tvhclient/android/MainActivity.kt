@@ -318,7 +318,23 @@ fun AppMain() {
                 0 -> ChannelsScreen(resetSignal = resetCh)
                 1 -> RadioScreen()
                 2 -> DvrScreen(resetSignal = resetDvr)
-                else -> ServersTab()
+                else -> {
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    var unlocked by remember { mutableStateOf(!ParentalLock.needsPin(ctx)) }
+                    if (unlocked) {
+                        ServersTab()
+                    } else {
+                        PinDialog(
+                            title = stringResource(R.string.plock_unlock_settings),
+                            onDismiss = { tab = 0 },
+                            onComplete = { pin ->
+                                if (ParentalLock.checkPin(ctx, pin)) {
+                                    ParentalLock.markUnlocked(ctx); unlocked = true; true
+                                } else false
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -408,6 +424,59 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
             DropdownField(stringResource(R.string.audio_pref_1), audio[0], audioOptions, audioLabels) { setSlot(0, it) }
             DropdownField(stringResource(R.string.audio_pref_2), audio[1], audioOptions, audioLabels) { setSlot(1, it) }
             DropdownField(stringResource(R.string.audio_pref_3), audio[2], audioOptions, audioLabels) { setSlot(2, it) }
+            Spacer(Modifier.height(16.dp))
+
+            // Rodicovsky zamok (PIN)
+            Text(stringResource(R.string.plock_title), style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            var lockEnabled by remember { mutableStateOf(ParentalLock.isEnabled(ctx)) }
+            var pinStage by remember { mutableStateOf(0) }   // 0=ziadny, 1=novy, 2=potvrdit
+            var firstPin by remember { mutableStateOf("") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = lockEnabled,
+                    onCheckedChange = { on ->
+                        if (on) {
+                            if (ParentalLock.hasPin(ctx)) {
+                                ParentalLock.setEnabled(ctx, true); lockEnabled = true
+                            } else pinStage = 1  // najprv nastav PIN
+                        } else {
+                            ParentalLock.setEnabled(ctx, false); lockEnabled = false
+                        }
+                    }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.plock_enable))
+            }
+            OutlinedButton(
+                onClick = { firstPin = ""; pinStage = 1 },
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                Text(
+                    if (ParentalLock.hasPin(ctx)) stringResource(R.string.plock_change_pin)
+                    else stringResource(R.string.plock_set_pin)
+                )
+            }
+            if (pinStage == 1) {
+                PinDialog(
+                    title = stringResource(R.string.plock_enter_new),
+                    onDismiss = { pinStage = 0 },
+                    onComplete = { pin -> firstPin = pin; pinStage = 2; true }
+                )
+            } else if (pinStage == 2) {
+                PinDialog(
+                    title = stringResource(R.string.plock_confirm),
+                    onDismiss = { pinStage = 0; firstPin = "" },
+                    onComplete = { pin ->
+                        if (pin == firstPin) {
+                            ParentalLock.setPin(ctx, pin)
+                            ParentalLock.setEnabled(ctx, true); lockEnabled = true
+                            ParentalLock.markUnlocked(ctx)
+                            pinStage = 0; firstPin = ""; true
+                        } else { firstPin = ""; pinStage = 1; true }  // nezhoda -> zadaj odznova
+                    }
+                )
+            }
             Spacer(Modifier.height(16.dp))
             if (servers.isEmpty()) {
                 Text(stringResource(R.string.no_servers))

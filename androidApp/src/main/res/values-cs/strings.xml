@@ -181,4 +181,18 @@
     <string name="dvr_search_results">Výsledky</string>
     <string name="dvr_search_empty">Nic nenalezeno</string>
     <string name="player_channel_list">Všechny kanály</string>
+    <string name="plock_wrong">Nesprávný PIN</string>
+    <string name="plock_title">Rodičovský zámek</string>
+    <string name="plock_enable">Rodičovský zámek (PIN)</string>
+    <string name="plock_set_pin">Nastavit PIN</string>
+    <string name="plock_change_pin">Změnit PIN</string>
+    <string name="plock_enter_new">Zadejte nový PIN</string>
+    <string name="plock_confirm">Potvrďte PIN</string>
+    <string name="plock_enter">Zadejte PIN</string>
+    <string name="plock_mismatch">PIN se neshoduje</string>
+    <string name="plock_lock">Zamknout kanál (PIN)</string>
+    <string name="plock_unlock">Odemknout kanál (PIN)</string>
+    <string name="plock_unlock_settings">Zadejte PIN pro vstup do nastavení</string>
+    <string name="plock_hint">4 číslice (0000-9999)</string>
+    <string name="plock_no_pin">Nejprve nastavte PIN</string>
 </resources>
