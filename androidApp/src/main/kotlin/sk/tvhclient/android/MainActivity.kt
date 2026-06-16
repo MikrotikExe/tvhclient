@@ -613,6 +613,26 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
             ) {
                 Text(stringResource(R.string.autostart_open_settings))
             }
+            OutlinedButton(
+                onClick = {
+                    val i = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.fromParts("package", ctx.packageName, null)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    // fallback: zoznam vsetkych appiek pre optimalizaciu baterie
+                    if (runCatching { ctx.startActivity(i) }.isFailure) {
+                        runCatching {
+                            ctx.startActivity(
+                                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                Text(stringResource(R.string.autostart_battery))
+            }
             Spacer(Modifier.height(16.dp))
             if (servers.isEmpty()) {
                 Text(stringResource(R.string.no_servers))

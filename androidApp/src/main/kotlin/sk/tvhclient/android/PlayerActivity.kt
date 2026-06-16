@@ -262,7 +262,7 @@ class PlayerActivity : ComponentActivity() {
         numEntryState.value = ""
         if (typed == null) return
         val idx = LivePlaylist.channels.indexOfFirst { it.number == typed }
-        if (idx in liveUuids.indices) { switchToIndex(idx) }
+        if (idx in liveUuids.indices) { switchToIndex(idx); pokeControls() }
     }
 
     // stav prekryti (z Compose) — kym je otvorene, D-pad riesime my (zoznam) alebo Compose (menu)
@@ -503,11 +503,11 @@ class PlayerActivity : ComponentActivity() {
                 android.view.KeyEvent.KEYCODE_CHANNEL_UP,
                 android.view.KeyEvent.KEYCODE_PAGE_UP,
                 android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                    if (down && canZap && event.repeatCount == 0) { switchLive(+1); return true }
+                    if (down && canZap && event.repeatCount == 0) { switchLive(+1); pokeControls(); return true }
                 android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
                 android.view.KeyEvent.KEYCODE_PAGE_DOWN,
                 android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                    if (down && canZap && event.repeatCount == 0) { switchLive(-1); return true }
+                    if (down && canZap && event.repeatCount == 0) { switchLive(-1); pokeControls(); return true }
             }
             // cislice 0-9 (aj numericka klavesnica) = volba kanala cislom
             run {
@@ -913,15 +913,6 @@ private fun PlayerUi(
     LaunchedEffect(controlsPoke) {
         if (controlsPoke > 0) controlsVisible = true
     }
-    // Info pruh kanala po prepnuti (zap) — zobraz a po ~6s skry
-    var zapBanner by remember { mutableStateOf(false) }
-    LaunchedEffect(zapPoke) {
-        if (zapPoke > 0) {
-            zapBanner = true
-            kotlinx.coroutines.delay(6000)
-            zapBanner = false
-        }
-    }
     // oznam Activity ci je ovladanie zobrazene (vtedy D-pad navigaciu riesi Activity)
     LaunchedEffect(controlsVisible) { onControlsVisibleChange(controlsVisible) }
     // oznam Activity stav prekryti (kvoli D-pad smerovaniu)
@@ -998,6 +989,10 @@ private fun PlayerUi(
     var progStart by remember(liveChannelUuid) { mutableStateOf(progStartSec) }
     var progStop by remember(liveChannelUuid) { mutableStateOf(progStopSec) }
     var progTitle by remember(liveChannelUuid) { mutableStateOf(progTitleArg) }
+    var progDesc by remember(liveChannelUuid) { mutableStateOf("") }
+    var nextTitle by remember(liveChannelUuid) { mutableStateOf(progNextTitle) }
+    var nextStart by remember(liveChannelUuid) { mutableStateOf(progNextStart) }
+    var nextStop by remember(liveChannelUuid) { mutableStateOf(progNextStop) }
     val hasLiveProg = !seekable && progStart > 0 && progStop > progStart
 
     if (!seekable && liveChannelUuid != null && server != null) {
@@ -1024,6 +1019,11 @@ private fun PlayerUi(
                     if (cur != null) {
                         progStart = cur.start; progStop = cur.stop
                         progTitle = cur.title
+                        progDesc = cur.bestDescription
+                        val nx = list.firstOrNull { it.start >= cur.stop }
+                        if (nx != null) {
+                            nextTitle = nx.title; nextStart = nx.start; nextStop = nx.stop
+                        }
                     }
                 }
                 kotlinx.coroutines.delay(5000)
@@ -1140,258 +1140,206 @@ private fun PlayerUi(
             }
         }
 
-        // Info pruh kanala po prepnuti (zap): cislo + logo + nazov + teraz/dalej
-        androidx.compose.animation.AnimatedVisibility(
-            visible = zapBanner && !controlsVisible && menu == null && !showChannelList && !showOptions,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomStart)
-        ) {
-            val curCh = liveChannels.getOrNull(liveCurrentIndex)
-            val bannerLoader = remember(server?.id) { PiconImageLoader.get(ctx, server) }
-            fun clock(sec: Long): String {
-                if (sec <= 0) return ""
-                return java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                    .format(java.util.Date(sec * 1000))
-            }
-            val hasNow = progStart > 0 && progStop > progStart
-            val frac = if (hasNow)
-                ((liveNowSec - progStart).toFloat() / (progStop - progStart)).coerceIn(0f, 1f)
-            else 0f
-            val remainMin = if (hasNow) ((progStop - liveNowSec) / 60).coerceAtLeast(0) else 0
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xE6000000))
-                    .systemBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.width(72.dp)
-                ) {
-                    if ((curCh?.number ?: 0) > 0) {
-                        Text(
-                            "${curCh?.number}",
-                            color = Color.White,
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                    }
-                    if (curCh?.piconUrl != null) {
-                        Spacer(Modifier.height(4.dp))
-                        AsyncImage(
-                            model = ImageRequest.Builder(ctx).data(curCh.piconUrl).build(),
-                            contentDescription = null,
-                            imageLoader = bannerLoader,
-                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                            modifier = Modifier.size(64.dp, 40.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1
-                    )
-                    if (progTitle.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (hasNow) {
-                                Text(
-                                    clock(progStart) + " \u2013 " + clock(progStop),
-                                    color = Color(0xCCFFFFFF),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            Text(
-                                progTitle,
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                        if (hasNow) {
-                            Spacer(Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                androidx.compose.material3.LinearProgressIndicator(
-                                    progress = { frac },
-                                    modifier = Modifier.weight(1f).height(3.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "$remainMin min",
-                                    color = Color(0xCCFFFFFF),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                    if (progNextTitle.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            clock(progNextStart) + " \u2013 " + clock(progNextStop) + "  " + progNextTitle,
-                            color = Color(0x99FFFFFF),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
         ) {
-            Box(Modifier.fillMaxSize().systemBarsPadding().background(Color(0x66000000))) {
-                val selCtrl = playerControlOrder(onPrevChannel != null, seekable).getOrNull(controlNavIndex)
-                // Horny pruh: zavriet + nazov
-                Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircleButton("\u2715", selected = selCtrl == "close", onClick = onClose)
-                    Column(
-                        Modifier.padding(start = 12.dp).weight(1f)
-                    ) {
-                        Text(
-                            title,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1
-                        )
-                        if (progTitle.isNotBlank()) {
-                            Text(
-                                progTitle,
-                                color = Color(0xCCFFFFFF),
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                    // Zoznam kanalov (overlay)
-                    if (liveChannels.isNotEmpty()) {
-                        CircleButton(
-                            label = "\u2630",
-                            selected = selCtrl == "list",
-                            onClick = { showChannelList = true; controlsVisible = false }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    // Zamok orientacie: zamknuty = aktualna poloha, odomknuty = podla telefonu
-                    CircleButton(
-                        label = if (orientationLocked) "\uD83D\uDD12" else "\uD83D\uDD13",
-                        onClick = {
-                            orientationLocked = !orientationLocked
-                            activity?.requestedOrientation = if (orientationLocked)
-                                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
-                            else
-                                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
-                        }
-                    )
-                }
+            Box(Modifier.fillMaxSize().systemBarsPadding()) {
+                val order = playerControlOrder(onPrevChannel != null, seekable)
+                val selCtrl = order.getOrNull(controlNavIndex)
+                val curCh = liveChannels.getOrNull(liveCurrentIndex)
+                val infoLoader = remember(server?.id) { PiconImageLoader.get(ctx, server) }
+                fun clock(sec: Long): String =
+                    if (sec <= 0) "" else java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(sec * 1000))
+                val dateTime = java.text.SimpleDateFormat("EEE d. M., HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(liveNowSec * 1000))
+                val hasNow = !seekable && progStart > 0 && progStop > progStart
+                val total = (progStop - progStart).coerceAtLeast(1)
+                val elapsed = (liveNowSec - progStart).coerceIn(0, total)
+                val fracNow = elapsed.toFloat() / total.toFloat()
+                val remainMin = if (hasNow) ((progStop - liveNowSec) / 60).coerceAtLeast(0) else 0
 
-                // Stred: (prev kanal) play/pause (next kanal)
-                Row(
-                    Modifier.align(Alignment.Center),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (onPrevChannel != null) {
-                        CircleButton(label = "\u23EE", selected = selCtrl == "prev", onClick = onPrevChannel)
-                        Spacer(Modifier.width(28.dp))
-                    }
-                    PlayPauseButton(
-                        isPlaying = isPlaying,
-                        selected = selCtrl == "play",
-                        onClick = {
-                            if (player.isPlaying) {
-                                player.pause(); isPlaying = false
-                            } else {
-                                player.play(); isPlaying = true
-                            }
-                        }
-                    )
-                    if (onNextChannel != null) {
-                        Spacer(Modifier.width(28.dp))
-                        CircleButton(label = "\u23ED", selected = selCtrl == "next", onClick = onNextChannel)
-                    }
-                }
-
-                // Dolna cast: seek lista (len DVR) + audio/titulky
+                // Jeden spolocny info+ovladaci pruh dole
                 Column(
                     Modifier
-                        .align(Alignment.BottomCenter)
+                        .align(Alignment.BottomStart)
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .background(Color(0xE6000000))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    if (hasLiveProg) {
-                        val total = (progStop - progStart).coerceAtLeast(1)
-                        val elapsed = (liveNowSec - progStart).coerceIn(0, total)
-                        val frac = elapsed.toFloat() / total.toFloat()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(fmtMs(elapsed * 1000), color = Color.White,
-                                style = MaterialTheme.typography.bodySmall)
-                            androidx.compose.material3.LinearProgressIndicator(
-                                progress = { frac },
-                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                                trackColor = Color(0x55FFFFFF)
-                            )
-                            Text("-" + fmtMs((total - elapsed) * 1000), color = Color.White,
-                                style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    if (seekable && lengthMs > 0) {
-                        val seekFocused = selCtrl == "seek"
-                        val frac = when {
-                            seekFocused -> scrubFrac
-                            dragging -> dragValue
-                            else -> posFraction
-                        }
-                        val cur = (frac * lengthMs).toLong()
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .then(
-                                    if (seekFocused) Modifier.border(
-                                        2.dp, Color.White, RoundedCornerShape(8.dp)
-                                    ) else Modifier
-                                )
-                                .padding(horizontal = 4.dp)
+                    Row(verticalAlignment = Alignment.Top) {
+                        // cislo + logo + nazov kanala
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(86.dp)
                         ) {
-                            Text(fmtMs(cur), color = Color.White,
-                                style = MaterialTheme.typography.bodySmall)
-                            androidx.compose.material3.Slider(
-                                value = frac.coerceIn(0f, 1f),
-                                onValueChange = { dragging = true; dragValue = it },
-                                onValueChangeFinished = {
-                                    player.position = dragValue
-                                    posFraction = dragValue
-                                    dragging = false
-                                },
-                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                            if ((curCh?.number ?: 0) > 0) {
+                                Text(
+                                    "${curCh?.number}",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.headlineMedium
+                                )
+                            }
+                            if (curCh?.piconUrl != null) {
+                                Spacer(Modifier.height(4.dp))
+                                AsyncImage(
+                                    model = ImageRequest.Builder(ctx).data(curCh.piconUrl).build(),
+                                    contentDescription = null,
+                                    imageLoader = infoLoader,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                    modifier = Modifier.size(72.dp, 40.dp)
+                                )
+                            }
+                            Text(
+                                title,
+                                color = Color(0xCCFFFFFF),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
-                            Text(fmtMs(lengthMs), color = Color.White,
-                                style = MaterialTheme.typography.bodySmall)
                         }
+                        Spacer(Modifier.width(16.dp))
+                        // popis relacie: nazov, cas, priebeh, popis, dalej
+                        Column(Modifier.weight(1f)) {
+                            if (progTitle.isNotBlank()) {
+                                Text(
+                                    progTitle,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                            if (hasNow) {
+                                Spacer(Modifier.height(2.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        clock(progStart) + " \u2013 " + clock(progStop),
+                                        color = Color(0xCCFFFFFF),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    androidx.compose.material3.LinearProgressIndicator(
+                                        progress = { fracNow },
+                                        modifier = Modifier
+                                            .width(120.dp)
+                                            .padding(horizontal = 10.dp),
+                                        trackColor = Color(0x55FFFFFF)
+                                    )
+                                    Text(
+                                        "$remainMin min",
+                                        color = Color(0xCCFFFFFF),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                            // DVR: pretacacia lista (zvyraznena pri vybere "seek")
+                            if (seekable && lengthMs > 0) {
+                                val seekFocused = selCtrl == "seek"
+                                val frac = when {
+                                    seekFocused -> scrubFrac
+                                    dragging -> dragValue
+                                    else -> posFraction
+                                }
+                                val cur = (frac * lengthMs).toLong()
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .then(
+                                            if (seekFocused) Modifier.border(
+                                                2.dp, Color.White, RoundedCornerShape(8.dp)
+                                            ) else Modifier
+                                        )
+                                        .padding(horizontal = 4.dp)
+                                ) {
+                                    Text(fmtMs(cur), color = Color.White,
+                                        style = MaterialTheme.typography.bodySmall)
+                                    androidx.compose.material3.Slider(
+                                        value = frac.coerceIn(0f, 1f),
+                                        onValueChange = { dragging = true; dragValue = it },
+                                        onValueChangeFinished = {
+                                            player.position = dragValue
+                                            posFraction = dragValue
+                                            dragging = false
+                                        },
+                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                                    )
+                                    Text(fmtMs(lengthMs), color = Color.White,
+                                        style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            if (progDesc.isNotBlank()) {
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    progDesc,
+                                    color = Color(0xBBFFFFFF),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                            if (nextTitle.isNotBlank()) {
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    clock(nextStart) + " \u2013 " + clock(nextStop) + "  " + nextTitle,
+                                    color = Color(0x99FFFFFF),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            dateTime,
+                            color = Color(0xCCFFFFFF),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
+                    Spacer(Modifier.height(10.dp))
+                    // Tlacidla: zavriet, zoznam, prev, play, next, audio, titulky, sw
                     Row(
-                        Modifier.align(Alignment.End),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        TextChip("\uD83D\uDD0A Audio", selected = selCtrl == "audio") { menu = if (menu == "audio") null else "audio" }
-                        TextChip("\uD83D\uDCAC Titulky", selected = selCtrl == "subs") { menu = if (menu == "spu") null else "spu" }
-                        TextChip(if (softwareDecode) "\u2699 SW dekód: ZAP" else "\u2699 SW dekód: VYP", selected = selCtrl == "sw") {
-                            onToggleSoftwareDecode()
+                        order.forEach { c ->
+                            when (c) {
+                                "close" -> CircleButton("\u2715", selected = selCtrl == "close", onClick = onClose)
+                                "list" -> if (liveChannels.isNotEmpty()) CircleButton(
+                                    label = "\u2630",
+                                    selected = selCtrl == "list",
+                                    onClick = { showChannelList = true; controlsVisible = false }
+                                )
+                                "prev" -> if (onPrevChannel != null) CircleButton(
+                                    label = "\u23EE", selected = selCtrl == "prev", onClick = onPrevChannel
+                                )
+                                "play" -> PlayPauseButton(
+                                    isPlaying = isPlaying,
+                                    selected = selCtrl == "play",
+                                    onClick = {
+                                        if (player.isPlaying) { player.pause(); isPlaying = false }
+                                        else { player.play(); isPlaying = true }
+                                    }
+                                )
+                                "next" -> if (onNextChannel != null) CircleButton(
+                                    label = "\u23ED", selected = selCtrl == "next", onClick = onNextChannel
+                                )
+                                "audio" -> TextChip("\uD83D\uDD0A Audio", selected = selCtrl == "audio") {
+                                    menu = if (menu == "audio") null else "audio"
+                                }
+                                "subs" -> TextChip("\uD83D\uDCAC Titulky", selected = selCtrl == "subs") {
+                                    menu = if (menu == "spu") null else "spu"
+                                }
+                                "sw" -> TextChip(
+                                    if (softwareDecode) "\u2699 SW dek\u00f3d: ZAP" else "\u2699 SW dek\u00f3d: VYP",
+                                    selected = selCtrl == "sw"
+                                ) { onToggleSoftwareDecode() }
+                            }
                         }
                     }
                 }
