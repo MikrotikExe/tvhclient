@@ -331,7 +331,6 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0) {
             onDismiss = { pinAction = null },
             onComplete = { pin ->
                 if (ParentalLock.checkPin(ctx, pin)) {
-                    ParentalLock.markUnlocked(ctx)
                     pinAction = null
                     pa()
                     true
@@ -669,6 +668,7 @@ private fun ChannelItem(
     itemModifier: Modifier = Modifier
 ) {
     val (curTitle, curStart, curStop) = currentNow(row, epgList, nowSec)
+    val locked = ParentalLock.isChannelLocked(context, Tvh.store.active()?.id, row.channel.uuid)
     Row(
         modifier = itemModifier
             .fillMaxWidth()
@@ -730,6 +730,10 @@ private fun ChannelItem(
                             .clip(androidx.compose.foundation.shape.CircleShape)
                             .background(Color(0xFFE53935))
                     )
+                }
+                if (locked) {
+                    Spacer(Modifier.width(6.dp))
+                    Text("\uD83D\uDD12", style = MaterialTheme.typography.bodySmall)
                 }
             }
             // Aktualna relacia uz vypocitana hore (curTitle/curStart/curStop)

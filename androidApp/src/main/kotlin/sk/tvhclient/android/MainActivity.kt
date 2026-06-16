@@ -378,6 +378,7 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             // Vyber jazyka appky (Systém/SK/CZ/EN) — zmena restartuje aktivitu
             val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -471,7 +472,6 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                         if (pin == firstPin) {
                             ParentalLock.setPin(ctx, pin)
                             ParentalLock.setEnabled(ctx, true); lockEnabled = true
-                            ParentalLock.markUnlocked(ctx)
                             pinStage = 0; firstPin = ""; true
                         } else { firstPin = ""; pinStage = 1; true }  // nezhoda -> zadaj odznova
                     }
@@ -482,19 +482,15 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                 Text(stringResource(R.string.no_servers))
                 Spacer(Modifier.height(16.dp))
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(servers, key = { it.id }) { server ->
-                        ServerRow(
-                            server = server,
-                            isActive = server.id == activeId,
-                            onSelect = { vm.setActive(server.id) },
-                            onEdit = { onEdit(server) },
-                            onDelete = { vm.delete(server.id) }
-                        )
-                    }
+                servers.forEach { server ->
+                    ServerRow(
+                        server = server,
+                        isActive = server.id == activeId,
+                        onSelect = { vm.setActive(server.id) },
+                        onEdit = { onEdit(server) },
+                        onDelete = { vm.delete(server.id) }
+                    )
+                    Spacer(Modifier.height(8.dp))
                 }
             }
             Spacer(Modifier.height(12.dp))

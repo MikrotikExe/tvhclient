@@ -1,6 +1,8 @@
 package sk.tvhclient.android
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,11 +12,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,10 +37,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 
 /**
- * PIN dialog (4 cislice). Zachytava cislice z dialkoveho ovladaca aj ma
- * dotykovu numericku klavesnicu. [onComplete] dostane zadane 4 cislice a vrati
- * true ak su prijate (dialog sa zavrie), alebo false ak su nespravne (zobrazi
- * chybu a vynuluje zadanie).
+ * PIN dialog (4 cislice). Navigaciu po klavesnici riadime sami (sipky + OK),
+ * lebo Compose focus na lacnych Android TV boxoch nefunguje spolahlivo.
+ * Funguju aj cislice priamo z dialkoveho (0-9). [onComplete] dostane 4 cislice
+ * a vrati true = prijate (zavrie volajuci), false = nespravne (vynuluje).
  */
 @Composable
 fun PinDialog(
@@ -50,8 +50,18 @@ fun PinDialog(
 ) {
     var entered by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
+    var selRow by remember { mutableStateOf(0) }
+    var selCol by remember { mutableStateOf(0) }
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
+
+    // mriezka klaves: 1-9, potom [zmazat] 0 [zrusit]
+    val grid = listOf(
+        listOf("1", "2", "3"),
+        listOf("4", "5", "6"),
+        listOf("7", "8", "9"),
+        listOf("del", "0", "x")
+    )
 
     fun push(d: Int) {
         if (entered.length >= 4) return
@@ -59,11 +69,17 @@ fun PinDialog(
         error = false
         if (entered.length == 4) {
             val pin = entered
-            if (onComplete(pin)) { /* zavrie volajuci */ }
-            else { error = true; entered = "" }
+            if (!onComplete(pin)) { error = true; entered = "" }
         }
     }
     fun del() { if (entered.isNotEmpty()) entered = entered.dropLast(1) }
+    fun activate(label: String) {
+        when (label) {
+            "del" -> del()
+            "x" -> onDismiss()
+            else -> push(label.toInt())
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 6.dp) {
@@ -84,8 +100,17 @@ fun PinDialog(
                         }
                         when {
                             digit >= 0 -> { push(digit); true }
+                            kc == android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { selCol = (selCol - 1 + 3) % 3; true }
+                            kc == android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> { selCol = (selCol + 1) % 3; true }
+                            kc == android.view.KeyEvent.KEYCODE_DPAD_UP -> { selRow = (selRow - 1 + 4) % 4; true }
+                            kc == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> { selRow = (selRow + 1) % 4; true }
+                            kc == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                                kc == android.view.KeyEvent.KEYCODE_ENTER ||
+                                kc == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                activate(grid[selRow][selCol]); true
+                            }
                             kc == android.view.KeyEvent.KEYCODE_DEL -> { del(); true }
-                            else -> false
+                            else -> false  // BACK necha zavriet dialog
                         }
                     },
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -107,24 +132,35 @@ fun PinDialog(
                     Text(stringResource(R.string.plock_wrong), color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.height(16.dp))
-                // Dotykova numericka klavesnica (1-9, 0, zmazat)
-                val rows = listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9))
-                rows.forEach { r ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        r.forEach { d ->
-                            OutlinedButton(onClick = { push(d) }, modifier = Modifier.width(64.dp)) {
-                                Text("$d", style = MaterialTheme.typography.titleMedium)
+                grid.forEachIndexed { r, rowKeys ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        rowKeys.forEachIndexed { c, label ->
+                            val selected = r == selRow && c == selCol
+                            Box(
+                                Modifier
+                                    .size(width = 64.dp, height = 44.dp)
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(
+                                        if (selected) MaterialTheme.colorScheme.primary
+                                        else Color(0x22FFFFFF)
+                                    )
+                                    .border(
+                                        2.dp,
+                                        if (selected) Color.White else Color(0x55FFFFFF),
+                                        RoundedCornerShape(22.dp)
+                                    )
+                                    .clickable { selRow = r; selCol = c; activate(label) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    when (label) { "del" -> "\u232B"; "x" -> "\u2715"; else -> label },
+                                    color = if (selected) MaterialTheme.colorScheme.onPrimary else Color.White,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
                             }
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { del() }, modifier = Modifier.width(64.dp)) { Text("\u232B") }
-                    OutlinedButton(onClick = { push(0) }, modifier = Modifier.width(64.dp)) {
-                        Text("0", style = MaterialTheme.typography.titleMedium)
-                    }
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.width(64.dp)) { Text("\u2715") }
                 }
             }
         }
