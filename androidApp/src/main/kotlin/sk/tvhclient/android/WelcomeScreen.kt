@@ -136,7 +136,9 @@ fun WelcomeScreen(vm: ServersViewModel) {
                 androidx.compose.material3.IconButton(onClick = { showPw = !showPw }) {
                     androidx.compose.material3.Icon(
                         if (showPw) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = null
+                        contentDescription = stringResource(
+                            if (showPw) R.string.hide_password else R.string.show_password
+                        )
                     )
                 }
             },

@@ -142,6 +142,9 @@
     <string name="view_list">List</string>
     <string name="view_grid">Grid</string>
     <string name="view_tiles">Tiles</string>
+    <string name="view_mode">View mode</string>
+    <string name="show_password">Show password</string>
+    <string name="hide_password">Hide password</string>
     <string name="language">Language</string>
     <string name="lang_system">System</string>
     <string name="audio_pref_title">Preferred audio (priority)</string>
@@ -205,6 +208,8 @@
     <string name="set_cat_playlist">Playlist</string>
     <string name="set_cat_servers">Servers</string>
     <string name="set_cat_info">Information</string>
+    <string name="privacy_policy">Privacy Policy</string>
+    <string name="terms_of_use">Terms of Use</string>
     <string name="info_app_version">App version</string>
     <string name="info_active_server">Active server</string>
     <string name="set_leave_title">Leave settings?</string>

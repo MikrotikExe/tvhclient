@@ -249,7 +249,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                             ChannelViewMode.GRID -> Icons.Default.GridView
                             ChannelViewMode.TILES -> Icons.Default.ViewModule
                         },
-                        contentDescription = null
+                        contentDescription = stringResource(R.string.view_mode)
                     )
                 }
                 androidx.compose.material3.DropdownMenu(

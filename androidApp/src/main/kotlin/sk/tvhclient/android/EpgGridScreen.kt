@@ -276,7 +276,7 @@ fun EpgGridScreen(
                     }) {
                         androidx.compose.material3.Icon(
                             Icons.Default.Refresh,
-                            contentDescription = null
+                            contentDescription = stringResource(R.string.retry)
                         )
                     }
                 }

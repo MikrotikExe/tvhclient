@@ -330,7 +330,13 @@ internal fun RemoteSettings(ctx: android.content.Context) {
 }
 
 @Composable
-internal fun InfoSettings(ctx: android.content.Context, servers: List<TvhServer>, activeId: String?) {
+internal fun InfoSettings(
+    ctx: android.content.Context,
+    servers: List<TvhServer>,
+    activeId: String?,
+    onOpenDoc: (LegalDoc) -> Unit
+) {
+    val lang = remember { LocaleHelper.getLang(ctx) }
     val version = remember {
         runCatching {
             ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
@@ -352,5 +358,25 @@ internal fun InfoSettings(ctx: android.content.Context, servers: List<TvhServer>
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     } else {
         Text(stringResource(R.string.no_servers))
+    }
+
+    Spacer(Modifier.height(20.dp))
+    InfoLinkRow(stringResource(R.string.privacy_policy)) { onOpenDoc(LegalText.privacy(lang)) }
+    Spacer(Modifier.height(8.dp))
+    InfoLinkRow(stringResource(R.string.terms_of_use)) { onOpenDoc(LegalText.terms(lang)) }
+}
+
+@Composable
+private fun InfoLinkRow(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .dpadFocusable()
+            .clickable { onClick() }
+            .padding(vertical = 14.dp, horizontal = 8.dp)
+    ) {
+        Text(label, style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary)
     }
 }

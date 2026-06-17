@@ -142,6 +142,9 @@
     <string name="view_list">Seznam</string>
     <string name="view_grid">Mřížka</string>
     <string name="view_tiles">Dlaždice</string>
+    <string name="view_mode">Zobrazení</string>
+    <string name="show_password">Zobrazit heslo</string>
+    <string name="hide_password">Skrýt heslo</string>
     <string name="language">Jazyk</string>
     <string name="lang_system">Systém</string>
     <string name="audio_pref_title">Předvolené audio (priorita)</string>
@@ -205,6 +208,8 @@
     <string name="set_cat_playlist">Playlist</string>
     <string name="set_cat_servers">Servery</string>
     <string name="set_cat_info">Informace</string>
+    <string name="privacy_policy">Zásady ochrany osobních údajů</string>
+    <string name="terms_of_use">Podmínky používání</string>
     <string name="info_app_version">Verze aplikace</string>
     <string name="info_active_server">Aktivní server</string>
     <string name="set_leave_title">Opustit nastavení?</string>

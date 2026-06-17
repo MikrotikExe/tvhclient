@@ -103,7 +103,7 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
                             ChannelViewMode.GRID -> Icons.Default.GridView
                             ChannelViewMode.TILES -> Icons.Default.ViewModule
                         },
-                        contentDescription = null
+                        contentDescription = stringResource(R.string.view_mode)
                     )
                 }
                 DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {

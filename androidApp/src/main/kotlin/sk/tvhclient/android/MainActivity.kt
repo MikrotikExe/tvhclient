@@ -399,6 +399,7 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
         )
     }
     val sectionFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    var legalDoc by remember { mutableStateOf<LegalDoc?>(null) }
 
     LaunchedEffect(resetSignal) {
         if (resetSignal > 0) { section = null; TabController.settingsDirty.value = false }
@@ -416,7 +417,7 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
         section = null; TabController.settingsDirty.value = false
     }
 
-    val title = when (section) {
+    val title = legalDoc?.title ?: when (section) {
         "general" -> stringResource(R.string.set_cat_general)
         "playback" -> stringResource(R.string.set_cat_playback)
         "plock" -> stringResource(R.string.plock_title)
@@ -431,9 +432,10 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
             TopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
-                    if (section != null) {
+                    if (legalDoc != null || section != null) {
                         androidx.compose.material3.IconButton(onClick = {
-                            section = null; TabController.settingsDirty.value = false
+                            if (legalDoc != null) legalDoc = null
+                            else { section = null; TabController.settingsDirty.value = false }
                         }) {
                             Text("\u2039", style = MaterialTheme.typography.headlineMedium)
                         }
@@ -442,30 +444,35 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
-                .focusRequester(sectionFocus)
-                .focusGroup()
-        ) {
-            when (section) {
-                null -> {
-                    SettingsCategory(stringResource(R.string.set_cat_general), catFocus["general"]) { lastSection = "general"; section = "general" }
-                    SettingsCategory(stringResource(R.string.set_cat_playback), catFocus["playback"]) { lastSection = "playback"; section = "playback" }
-                    SettingsCategory(stringResource(R.string.plock_title), catFocus["plock"]) { lastSection = "plock"; section = "plock" }
-                    SettingsCategory(stringResource(R.string.set_cat_servers), catFocus["servers"]) { lastSection = "servers"; section = "servers" }
-                    SettingsCategory(stringResource(R.string.set_cat_remote), catFocus["remote"]) { lastSection = "remote"; section = "remote" }
-                    SettingsCategory(stringResource(R.string.set_cat_info), catFocus["info"]) { lastSection = "info"; section = "info" }
+        val legal = legalDoc
+        if (legal != null) {
+            LegalScreen(legal, Modifier.padding(padding)) { legalDoc = null }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
+                    .focusRequester(sectionFocus)
+                    .focusGroup()
+            ) {
+                when (section) {
+                    null -> {
+                        SettingsCategory(stringResource(R.string.set_cat_general), catFocus["general"]) { lastSection = "general"; section = "general" }
+                        SettingsCategory(stringResource(R.string.set_cat_playback), catFocus["playback"]) { lastSection = "playback"; section = "playback" }
+                        SettingsCategory(stringResource(R.string.plock_title), catFocus["plock"]) { lastSection = "plock"; section = "plock" }
+                        SettingsCategory(stringResource(R.string.set_cat_servers), catFocus["servers"]) { lastSection = "servers"; section = "servers" }
+                        SettingsCategory(stringResource(R.string.set_cat_remote), catFocus["remote"]) { lastSection = "remote"; section = "remote" }
+                        SettingsCategory(stringResource(R.string.set_cat_info), catFocus["info"]) { lastSection = "info"; section = "info" }
+                    }
+                    "general" -> GeneralSettings(ctx)
+                    "playback" -> PlaybackSettings(ctx)
+                    "plock" -> ParentalSettings(ctx)
+                    "servers" -> ServersSettings(vm, servers, activeId, onAdd, onEdit)
+                    "remote" -> RemoteSettings(ctx)
+                    "info" -> InfoSettings(ctx, servers, activeId) { legalDoc = it }
                 }
-                "general" -> GeneralSettings(ctx)
-                "playback" -> PlaybackSettings(ctx)
-                "plock" -> ParentalSettings(ctx)
-                "servers" -> ServersSettings(vm, servers, activeId, onAdd, onEdit)
-                "remote" -> RemoteSettings(ctx)
-                "info" -> InfoSettings(ctx, servers, activeId)
             }
         }
     }
