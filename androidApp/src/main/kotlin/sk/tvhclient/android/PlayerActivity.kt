@@ -481,7 +481,9 @@ class PlayerActivity : ComponentActivity() {
         if (down) {
             when (kc) {
                 android.view.KeyEvent.KEYCODE_GUIDE,
-                android.view.KeyEvent.KEYCODE_TV_DATA_SERVICE -> { openEpgInApp(); return true }
+                android.view.KeyEvent.KEYCODE_TV_DATA_SERVICE,
+                android.view.KeyEvent.KEYCODE_TV_CONTENTS_MENU,
+                android.view.KeyEvent.KEYCODE_TV_MEDIA_CONTEXT_MENU -> { openEpgInApp(); return true }
                 android.view.KeyEvent.KEYCODE_INFO -> { toggleInfo(); return true }
             }
         }
@@ -504,7 +506,10 @@ class PlayerActivity : ComponentActivity() {
                         { navChannelIndexState.value = (navChannelIndexState.value - 1 + n) % n; return true }
                     android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
                         { navChannelIndexState.value = (navChannelIndexState.value + 1) % n; return true }
-                    android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT ->
+                        { navChannelIndexState.value = (navChannelIndexState.value - 8).coerceIn(0, n - 1); return true }
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT ->
+                        { navChannelIndexState.value = (navChannelIndexState.value + 8).coerceIn(0, n - 1); return true }
                     android.view.KeyEvent.KEYCODE_BACK ->
                         { closeChannelList(); return true }
                 }
@@ -534,10 +539,8 @@ class PlayerActivity : ComponentActivity() {
                     }
                     android.view.KeyEvent.KEYCODE_DPAD_LEFT,
                     android.view.KeyEvent.KEYCODE_BACK -> {
-                        // z casovaca spat na hlavne menu, inak zatvor
-                        if (optionsPageState.value == 1) {
-                            optionsPageState.value = 0; optionsNavState.value = 0
-                        } else closeOptions()
+                        // z casovaca aj z hlavneho menu zatvor cele Moznosti
+                        closeOptions()
                         return true
                     }
                 }
