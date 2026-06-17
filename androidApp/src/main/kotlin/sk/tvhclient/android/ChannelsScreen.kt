@@ -384,7 +384,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
 }
 
 @Composable
-private fun ChannelActionDialog(
+fun ChannelActionDialog(
     channelName: String,
     isFav: Boolean,
     isLocked: Boolean,
@@ -427,7 +427,7 @@ private fun ChannelActionDialog(
 }
 
 @Composable
-private fun ActionRow(label: String, onClick: () -> Unit) {
+fun ActionRow(label: String, onClick: () -> Unit) {
     Text(
         label,
         modifier = Modifier
@@ -440,7 +440,7 @@ private fun ActionRow(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ProfilePickerDialog(
+fun ProfilePickerDialog(
     channelName: String,
     current: String,
     onPick: (String) -> Unit,

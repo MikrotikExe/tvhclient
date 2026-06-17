@@ -2,6 +2,8 @@ package sk.tvhclient.android
 
 import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,9 +45,28 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
     val query by vm.query.collectAsState()
     val context = LocalContext.current
     val server = remember { Tvh.store.active() }
+    val serverId = server?.id
     val loader = remember(server?.id) { PiconImageLoader.get(context, server) }
 
+    var contextRow by remember { mutableStateOf<ChannelRow?>(null) }
+    var epgFor by remember { mutableStateOf<ChannelRow?>(null) }
+    var profileFor by remember { mutableStateOf<ChannelRow?>(null) }
+    var favTick by remember { mutableStateOf(0) }
+    var lockTick by remember { mutableStateOf(0) }
+    var hiddenTick by remember { mutableStateOf(0) }
+
     LaunchedEffect(Unit) { vm.load() }
+
+    // EPG jedneho radia
+    val epgRow = epgFor
+    if (epgRow != null) {
+        EpgScreen(
+            channelUuid = epgRow.channel.uuid,
+            channelName = epgRow.channel.name,
+            onBack = { epgFor = null }
+        )
+        return
+    }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         OutlinedTextField(
@@ -80,7 +103,7 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
                     } else {
                         LazyColumn(Modifier.fillMaxSize()) {
                             items(rows, key = { it.channel.uuid }) { row ->
-                                RadioRow(row, loader, context)
+                                RadioRow(row, loader, context, onContext = { contextRow = it })
                             }
                         }
                     }
@@ -88,27 +111,79 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
             }
         }
     }
+
+    // Kontextove menu (dlhe podrzanie)
+    val cr = contextRow
+    if (cr != null) {
+        val isFav = remember(favTick) { Favorites.isFav(context, serverId, cr.channel.uuid) }
+        val isLocked = remember(lockTick) {
+            ParentalLock.isChannelLocked(context, serverId, cr.channel.uuid)
+        }
+        val isHidden = remember(hiddenTick) {
+            HiddenChannels.isHidden(context, serverId, cr.channel.uuid)
+        }
+        ChannelActionDialog(
+            channelName = cr.channel.name,
+            isFav = isFav,
+            isLocked = isLocked,
+            isHidden = isHidden,
+            onProgram = { epgFor = cr; contextRow = null },
+            onToggleFav = {
+                Favorites.toggle(context, serverId, cr.channel.uuid); favTick++; contextRow = null
+            },
+            onProfile = { profileFor = cr; contextRow = null },
+            onToggleLock = {
+                val uuid = cr.channel.uuid
+                ParentalLock.setChannelLocked(context, serverId, uuid, !isLocked); lockTick++
+                contextRow = null
+            },
+            onToggleHide = {
+                HiddenChannels.setHidden(context, serverId, cr.channel.uuid, !isHidden)
+                hiddenTick++; contextRow = null
+            },
+            onDismiss = { contextRow = null }
+        )
+    }
+
+    val pf = profileFor
+    if (pf != null) {
+        val current = remember { ChannelPrefs.getProfile(context, serverId, pf.channel.uuid) }
+        ProfilePickerDialog(
+            channelName = pf.channel.name,
+            current = current,
+            onPick = {
+                ChannelPrefs.setProfile(context, serverId, pf.channel.uuid, it); profileFor = null
+            },
+            onDismiss = { profileFor = null }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RadioRow(
     row: ChannelRow,
     loader: coil.ImageLoader,
-    context: android.content.Context
+    context: android.content.Context,
+    onContext: (ChannelRow) -> Unit
 ) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable {
-                val server = Tvh.store.active() ?: return@clickable
-                val url = Tvh.liveUrl(server, row.channel.uuid, row.channel.name,
-                    server.profile.ifBlank { "pass" })
-                val intent = Intent(context, PlayerActivity::class.java).apply {
-                    putExtra(PlayerActivity.EXTRA_URL, url)
-                    putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
-                }
-                context.startActivity(intent)
-            }
+            .combinedClickable(
+                onClick = {
+                    val server = Tvh.store.active() ?: return@combinedClickable
+                    val prof = ChannelPrefs.getProfile(context, server.id, row.channel.uuid)
+                        .ifBlank { server.profile.ifBlank { "pass" } }
+                    val url = Tvh.liveUrl(server, row.channel.uuid, row.channel.name, prof)
+                    val intent = Intent(context, PlayerActivity::class.java).apply {
+                        putExtra(PlayerActivity.EXTRA_URL, url)
+                        putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
+                    }
+                    context.startActivity(intent)
+                },
+                onLongClick = { onContext(row) }
+            )
             .padding(horizontal = 4.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
