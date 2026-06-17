@@ -216,4 +216,11 @@
     <string name="backup_exported">Backup saved</string>
     <string name="backup_imported">Restored, restarting…</string>
     <string name="backup_failed">Operation failed</string>
+    <string name="set_cat_general">General</string>
+    <string name="set_cat_playback">Playback</string>
+    <string name="set_cat_playlist">Playlist</string>
+    <string name="set_cat_servers">Servers</string>
+    <string name="set_cat_info">Information</string>
+    <string name="info_app_version">App version</string>
+    <string name="info_active_server">Active server</string>
 </resources>

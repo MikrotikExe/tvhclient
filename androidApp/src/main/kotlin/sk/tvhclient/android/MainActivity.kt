@@ -7,11 +7,13 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -332,21 +334,13 @@ fun WelcomeScreen(vm: ServersViewModel) {
             ) { profile = it }
             Spacer(Modifier.height(8.dp))
             // skryta moznost: obnova nastaveni zo zalohy
-            BackupControls(compact = true)
+            BackupControls(compact = true, onImported = { vm.refresh() })
         }
     }
 }
 
-private fun restartApp(ctx: android.content.Context) {
-    val i = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
-    i?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { ctx.startActivity(i) }
-    if (ctx is android.app.Activity) ctx.finish()
-    Runtime.getRuntime().exit(0)
-}
-
 @Composable
-fun BackupControls(compact: Boolean = false) {
+fun BackupControls(compact: Boolean = false, onImported: () -> Unit = {}) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -373,11 +367,14 @@ fun BackupControls(compact: Boolean = false) {
                 ctx, ctx.getString(if (ok) R.string.backup_imported else R.string.backup_failed),
                 Toast.LENGTH_LONG
             ).show()
-            if (ok) restartApp(ctx)
+            if (ok) {
+                onImported()
+                // znovu vykresli appku (nacita obnovene servery aj jazyk), bez zabitia procesu
+                (ctx as? android.app.Activity)?.recreate()
+            }
         }
     }
     if (compact) {
-        // skryta moznost pri prihlaseni: len obnova
         androidx.compose.material3.TextButton(
             onClick = { runCatching { importLauncher.launch(arrayOf("*/*")) } }
         ) { Text(stringResource(R.string.backup_restore)) }
@@ -557,9 +554,33 @@ fun ServersTab(vm: ServersViewModel = viewModel()) {
 fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> Unit) {
     val servers by vm.servers.collectAsState()
     val activeId by vm.activeId.collectAsState()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var section by remember { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = section != null) { section = null }
+
+    val title = when (section) {
+        "general" -> stringResource(R.string.set_cat_general)
+        "playback" -> stringResource(R.string.set_cat_playback)
+        "playlist" -> stringResource(R.string.set_cat_playlist)
+        "servers" -> stringResource(R.string.set_cat_servers)
+        "info" -> stringResource(R.string.set_cat_info)
+        else -> stringResource(R.string.tab_settings)
+    }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.tab_settings)) }) }
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    if (section != null) {
+                        androidx.compose.material3.IconButton(onClick = { section = null }) {
+                            Text("\u2039", style = MaterialTheme.typography.headlineMedium)
+                        }
+                    }
+                }
+            )
+        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -568,182 +589,247 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Vyber jazyka appky (Systém/SK/CZ/EN) — zmena restartuje aktivitu
-            val ctx = androidx.compose.ui.platform.LocalContext.current
-            var lang by remember { mutableStateOf(LocaleHelper.getLang(ctx)) }
-            DropdownField(
-                label = stringResource(R.string.language),
-                value = lang,
-                options = listOf("", "sk", "cs", "en"),
-                optionLabel = {
-                    when (it) {
-                        "sk" -> "Slovenčina"
-                        "cs" -> "Čeština"
-                        "en" -> "English"
-                        else -> stringResource(R.string.lang_system)
-                    }
-                },
-                onSelect = {
-                    if (it != lang) {
-                        lang = it
-                        LocaleHelper.setLang(ctx, it)
-                        (ctx as? android.app.Activity)?.recreate()
-                    }
+            when (section) {
+                null -> {
+                    SettingsCategory(stringResource(R.string.set_cat_general)) { section = "general" }
+                    SettingsCategory(stringResource(R.string.set_cat_playback)) { section = "playback" }
+                    SettingsCategory(stringResource(R.string.set_cat_playlist)) { section = "playlist" }
+                    SettingsCategory(stringResource(R.string.set_cat_servers)) { section = "servers" }
+                    SettingsCategory(stringResource(R.string.set_cat_info)) { section = "info" }
                 }
-            )
-            Spacer(Modifier.height(16.dp))
-
-            // Zaloha / obnova dat (export/import nastaveni)
-            Text(stringResource(R.string.backup_section), style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
-            BackupControls()
-            Spacer(Modifier.height(16.dp))
-
-            // Predvolene audio stopy (priorita 1-3)
-            Text(stringResource(R.string.audio_pref_title),
-                style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
-            var audio by remember {
-                mutableStateOf(AudioPref.get(ctx).let { l -> List(3) { l.getOrNull(it) ?: "" } })
-            }
-            fun setSlot(i: Int, code: String) {
-                val list = audio.toMutableList()
-                list[i] = code
-                audio = list
-                AudioPref.set(ctx, list)
-            }
-            val audioLabels: @Composable (String) -> String = { code ->
-                AudioPref.options.firstOrNull { it.first == code }?.second ?: "—"
-            }
-            val audioOptions = AudioPref.options.map { it.first }
-            DropdownField(stringResource(R.string.audio_pref_1), audio[0], audioOptions, audioLabels) { setSlot(0, it) }
-            DropdownField(stringResource(R.string.audio_pref_2), audio[1], audioOptions, audioLabels) { setSlot(1, it) }
-            DropdownField(stringResource(R.string.audio_pref_3), audio[2], audioOptions, audioLabels) { setSlot(2, it) }
-            Spacer(Modifier.height(16.dp))
-
-            // Rodicovsky zamok (PIN)
-            Text(stringResource(R.string.plock_title), style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(4.dp))
-            var lockEnabled by remember { mutableStateOf(ParentalLock.isEnabled(ctx)) }
-            var pinStage by remember { mutableStateOf(0) }   // 0=ziadny, 1=novy, 2=potvrdit
-            var firstPin by remember { mutableStateOf("") }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(
-                    checked = lockEnabled,
-                    onCheckedChange = { on ->
-                        if (on) {
-                            if (ParentalLock.hasPin(ctx)) {
-                                ParentalLock.setEnabled(ctx, true); lockEnabled = true
-                            } else pinStage = 1  // najprv nastav PIN
-                        } else {
-                            ParentalLock.setEnabled(ctx, false); lockEnabled = false
-                        }
-                    }
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.plock_enable))
-            }
-            OutlinedButton(
-                onClick = { firstPin = ""; pinStage = 1 },
-                modifier = Modifier.padding(top = 4.dp)
-            ) {
-                Text(
-                    if (ParentalLock.hasPin(ctx)) stringResource(R.string.plock_change_pin)
-                    else stringResource(R.string.plock_set_pin)
-                )
-            }
-            if (pinStage == 1) {
-                PinDialog(
-                    title = stringResource(R.string.plock_enter_new),
-                    onDismiss = { pinStage = 0 },
-                    onComplete = { pin -> firstPin = pin; pinStage = 2; true }
-                )
-            } else if (pinStage == 2) {
-                PinDialog(
-                    title = stringResource(R.string.plock_confirm),
-                    onDismiss = { pinStage = 0; firstPin = "" },
-                    onComplete = { pin ->
-                        if (pin == firstPin) {
-                            ParentalLock.setPin(ctx, pin)
-                            ParentalLock.setEnabled(ctx, true); lockEnabled = true
-                            pinStage = 0; firstPin = ""; true
-                        } else { firstPin = ""; pinStage = 1; true }  // nezhoda -> zadaj odznova
-                    }
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-
-            // Automaticke spustenie po zapnuti zariadenia
-            Text(stringResource(R.string.autostart_title), style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(4.dp))
-            // Povolenie "zobrazenie nad ostatnymi aplikaciami" — vdaka nemu sa
-            // appka smie spustit z pozadia (boot / prebudenie). Bez neho to Android blokuje.
-            fun requestOverlay() {
-                if (android.os.Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(ctx)) {
-                    val i = Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + ctx.packageName)
-                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    if (runCatching { ctx.startActivity(i) }.isFailure) {
-                        runCatching {
-                            ctx.startActivity(
-                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        }
-                    }
-                }
-            }
-            var autostart by remember { mutableStateOf(AutostartPref.isEnabled(ctx)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(
-                    checked = autostart,
-                    onCheckedChange = { on ->
-                        autostart = on; AutostartPref.setEnabled(ctx, on)
-                        if (on) requestOverlay()
-                    }
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.autostart_enable))
-            }
-            var autostartWake by remember { mutableStateOf(AutostartPref.isWakeEnabled(ctx)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(
-                    checked = autostartWake,
-                    onCheckedChange = { on ->
-                        autostartWake = on; AutostartPref.setWakeEnabled(ctx, on)
-                        if (on) requestOverlay()
-                    }
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.autostart_wake))
-            }
-            Text(
-                stringResource(R.string.autostart_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(16.dp))
-            if (servers.isEmpty()) {
-                Text(stringResource(R.string.no_servers))
-                Spacer(Modifier.height(16.dp))
-            } else {
-                servers.forEach { server ->
-                    ServerRow(
-                        server = server,
-                        isActive = server.id == activeId,
-                        onSelect = { vm.setActive(server.id) },
-                        onEdit = { onEdit(server) },
-                        onDelete = { vm.delete(server.id) }
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.add_server))
+                "general" -> GeneralSettings(ctx)
+                "playback" -> PlaybackSettings(ctx)
+                "playlist" -> PlaylistSettings(ctx)
+                "servers" -> ServersSettings(vm, servers, activeId, onAdd, onEdit)
+                "info" -> InfoSettings(ctx, servers, activeId)
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsCategory(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(vertical = 16.dp, horizontal = 8.dp)
+    ) {
+        Text(label, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+// --- Vseobecne: jazyk + autostart ---
+@Composable
+private fun GeneralSettings(ctx: android.content.Context) {
+    var lang by remember { mutableStateOf(LocaleHelper.getLang(ctx)) }
+    DropdownField(
+        label = stringResource(R.string.language),
+        value = lang,
+        options = listOf("", "sk", "cs", "en"),
+        optionLabel = {
+            when (it) {
+                "sk" -> "Slovenčina"
+                "cs" -> "Čeština"
+                "en" -> "English"
+                else -> stringResource(R.string.lang_system)
+            }
+        },
+        onSelect = {
+            if (it != lang) {
+                lang = it
+                LocaleHelper.setLang(ctx, it)
+                (ctx as? android.app.Activity)?.recreate()
+            }
+        }
+    )
+    Spacer(Modifier.height(16.dp))
+
+    Text(stringResource(R.string.autostart_title), style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(4.dp))
+    fun requestOverlay() {
+        if (android.os.Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(ctx)) {
+            val i = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + ctx.packageName)
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (runCatching { ctx.startActivity(i) }.isFailure) {
+                runCatching {
+                    ctx.startActivity(
+                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
+        }
+    }
+    var autostart by remember { mutableStateOf(AutostartPref.isEnabled(ctx)) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(
+            checked = autostart,
+            onCheckedChange = { on ->
+                autostart = on; AutostartPref.setEnabled(ctx, on)
+                if (on) requestOverlay()
+            }
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.autostart_enable))
+    }
+    var autostartWake by remember { mutableStateOf(AutostartPref.isWakeEnabled(ctx)) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(
+            checked = autostartWake,
+            onCheckedChange = { on ->
+                autostartWake = on; AutostartPref.setWakeEnabled(ctx, on)
+                if (on) requestOverlay()
+            }
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.autostart_wake))
+    }
+    Text(
+        stringResource(R.string.autostart_note),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+// --- Prehravanie: predvolene audio stopy ---
+@Composable
+private fun PlaybackSettings(ctx: android.content.Context) {
+    Text(stringResource(R.string.audio_pref_title), style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(8.dp))
+    var audio by remember {
+        mutableStateOf(AudioPref.get(ctx).let { l -> List(3) { l.getOrNull(it) ?: "" } })
+    }
+    fun setSlot(i: Int, code: String) {
+        val list = audio.toMutableList()
+        list[i] = code
+        audio = list
+        AudioPref.set(ctx, list)
+    }
+    val audioLabels: @Composable (String) -> String = { code ->
+        AudioPref.options.firstOrNull { it.first == code }?.second ?: "—"
+    }
+    val audioOptions = AudioPref.options.map { it.first }
+    DropdownField(stringResource(R.string.audio_pref_1), audio[0], audioOptions, audioLabels) { setSlot(0, it) }
+    DropdownField(stringResource(R.string.audio_pref_2), audio[1], audioOptions, audioLabels) { setSlot(1, it) }
+    DropdownField(stringResource(R.string.audio_pref_3), audio[2], audioOptions, audioLabels) { setSlot(2, it) }
+}
+
+// --- Playlist: rodicovsky zamok (PIN) ---
+@Composable
+private fun PlaylistSettings(ctx: android.content.Context) {
+    Text(stringResource(R.string.plock_title), style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(4.dp))
+    var lockEnabled by remember { mutableStateOf(ParentalLock.isEnabled(ctx)) }
+    var pinStage by remember { mutableStateOf(0) }
+    var firstPin by remember { mutableStateOf("") }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(
+            checked = lockEnabled,
+            onCheckedChange = { on ->
+                if (on) {
+                    if (ParentalLock.hasPin(ctx)) {
+                        ParentalLock.setEnabled(ctx, true); lockEnabled = true
+                    } else pinStage = 1
+                } else {
+                    ParentalLock.setEnabled(ctx, false); lockEnabled = false
+                }
+            }
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.plock_enable))
+    }
+    OutlinedButton(
+        onClick = { firstPin = ""; pinStage = 1 },
+        modifier = Modifier.padding(top = 4.dp)
+    ) {
+        Text(
+            if (ParentalLock.hasPin(ctx)) stringResource(R.string.plock_change_pin)
+            else stringResource(R.string.plock_set_pin)
+        )
+    }
+    if (pinStage == 1) {
+        PinDialog(
+            title = stringResource(R.string.plock_enter_new),
+            onDismiss = { pinStage = 0 },
+            onComplete = { pin -> firstPin = pin; pinStage = 2; true }
+        )
+    } else if (pinStage == 2) {
+        PinDialog(
+            title = stringResource(R.string.plock_confirm),
+            onDismiss = { pinStage = 0; firstPin = "" },
+            onComplete = { pin ->
+                if (pin == firstPin) {
+                    ParentalLock.setPin(ctx, pin)
+                    ParentalLock.setEnabled(ctx, true); lockEnabled = true
+                    pinStage = 0; firstPin = ""; true
+                } else { firstPin = ""; pinStage = 1; true }
+            }
+        )
+    }
+}
+
+// --- Servery: zoznam serverov + zaloha/obnova ---
+@Composable
+private fun ServersSettings(
+    vm: ServersViewModel,
+    servers: List<TvhServer>,
+    activeId: String?,
+    onAdd: () -> Unit,
+    onEdit: (TvhServer) -> Unit
+) {
+    if (servers.isEmpty()) {
+        Text(stringResource(R.string.no_servers))
+        Spacer(Modifier.height(16.dp))
+    } else {
+        servers.forEach { server ->
+            ServerRow(
+                server = server,
+                isActive = server.id == activeId,
+                onSelect = { vm.setActive(server.id) },
+                onEdit = { onEdit(server) },
+                onDelete = { vm.delete(server.id) }
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.add_server))
+    }
+    Spacer(Modifier.height(24.dp))
+    Text(stringResource(R.string.backup_section), style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(8.dp))
+    BackupControls(onImported = { vm.refresh() })
+}
+
+// --- Informacie: verzia appky + aktivny server ---
+@Composable
+private fun InfoSettings(ctx: android.content.Context, servers: List<TvhServer>, activeId: String?) {
+    val version = remember {
+        runCatching {
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
+        }.getOrNull() ?: "?"
+    }
+    Text(stringResource(R.string.info_app_version) + ": " + version,
+        style = MaterialTheme.typography.bodyLarge)
+    Spacer(Modifier.height(12.dp))
+    val active = servers.firstOrNull { it.id == activeId }
+    if (active != null) {
+        Text(stringResource(R.string.info_active_server), style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        Text(active.name, style = MaterialTheme.typography.bodyLarge)
+        Text("${active.host}:${active.port}" + if (active.useHttps) " (HTTPS)" else "",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.field_conn_mode) + ": " + active.connectionMode.uppercase(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } else {
+        Text(stringResource(R.string.no_servers))
     }
 }
 

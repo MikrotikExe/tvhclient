@@ -216,4 +216,11 @@
     <string name="backup_exported">Záloha uložená</string>
     <string name="backup_imported">Obnovené, reštartujem…</string>
     <string name="backup_failed">Operácia zlyhala</string>
+    <string name="set_cat_general">Všeobecné</string>
+    <string name="set_cat_playback">Prehrávanie</string>
+    <string name="set_cat_playlist">Playlist</string>
+    <string name="set_cat_servers">Servery</string>
+    <string name="set_cat_info">Informácie</string>
+    <string name="info_app_version">Verzia aplikácie</string>
+    <string name="info_active_server">Aktívny server</string>
 </resources>

@@ -138,6 +138,7 @@ object Backup {
                 }
             }
         }
-        ed.apply()
+        // commit (synchronne) – aby boli data na disku aj pri okamzitom restarte
+        ed.commit()
     }
 }
