@@ -299,8 +299,7 @@ class PlayerActivity : ComponentActivity() {
     private val optionsNavState = androidx.compose.runtime.mutableStateOf(0)
     private val openAudioMenuState = androidx.compose.runtime.mutableStateOf(0)
     private val openSpuMenuState = androidx.compose.runtime.mutableStateOf(0)
-    // Casovac uspatia + stranka v menu Moznosti (0=hlavne, 1=casovac)
-    private val optionsPageState = androidx.compose.runtime.mutableStateOf(0)
+    // Casovac uspatia
     private val sleepMinutesState = androidx.compose.runtime.mutableStateOf(0)
     private val sleepDeadlineState = androidx.compose.runtime.mutableStateOf(0L)
     private val sleepHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -361,19 +360,12 @@ class PlayerActivity : ComponentActivity() {
     private fun closeChannelList() {
         closeChannelListState.value = closeChannelListState.value + 1
     }
-    private fun openOptions() {
-        optionsNavState.value = 0
-        optionsPageState.value = 0
-        openOptionsState.value = openOptionsState.value + 1
-    }
     private fun closeOptions() {
-        optionsPageState.value = 0
         closeOptionsState.value = closeOptionsState.value + 1
     }
 
-    /** Otvori menu Moznosti rovno na vybere casovaca uspatia (dostupne aj dotykom). */
+    /** Otvori vyber dlzky casovaca uspatia (dostupne dotykom aj D-padom). */
     private fun openSleepMenu() {
-        optionsPageState.value = 1
         optionsNavState.value = 0
         openOptionsState.value = openOptionsState.value + 1
     }
@@ -395,18 +387,10 @@ class PlayerActivity : ComponentActivity() {
         Toast.makeText(this, getString(R.string.sleep_set, minutes), Toast.LENGTH_SHORT).show()
     }
 
-    /** Vyber polozky v menu Moznosti (page 0 = hlavne, 1 = casovac uspatia). */
-    private fun selectOption(page: Int, idx: Int) {
-        if (page == 0) {
-            when (idx) {
-                0 -> { closeOptions(); openAudioMenuState.value = openAudioMenuState.value + 1 }
-                1 -> { closeOptions(); openSpuMenuState.value = openSpuMenuState.value + 1 }
-                2 -> { optionsPageState.value = 1; optionsNavState.value = 0 }
-            }
-        } else {
-            setSleepTimer(sleepDurations.getOrElse(idx) { 0 })
-            closeOptions()
-        }
+    /** Vyber dlzky casovaca uspatia. */
+    private fun selectOption(idx: Int) {
+        setSleepTimer(sleepDurations.getOrElse(idx) { 0 })
+        closeOptions()
     }
 
     // --- Track menu (audio/titulky) riadene z Activity ---
@@ -522,9 +506,9 @@ class PlayerActivity : ComponentActivity() {
             return true
         }
 
-        // 2) Otvorene Moznosti (Zvuk/Titulky/Casovac) -> vertikalna navigacia
+        // 2) Otvoreny vyber casovaca uspatia -> vertikalna navigacia
         if (optionsOpen) {
-            val count = if (optionsPageState.value == 0) 3 else sleepDurations.size
+            val count = sleepDurations.size
             if (down) {
                 when (kc) {
                     android.view.KeyEvent.KEYCODE_DPAD_UP ->
@@ -534,12 +518,11 @@ class PlayerActivity : ComponentActivity() {
                     android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                     android.view.KeyEvent.KEYCODE_ENTER,
                     android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        selectOption(optionsPageState.value, optionsNavState.value)
+                        selectOption(optionsNavState.value)
                         return true
                     }
                     android.view.KeyEvent.KEYCODE_DPAD_LEFT,
                     android.view.KeyEvent.KEYCODE_BACK -> {
-                        // z casovaca aj z hlavneho menu zatvor cele Moznosti
                         closeOptions()
                         return true
                     }
@@ -691,8 +674,6 @@ class PlayerActivity : ComponentActivity() {
                 android.view.KeyEvent.KEYCODE_DPAD_UP,
                 android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
                     if (down) { showControlsFocused(); return true }
-                android.view.KeyEvent.KEYCODE_MENU ->
-                    if (down) { openOptions(); return true }
             }
         }
         return super.dispatchKeyEvent(event)
@@ -886,10 +867,8 @@ class PlayerActivity : ComponentActivity() {
                 openOptionsSignal = openOptionsState.value,
                 closeOptionsSignal = closeOptionsState.value,
                 optionsNavIndex = optionsNavState.value,
-                optionsPage = optionsPageState.value,
-                sleepMinutes = sleepMinutesState.value,
                 sleepDeadline = sleepDeadlineState.value,
-                onOptionsSelect = { page, idx -> selectOption(page, idx) },
+                onOptionsSelect = { idx -> selectOption(idx) },
                 controlNavIndex = controlNavState.value,
                 trackNavIndex = trackNavState.value,
                 closeMenuSignal = closeMenuState.value,
@@ -1121,10 +1100,8 @@ private fun PlayerUi(
     openOptionsSignal: Int = 0,
     closeOptionsSignal: Int = 0,
     optionsNavIndex: Int = 0,
-    optionsPage: Int = 0,
-    sleepMinutes: Int = 0,
     sleepDeadline: Long = 0,
-    onOptionsSelect: (Int, Int) -> Unit = { _, _ -> },
+    onOptionsSelect: (Int) -> Unit = {},
     controlNavIndex: Int = 0,
     trackNavIndex: Int = 0,
     closeMenuSignal: Int = 0,
@@ -1981,16 +1958,9 @@ private fun PlayerUi(
             }
         }
 
-        // Moznosti (Zvuk / Titulky / Casovac uspatia) — vertikalne, navigacia z Activity
+        // Vyber dlzky casovaca uspatia — vertikalne, navigacia z Activity
         if (showOptions) {
-            val sleepLabel = if (sleepMinutes > 0)
-                "\u23F2  ${stringResource(R.string.sleep_timer)}: $sleepMinutes min"
-            else "\u23F2  ${stringResource(R.string.sleep_timer)}"
-            val opts = if (optionsPage == 0) listOf(
-                "\uD83D\uDD0A  Zvuk (jazyk)",
-                "\uD83D\uDCAC  Titulky",
-                sleepLabel
-            ) else listOf(
+            val opts = listOf(
                 stringResource(R.string.sleep_off),
                 "15 min", "30 min", "45 min", "60 min", "90 min"
             )
@@ -2012,7 +1982,7 @@ private fun PlayerUi(
                         .padding(8.dp)
                 ) {
                     Text(
-                        if (optionsPage == 0) "Možnosti" else stringResource(R.string.sleep_timer),
+                        stringResource(R.string.sleep_timer),
                         color = Color.White,
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(12.dp)
@@ -2024,7 +1994,7 @@ private fun PlayerUi(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (sel) Color(0x553B82F6) else Color.Transparent)
-                                .clickable { onOptionsSelect(optionsPage, idx) }
+                                .clickable { onOptionsSelect(idx) }
                                 .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
