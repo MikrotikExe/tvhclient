@@ -23,7 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Dvr
+import androidx.compose.material.icons.automirrored.filled.Dvr
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -267,7 +267,7 @@ fun AppMain() {
                     selected = tab == 2,
                     onClick = { guardLeave { resetDvr++; tab = 2 } },
                     icon = { androidx.compose.material3.Icon(
-                        Icons.Default.Dvr, contentDescription = null) },
+                        Icons.AutoMirrored.Filled.Dvr, contentDescription = null) },
                     label = { TabLabel(yellow, stringResource(R.string.tab_dvr)) }
                 )
                 NavigationBarItem(

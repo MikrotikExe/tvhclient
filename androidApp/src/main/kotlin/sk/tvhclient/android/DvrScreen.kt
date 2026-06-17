@@ -25,7 +25,7 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.focusGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.filled.Movie
@@ -92,7 +92,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
     }
 
     // Po navrate z prehravaca obnov priznaky sledovania (hviezdicka/pozicia)
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var progressTick by remember { mutableStateOf(0) }
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
@@ -177,7 +177,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
                 androidx.compose.material3.IconButton(onClick = { viewMenu = true }) {
                     androidx.compose.material3.Icon(
                         when (viewMode) {
-                            ChannelViewMode.LIST -> Icons.Default.ViewList
+                            ChannelViewMode.LIST -> Icons.AutoMirrored.Filled.ViewList
                             ChannelViewMode.GRID -> Icons.Default.GridView
                             ChannelViewMode.TILES -> Icons.Default.ViewModule
                         },
@@ -187,7 +187,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
                 androidx.compose.material3.DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(stringResource(R.string.view_list)) },
-                        leadingIcon = { androidx.compose.material3.Icon(Icons.Default.ViewList, null) },
+                        leadingIcon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.ViewList, null) },
                         onClick = { viewMode = ChannelViewMode.LIST; DvrViewPref.set(context, viewMode); viewMenu = false }
                     )
                     androidx.compose.material3.DropdownMenuItem(

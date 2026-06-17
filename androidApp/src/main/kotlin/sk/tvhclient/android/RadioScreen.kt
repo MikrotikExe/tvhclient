@@ -22,7 +22,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.DropdownMenu
@@ -99,7 +99,7 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
                 IconButton(onClick = { viewMenu = true }) {
                     Icon(
                         when (viewMode) {
-                            ChannelViewMode.LIST -> Icons.Default.ViewList
+                            ChannelViewMode.LIST -> Icons.AutoMirrored.Filled.ViewList
                             ChannelViewMode.GRID -> Icons.Default.GridView
                             ChannelViewMode.TILES -> Icons.Default.ViewModule
                         },
@@ -109,7 +109,7 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
                 DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.view_list)) },
-                        leadingIcon = { Icon(Icons.Default.ViewList, null) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ViewList, null) },
                         onClick = { viewMode = ChannelViewMode.LIST; RadioViewPref.set(context, viewMode); viewMenu = false }
                     )
                     DropdownMenuItem(

@@ -12,7 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.CalendarViewDay
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -91,7 +91,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
     // pri navrate do prehravaca nechame mriezku zobrazenu (nech neblikne zoznam)
     // a skryjeme ju az ked sa MainActivity vrati na popredie (po zatvoreni prehravaca)
     var pendingGridDismiss by remember { mutableStateOf(false) }
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
             if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME && pendingGridDismiss) {
@@ -245,7 +245,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                 androidx.compose.material3.IconButton(onClick = { viewMenu = true }) {
                     androidx.compose.material3.Icon(
                         when (viewMode) {
-                            ChannelViewMode.LIST -> Icons.Default.ViewList
+                            ChannelViewMode.LIST -> Icons.AutoMirrored.Filled.ViewList
                             ChannelViewMode.GRID -> Icons.Default.GridView
                             ChannelViewMode.TILES -> Icons.Default.ViewModule
                         },
@@ -258,7 +258,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                 ) {
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(stringResource(R.string.view_list)) },
-                        leadingIcon = { androidx.compose.material3.Icon(Icons.Default.ViewList, null) },
+                        leadingIcon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.ViewList, null) },
                         onClick = { vm.setViewMode(ChannelViewMode.LIST); viewMenu = false }
                     )
                     androidx.compose.material3.DropdownMenuItem(
