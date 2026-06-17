@@ -1377,20 +1377,23 @@ private fun PlayerUi(
                                 onClick = { showInfo = !showInfo }
                             )
                             "audio" -> if (portrait) CircleButton(
-                                label = "\uD83D\uDD0A", selected = selCtrl == "audio", scale = bk
-                            ) { menu = if (menu == "audio") null else "audio" }
+                                label = "\uD83D\uDD0A", selected = selCtrl == "audio", scale = bk,
+                                onClick = { menu = if (menu == "audio") null else "audio" }
+                            )
                             else TextChip("\uD83D\uDD0A Audio", selected = selCtrl == "audio", scale = bk) {
                                 menu = if (menu == "audio") null else "audio"
                             }
                             "subs" -> if (portrait) CircleButton(
-                                label = "\uD83D\uDCAC", selected = selCtrl == "subs", scale = bk
-                            ) { menu = if (menu == "spu") null else "spu" }
+                                label = "\uD83D\uDCAC", selected = selCtrl == "subs", scale = bk,
+                                onClick = { menu = if (menu == "spu") null else "spu" }
+                            )
                             else TextChip("\uD83D\uDCAC Titulky", selected = selCtrl == "subs", scale = bk) {
                                 menu = if (menu == "spu") null else "spu"
                             }
                             "sw" -> if (portrait) CircleButton(
-                                label = "\u2699", selected = selCtrl == "sw", active = softwareDecode, scale = bk
-                            ) { onToggleSoftwareDecode() }
+                                label = "\u2699", selected = selCtrl == "sw", active = softwareDecode, scale = bk,
+                                onClick = { onToggleSoftwareDecode() }
+                            )
                             else TextChip(
                                 if (softwareDecode) "\u2699 SW dek\u00f3d: ZAP" else "\u2699 SW dek\u00f3d: VYP",
                                 selected = selCtrl == "sw", scale = bk
