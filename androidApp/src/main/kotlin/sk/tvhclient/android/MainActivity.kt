@@ -216,12 +216,6 @@ fun WelcomeScreen(vm: ServersViewModel) {
             fontWeight = FontWeight.Bold,
             color = Color.White
         )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            stringResource(R.string.welcome_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFB6B2C2)
-        )
         Spacer(Modifier.height(36.dp))
 
         OutlinedTextField(
