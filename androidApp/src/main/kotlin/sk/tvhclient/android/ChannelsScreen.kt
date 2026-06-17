@@ -1,5 +1,6 @@
 package sk.tvhclient.android
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -87,6 +88,20 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
         )
     }
     val showGrid = epgSignal > epgDismissedGen
+    // pri navrate do prehravaca nechame mriezku zobrazenu (nech neblikne zoznam)
+    // a skryjeme ju az ked sa MainActivity vrati na popredie (po zatvoreni prehravaca)
+    var pendingGridDismiss by remember { mutableStateOf(false) }
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME && pendingGridDismiss) {
+                epgDismissedGen = epgSignal
+                pendingGridDismiss = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
     // Zdielany DvrViewModel — vieme ktore kanaly sa prave nahravaju
     val dvrVm: DvrViewModel = viewModel()
     val dvrState by dvrVm.state.collectAsState()
@@ -172,7 +187,6 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                 rows = st0.allRows,
                 seed = epgMap,
                 onBack = {
-                    epgDismissedGen = epgSignal
                     if (TabController.epgFromPlayer) {
                         val uuid = TabController.epgReturnUuid
                         TabController.epgFromPlayer = false
@@ -184,8 +198,14 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                                 putExtra(PlayerActivity.EXTRA_UUID, uuid)
                                 putExtra(PlayerActivity.EXTRA_TITLE, title)
                             }
+                            // mriezku necham zobrazenu, skryje sa az po navrate z prehravaca
+                            pendingGridDismiss = true
                             runCatching { ctx.startActivity(pi) }
+                        } else {
+                            epgDismissedGen = epgSignal
                         }
+                    } else {
+                        epgDismissedGen = epgSignal
                     }
                 }
             )
