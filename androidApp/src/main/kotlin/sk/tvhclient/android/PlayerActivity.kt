@@ -1890,7 +1890,14 @@ private fun PlayerUi(
             // efektivny vyber: pri D-pad navigacii navIndex, inak aktualny kanal
             val sel = if (channelNavIndex >= 0) channelNavIndex else liveCurrentIndex
             LaunchedEffect(channelNavIndex) {
-                if (channelNavIndex in liveChannels.indices) listState.animateScrollToItem(channelNavIndex)
+                val i = channelNavIndex
+                if (i in liveChannels.indices) {
+                    val vis = listState.layoutInfo.visibleItemsInfo
+                    val first = vis.firstOrNull()?.index ?: 0
+                    val last = vis.lastOrNull()?.index ?: 0
+                    // skoc len ked je ciel mimo obrazovky — okamzite, bez pretacania cez vsetky polozky
+                    if (vis.isEmpty() || i < first || i > last) listState.scrollToItem(i)
+                }
             }
             Row(Modifier.fillMaxSize()) {
                 Column(
@@ -1932,8 +1939,11 @@ private fun PlayerUi(
                                     modifier = Modifier.width(34.dp)
                                 )
                                 if (ch.piconUrl != null) {
+                                    val req = remember(ch.piconUrl) {
+                                        ImageRequest.Builder(ctx).data(ch.piconUrl).size(120).build()
+                                    }
                                     AsyncImage(
-                                        model = ImageRequest.Builder(ctx).data(ch.piconUrl).build(),
+                                        model = req,
                                         contentDescription = null,
                                         imageLoader = loader,
                                         modifier = Modifier.size(40.dp)
