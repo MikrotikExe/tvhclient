@@ -1335,15 +1335,6 @@ private fun PlayerUi(
                                 modifier = Modifier.size(side * 0.42f)
                             )
                         }
-                        if (title.isNotBlank()) {
-                            Spacer(Modifier.height(side * 0.06f))
-                            Text(
-                                title,
-                                color = Color.White,
-                                fontSize = (side.value * 0.08f).coerceIn(14f, 28f).sp,
-                                maxLines = 1
-                            )
-                        }
                     }
                 }
             }
