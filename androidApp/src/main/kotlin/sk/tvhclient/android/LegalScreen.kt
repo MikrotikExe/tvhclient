@@ -1,12 +1,17 @@
 package sk.tvhclient.android
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -14,13 +19,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /** Jednoduchy zobrazitelny pravny dokument (nadpis + uvod + sekcie). */
 data class LegalDoc(
@@ -41,40 +49,71 @@ internal fun LegalScreen(doc: LegalDoc, modifier: Modifier = Modifier, onBack: (
     val scroll = rememberScrollState()
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
-    Column(
-        modifier
-            .fillMaxSize()
-            .focusRequester(fr)
-            .focusable()
-            .onPreviewKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (e.nativeKeyEvent.keyCode) {
-                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> { scroll.dispatchRawDelta(220f); true }
-                    android.view.KeyEvent.KEYCODE_DPAD_UP -> { scroll.dispatchRawDelta(-220f); true }
-                    android.view.KeyEvent.KEYCODE_PAGE_DOWN -> { scroll.dispatchRawDelta(700f); true }
-                    android.view.KeyEvent.KEYCODE_PAGE_UP -> { scroll.dispatchRawDelta(-700f); true }
-                    else -> false
+    Box(modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxHeight()
+                .widthIn(max = 680.dp)
+                .fillMaxWidth()
+                .focusRequester(fr)
+                .focusable()
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (e.nativeKeyEvent.keyCode) {
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> { scroll.dispatchRawDelta(220f); true }
+                        android.view.KeyEvent.KEYCODE_DPAD_UP -> { scroll.dispatchRawDelta(-220f); true }
+                        android.view.KeyEvent.KEYCODE_PAGE_DOWN -> { scroll.dispatchRawDelta(700f); true }
+                        android.view.KeyEvent.KEYCODE_PAGE_UP -> { scroll.dispatchRawDelta(-700f); true }
+                        else -> false
+                    }
                 }
-            }
-            .verticalScroll(scroll)
-            .padding(16.dp)
-    ) {
-        Text(doc.title, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            doc.meta,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(doc.intro, style = MaterialTheme.typography.bodyMedium)
-        doc.sections.forEach { (heading, body) ->
+                .verticalScroll(scroll)
+                .padding(horizontal = 24.dp, vertical = 20.dp)
+        ) {
+            Text(
+                doc.title,
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                doc.meta,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(Modifier.height(18.dp))
-            Text(heading, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(6.dp))
-            Text(body, style = MaterialTheme.typography.bodyMedium)
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                doc.intro,
+                style = MaterialTheme.typography.bodyMedium,
+                lineHeight = 22.sp
+            )
+            doc.sections.forEach { (heading, body) ->
+                Spacer(Modifier.height(22.dp))
+                Text(
+                    heading,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 22.sp
+                )
+            }
+            Spacer(Modifier.height(40.dp))
         }
-        Spacer(Modifier.height(32.dp))
     }
 }
 

@@ -402,7 +402,7 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
     var legalDoc by remember { mutableStateOf<LegalDoc?>(null) }
 
     LaunchedEffect(resetSignal) {
-        if (resetSignal > 0) { section = null; TabController.settingsDirty.value = false }
+        if (resetSignal > 0) { legalDoc = null; section = null; TabController.settingsDirty.value = false }
     }
     // pri kazdej zmene sekcie zacni s "ciste" (zmeny oznaci az uzivatelska akcia)
     LaunchedEffect(section) { TabController.settingsDirty.value = false }
