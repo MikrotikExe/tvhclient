@@ -6,6 +6,9 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -327,6 +330,65 @@ fun WelcomeScreen(vm: ServersViewModel) {
                 options = ChannelPrefs.profileOptions.map { it.first }.filter { it.isNotBlank() },
                 optionLabel = { it }
             ) { profile = it }
+            Spacer(Modifier.height(8.dp))
+            // skryta moznost: obnova nastaveni zo zalohy
+            BackupControls(compact = true)
+        }
+    }
+}
+
+private fun restartApp(ctx: android.content.Context) {
+    val i = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
+    i?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { ctx.startActivity(i) }
+    if (ctx is android.app.Activity) ctx.finish()
+    Runtime.getRuntime().exit(0)
+}
+
+@Composable
+fun BackupControls(compact: Boolean = false) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            val ok = runCatching {
+                ctx.contentResolver.openOutputStream(uri)?.use { it.write(Backup.export(ctx).toByteArray()) }
+            }.isSuccess
+            Toast.makeText(
+                ctx, ctx.getString(if (ok) R.string.backup_exported else R.string.backup_failed),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val text = runCatching {
+                ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            val ok = text != null && Backup.import(ctx, text)
+            Toast.makeText(
+                ctx, ctx.getString(if (ok) R.string.backup_imported else R.string.backup_failed),
+                Toast.LENGTH_LONG
+            ).show()
+            if (ok) restartApp(ctx)
+        }
+    }
+    if (compact) {
+        // skryta moznost pri prihlaseni: len obnova
+        androidx.compose.material3.TextButton(
+            onClick = { runCatching { importLauncher.launch(arrayOf("*/*")) } }
+        ) { Text(stringResource(R.string.backup_restore)) }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { runCatching { exportLauncher.launch("tvhclient-zaloha.json") } }) {
+                Text(stringResource(R.string.backup_export))
+            }
+            OutlinedButton(onClick = { runCatching { importLauncher.launch(arrayOf("*/*")) } }) {
+                Text(stringResource(R.string.backup_import))
+            }
         }
     }
 }
@@ -529,6 +591,12 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                     }
                 }
             )
+            Spacer(Modifier.height(16.dp))
+
+            // Zaloha / obnova dat (export/import nastaveni)
+            Text(stringResource(R.string.backup_section), style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            BackupControls()
             Spacer(Modifier.height(16.dp))
 
             // Predvolene audio stopy (priorita 1-3)

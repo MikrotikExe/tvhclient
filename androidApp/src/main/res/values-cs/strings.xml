@@ -209,4 +209,11 @@
     <string name="autostart_open_settings">Oprávnění aplikace (systémová nastavení)</string>
     <string name="autostart_battery">Povolit běh na pozadí (baterie)</string>
     <string name="autostart_overlay">Povolit zobrazení přes ostatní aplikace</string>
+    <string name="backup_section">Záloha / obnova</string>
+    <string name="backup_export">Zálohovat data</string>
+    <string name="backup_import">Obnovit data</string>
+    <string name="backup_restore">Obnovit ze zálohy</string>
+    <string name="backup_exported">Záloha uložena</string>
+    <string name="backup_imported">Obnoveno, restartuji…</string>
+    <string name="backup_failed">Operace selhala</string>
 </resources>

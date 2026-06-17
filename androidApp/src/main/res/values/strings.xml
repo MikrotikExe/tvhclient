@@ -209,4 +209,11 @@
     <string name="autostart_open_settings">App permissions (system settings)</string>
     <string name="autostart_battery">Allow background run (battery)</string>
     <string name="autostart_overlay">Allow display over other apps</string>
+    <string name="backup_section">Backup / restore</string>
+    <string name="backup_export">Back up data</string>
+    <string name="backup_import">Restore data</string>
+    <string name="backup_restore">Restore from backup</string>
+    <string name="backup_exported">Backup saved</string>
+    <string name="backup_imported">Restored, restarting…</string>
+    <string name="backup_failed">Operation failed</string>
 </resources>
