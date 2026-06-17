@@ -1,6 +1,7 @@
 package sk.tvhclient.android
 
 import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -16,7 +17,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -28,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -54,6 +68,8 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
     var favTick by remember { mutableStateOf(0) }
     var lockTick by remember { mutableStateOf(0) }
     var hiddenTick by remember { mutableStateOf(0) }
+    var viewMode by remember { mutableStateOf(RadioViewPref.get(context)) }
+    var viewMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { vm.load() }
 
@@ -69,13 +85,47 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
     }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { vm.setQuery(it) },
-            label = { Text(stringResource(R.string.search_channels)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { vm.setQuery(it) },
+                label = { Text(stringResource(R.string.search_channels)) },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = { vm.load() }) {
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.retry))
+            }
+            Box {
+                IconButton(onClick = { viewMenu = true }) {
+                    Icon(
+                        when (viewMode) {
+                            ChannelViewMode.LIST -> Icons.Default.ViewList
+                            ChannelViewMode.GRID -> Icons.Default.GridView
+                            ChannelViewMode.TILES -> Icons.Default.ViewModule
+                        },
+                        contentDescription = null
+                    )
+                }
+                DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.view_list)) },
+                        leadingIcon = { Icon(Icons.Default.ViewList, null) },
+                        onClick = { viewMode = ChannelViewMode.LIST; RadioViewPref.set(context, viewMode); viewMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.view_grid)) },
+                        leadingIcon = { Icon(Icons.Default.GridView, null) },
+                        onClick = { viewMode = ChannelViewMode.GRID; RadioViewPref.set(context, viewMode); viewMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.view_tiles)) },
+                        leadingIcon = { Icon(Icons.Default.ViewModule, null) },
+                        onClick = { viewMode = ChannelViewMode.TILES; RadioViewPref.set(context, viewMode); viewMenu = false }
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         Box(Modifier.fillMaxSize()) {
@@ -101,9 +151,22 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
                     if (rows.isEmpty()) {
                         Text(stringResource(R.string.radio_empty), Modifier.align(Alignment.Center))
                     } else {
-                        LazyColumn(Modifier.fillMaxSize()) {
-                            items(rows, key = { it.channel.uuid }) { row ->
-                                RadioRow(row, loader, context, onContext = { contextRow = it })
+                        when (viewMode) {
+                            ChannelViewMode.LIST -> LazyColumn(Modifier.fillMaxSize()) {
+                                items(rows, key = { it.channel.uuid }) { row ->
+                                    RadioRow(row, loader, context, onContext = { contextRow = it })
+                                }
+                            }
+                            ChannelViewMode.GRID, ChannelViewMode.TILES -> {
+                                val cols = if (viewMode == ChannelViewMode.GRID) 2 else 4
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(cols),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    gridItems(rows, key = { it.channel.uuid }) { row ->
+                                        RadioTile(row, loader, context, onContext = { contextRow = it })
+                                    }
+                                }
                             }
                         }
                     }
@@ -209,5 +272,83 @@ private fun RadioRow(
             Text(row.channel.name, style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        // Sipka -> otvori menu
+        Text(
+            "\u203A",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .clickable { onContext(row) }
+                .padding(horizontal = 14.dp, vertical = 4.dp)
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RadioTile(
+    row: ChannelRow,
+    loader: coil.ImageLoader,
+    context: android.content.Context,
+    onContext: (ChannelRow) -> Unit
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {
+                    val server = Tvh.store.active() ?: return@combinedClickable
+                    val prof = ChannelPrefs.getProfile(context, server.id, row.channel.uuid)
+                        .ifBlank { server.profile.ifBlank { "pass" } }
+                    val url = Tvh.liveUrl(server, row.channel.uuid, row.channel.name, prof)
+                    val intent = Intent(context, PlayerActivity::class.java).apply {
+                        putExtra(PlayerActivity.EXTRA_URL, url)
+                        putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
+                    }
+                    context.startActivity(intent)
+                },
+                onLongClick = { onContext(row) }
+            )
+            .padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.fillMaxWidth().height(56.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                .background(androidx.compose.ui.graphics.Color(0x22FFFFFF)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (row.piconUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context).data(row.piconUrl).build(),
+                    contentDescription = row.channel.name,
+                    imageLoader = loader,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(4.dp)
+                )
+            } else {
+                Text("\uD83D\uDCFB")
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            row.channel.name,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+object RadioViewPref {
+    private const val KEY = "radio_view_mode"
+    fun get(c: android.content.Context): ChannelViewMode {
+        val v = c.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+            .getString(KEY, null) ?: return ChannelViewMode.LIST
+        return runCatching { ChannelViewMode.valueOf(v) }.getOrDefault(ChannelViewMode.LIST)
+    }
+    fun set(c: android.content.Context, mode: ChannelViewMode) {
+        c.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().putString(KEY, mode.name).apply()
     }
 }
