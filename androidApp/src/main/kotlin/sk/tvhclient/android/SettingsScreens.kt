@@ -177,6 +177,24 @@ internal fun ParentalSettings(ctx: android.content.Context) {
         )
     }
 
+    // Sposob zadavania PIN
+    Spacer(Modifier.height(16.dp))
+    var pinInput by remember { mutableStateOf(ParentalLock.pinInput(ctx)) }
+    DropdownField(
+        label = stringResource(R.string.plock_pin_input_title),
+        value = pinInput,
+        options = listOf("picker", "keyboard"),
+        optionLabel = { v ->
+            if (v == "keyboard") stringResource(R.string.plock_pin_input_keyboard)
+            else stringResource(R.string.plock_pin_input_picker)
+        },
+        onSelect = { v ->
+            pinInput = v
+            ParentalLock.setPinInput(ctx, v)
+            TabController.settingsDirty.value = true
+        }
+    )
+
     // Okno po odomknuti (kym sa PIN znovu nepyta)
     Spacer(Modifier.height(16.dp))
     val graceOpts = listOf("0", "5", "10", "30", "60", "120")

@@ -19,6 +19,7 @@ object ParentalLock {
     private const val KEY_GRACE_MIN = "plock_grace_min"      // okno po odomknuti (min); 0 = vzdy vyzadovat
     private const val KEY_PROTECT_CHANNELS = "plock_protect_channels"
     private const val KEY_PROTECT_SETTINGS = "plock_protect_settings"
+    private const val KEY_PIN_INPUT = "plock_pin_input"
     const val DEFAULT_GRACE_MIN = 5
 
     private fun p(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -39,6 +40,10 @@ object ParentalLock {
     fun setProtectChannels(c: Context, on: Boolean) = p(c).edit().putBoolean(KEY_PROTECT_CHANNELS, on).apply()
     fun protectSettings(c: Context) = p(c).getBoolean(KEY_PROTECT_SETTINGS, true)
     fun setProtectSettings(c: Context, on: Boolean) = p(c).edit().putBoolean(KEY_PROTECT_SETTINGS, on).apply()
+
+    // Sposob zadavania PIN: "picker" (mriezka) alebo "keyboard" (systemova klavesnica)
+    fun pinInput(c: Context): String = p(c).getString(KEY_PIN_INPUT, "picker") ?: "picker"
+    fun setPinInput(c: Context, mode: String) = p(c).edit().putString(KEY_PIN_INPUT, mode).apply()
 
     fun lockedSet(c: Context, serverId: String?): Set<String> {
         if (serverId == null) return emptySet()

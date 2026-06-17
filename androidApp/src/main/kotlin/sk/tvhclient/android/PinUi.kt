@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +36,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 
@@ -44,6 +50,20 @@ import androidx.compose.ui.window.Dialog
  */
 @Composable
 fun PinDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    onComplete: (String) -> Boolean
+) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    if (ParentalLock.pinInput(ctx) == "keyboard") {
+        PinDialogKeyboard(title, onDismiss, onComplete)
+    } else {
+        PinDialogGrid(title, onDismiss, onComplete)
+    }
+}
+
+@Composable
+private fun PinDialogGrid(
     title: String,
     onDismiss: () -> Unit,
     onComplete: (String) -> Boolean
@@ -161,6 +181,54 @@ fun PinDialog(
                         }
                     }
                     Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PinDialogKeyboard(
+    title: String,
+    onDismiss: () -> Unit,
+    onComplete: (String) -> Boolean
+) {
+    var entered by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+    val fr = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
+
+    fun submit() {
+        if (entered.length == 4 && !onComplete(entered)) { error = true; entered = "" }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 6.dp) {
+            Column(
+                Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = entered,
+                    onValueChange = { v ->
+                        entered = v.filter { it.isDigit() }.take(4)
+                        error = false
+                        if (entered.length == 4) submit()
+                    },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.NumberPassword,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    modifier = Modifier.focusRequester(fr)
+                )
+                if (error) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(R.string.plock_wrong), color = MaterialTheme.colorScheme.error)
                 }
             }
         }

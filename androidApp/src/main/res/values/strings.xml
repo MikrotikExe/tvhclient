@@ -229,4 +229,7 @@
     <string name="plock_scope_title">PIN required for</string>
     <string name="plock_scope_channels">Channels</string>
     <string name="plock_scope_settings">Settings</string>
+    <string name="plock_pin_input_title">PIN entry method</string>
+    <string name="plock_pin_input_picker">On-screen picker</string>
+    <string name="plock_pin_input_keyboard">Keyboard</string>
 </resources>

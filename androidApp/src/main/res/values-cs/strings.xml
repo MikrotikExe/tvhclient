@@ -229,4 +229,7 @@
     <string name="plock_scope_title">Vyžaduje se PIN kód pro</string>
     <string name="plock_scope_channels">Kanály</string>
     <string name="plock_scope_settings">Nastavení</string>
+    <string name="plock_pin_input_title">Způsob zadávání PIN</string>
+    <string name="plock_pin_input_picker">Mřížka na obrazovce</string>
+    <string name="plock_pin_input_keyboard">Klávesnice</string>
 </resources>
