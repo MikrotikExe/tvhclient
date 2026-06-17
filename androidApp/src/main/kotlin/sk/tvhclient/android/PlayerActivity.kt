@@ -16,7 +16,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -1654,7 +1653,7 @@ private fun PlayerUi(
                     }
                     Spacer(Modifier.height((6 * k).dp))
                     // Tlacidla: zavriet, zoznam, prev, play, next, audio, titulky, sw
-                    val bk = (0.78f * k)
+                    val bk = if (portrait) 0.6f else (0.78f * k)
                     fun has(id: String) = order.contains(id)
                     // jedno tlacidlo podla id (zachytava okolity stav)
                     @Composable
@@ -1712,15 +1711,13 @@ private fun PlayerUi(
                     }
                     val gap = Arrangement.spacedBy((8 * k).dp)
                     if (portrait) {
-                        // PORTRET: vsetky tlacidla v jednom vodorovne posuvnom rade (nic sa neoreze)
+                        // PORTRET: vsetky tlacidla v jednom vycentrovanom rade (zmensene, aby sa zmestili)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(
-                                (6 * k).dp, Alignment.CenterHorizontally
+                                3.dp, Alignment.CenterHorizontally
                             ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(androidx.compose.foundation.rememberScrollState())
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             barCtrl("close")
                             barCtrl("pip")
