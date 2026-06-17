@@ -86,6 +86,8 @@ object TabController {
     // INFO kláves -> detail vybranej relacie (v mriezke)
     val infoKey = mutableStateOf(0)
     fun pressInfo() { infoKey.value = infoKey.value + 1 }
+    // ci boli v aktualnej podsekcii nastaveni vykonane zmeny (kvoli potvrdeniu pri odchode)
+    val settingsDirty = mutableStateOf(false)
 }
 
 class MainActivity : ComponentActivity() {
@@ -410,9 +412,15 @@ fun AppMain() {
     // Reset signaly: klik na tab (aj uz vybrany) vrati danu obrazovku na zaciatok
     var resetCh by remember { mutableStateOf(0) }
     var resetDvr by remember { mutableStateOf(0) }
+    var resetSet by remember { mutableStateOf(0) }
     val navFocus = remember { FocusRequester() }
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     var showExit by remember { mutableStateOf(false) }
+    // odchod z nastaveni s neulozenymi/vykonanymi zmenami -> potvrdenie
+    var leaveConfirm by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun guardLeave(action: () -> Unit) {
+        if (tab == 3 && TabController.settingsDirty.value) leaveConfirm = action else action()
+    }
 
     // Farebne tlacidla na dialkovom (cez TabController) prepnu tab
     val reqTab by TabController.requested
@@ -447,7 +455,7 @@ fun AppMain() {
             NavigationBar {
                 NavigationBarItem(
                     selected = tab == 0,
-                    onClick = { resetCh++; tab = 0 },
+                    onClick = { guardLeave { resetCh++; tab = 0 } },
                     icon = { androidx.compose.material3.Icon(
                         Icons.Default.LiveTv, contentDescription = null) },
                     label = { TabLabel(red, stringResource(R.string.tab_channels)) },
@@ -455,21 +463,24 @@ fun AppMain() {
                 )
                 NavigationBarItem(
                     selected = tab == 1,
-                    onClick = { tab = 1 },
+                    onClick = { guardLeave { tab = 1 } },
                     icon = { androidx.compose.material3.Icon(
                         Icons.Default.Radio, contentDescription = null) },
                     label = { TabLabel(green, stringResource(R.string.tab_radio)) }
                 )
                 NavigationBarItem(
                     selected = tab == 2,
-                    onClick = { resetDvr++; tab = 2 },
+                    onClick = { guardLeave { resetDvr++; tab = 2 } },
                     icon = { androidx.compose.material3.Icon(
                         Icons.Default.Dvr, contentDescription = null) },
                     label = { TabLabel(yellow, stringResource(R.string.tab_dvr)) }
                 )
                 NavigationBarItem(
                     selected = tab == 3,
-                    onClick = { tab = 3 },
+                    onClick = {
+                        if (tab == 3) guardLeave { resetSet++ }   // re-tap: spat na koren nastaveni
+                        else tab = 3
+                    },
                     icon = { androidx.compose.material3.Icon(
                         Icons.Default.Dns, contentDescription = null) },
                     label = { TabLabel(blue, stringResource(R.string.tab_settings)) }
@@ -489,7 +500,7 @@ fun AppMain() {
                     val ctx = androidx.compose.ui.platform.LocalContext.current
                     var unlocked by remember { mutableStateOf(!ParentalLock.needsPin(ctx)) }
                     if (unlocked) {
-                        ServersTab()
+                        ServersTab(resetSignal = resetSet)
                     } else {
                         PinDialog(
                             title = stringResource(R.string.plock_unlock_settings),
@@ -504,6 +515,26 @@ fun AppMain() {
                 }
             }
         }
+    }
+
+    leaveConfirm?.let { action ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { leaveConfirm = null },
+            title = { Text(stringResource(R.string.set_leave_title)) },
+            text = { Text(stringResource(R.string.set_leave_msg)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    TabController.settingsDirty.value = false
+                    leaveConfirm = null
+                    action()
+                }) { Text(stringResource(R.string.set_leave_yes)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { leaveConfirm = null }) {
+                    Text(stringResource(R.string.set_leave_no))
+                }
+            }
+        )
     }
 
     if (showExit) {
@@ -526,9 +557,13 @@ fun AppMain() {
 }
 
 @Composable
-fun ServersTab(vm: ServersViewModel = viewModel()) {
+fun ServersTab(vm: ServersViewModel = viewModel(), resetSignal: Int = 0) {
     var editing by remember { mutableStateOf<TvhServer?>(null) }
     var showForm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(resetSignal) {
+        if (resetSignal > 0) { showForm = false; editing = null }
+    }
 
     if (showForm) {
         ServerForm(
@@ -543,6 +578,7 @@ fun ServersTab(vm: ServersViewModel = viewModel()) {
     } else {
         ServerList(
             vm = vm,
+            resetSignal = resetSignal,
             onAdd = { editing = null; showForm = true },
             onEdit = { editing = it; showForm = true }
         )
@@ -551,13 +587,21 @@ fun ServersTab(vm: ServersViewModel = viewModel()) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> Unit) {
+fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, onEdit: (TvhServer) -> Unit) {
     val servers by vm.servers.collectAsState()
     val activeId by vm.activeId.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var section by remember { mutableStateOf<String?>(null) }
 
-    BackHandler(enabled = section != null) { section = null }
+    LaunchedEffect(resetSignal) {
+        if (resetSignal > 0) { section = null; TabController.settingsDirty.value = false }
+    }
+    // pri kazdej zmene sekcie zacni s "ciste" (zmeny oznaci az uzivatelska akcia)
+    LaunchedEffect(section) { TabController.settingsDirty.value = false }
+
+    BackHandler(enabled = section != null) {
+        section = null; TabController.settingsDirty.value = false
+    }
 
     val title = when (section) {
         "general" -> stringResource(R.string.set_cat_general)
@@ -574,7 +618,9 @@ fun ServerList(vm: ServersViewModel, onAdd: () -> Unit, onEdit: (TvhServer) -> U
                 title = { Text(title) },
                 navigationIcon = {
                     if (section != null) {
-                        androidx.compose.material3.IconButton(onClick = { section = null }) {
+                        androidx.compose.material3.IconButton(onClick = {
+                            section = null; TabController.settingsDirty.value = false
+                        }) {
                             Text("\u2039", style = MaterialTheme.typography.headlineMedium)
                         }
                     }
@@ -670,6 +716,7 @@ private fun GeneralSettings(ctx: android.content.Context) {
             checked = autostart,
             onCheckedChange = { on ->
                 autostart = on; AutostartPref.setEnabled(ctx, on)
+                TabController.settingsDirty.value = true
                 if (on) requestOverlay()
             }
         )
@@ -682,6 +729,7 @@ private fun GeneralSettings(ctx: android.content.Context) {
             checked = autostartWake,
             onCheckedChange = { on ->
                 autostartWake = on; AutostartPref.setWakeEnabled(ctx, on)
+                TabController.settingsDirty.value = true
                 if (on) requestOverlay()
             }
         )
@@ -708,6 +756,7 @@ private fun PlaybackSettings(ctx: android.content.Context) {
         list[i] = code
         audio = list
         AudioPref.set(ctx, list)
+        TabController.settingsDirty.value = true
     }
     val audioLabels: @Composable (String) -> String = { code ->
         AudioPref.options.firstOrNull { it.first == code }?.second ?: "—"
@@ -730,6 +779,7 @@ private fun PlaylistSettings(ctx: android.content.Context) {
         Switch(
             checked = lockEnabled,
             onCheckedChange = { on ->
+                TabController.settingsDirty.value = true
                 if (on) {
                     if (ParentalLock.hasPin(ctx)) {
                         ParentalLock.setEnabled(ctx, true); lockEnabled = true

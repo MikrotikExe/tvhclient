@@ -223,4 +223,8 @@
     <string name="set_cat_info">Informácie</string>
     <string name="info_app_version">Verzia aplikácie</string>
     <string name="info_active_server">Aktívny server</string>
+    <string name="set_leave_title">Opustiť nastavenia?</string>
+    <string name="set_leave_msg">Vykonali ste zmeny. Naozaj chcete odísť?</string>
+    <string name="set_leave_yes">Odísť</string>
+    <string name="set_leave_no">Zostať</string>
 </resources>

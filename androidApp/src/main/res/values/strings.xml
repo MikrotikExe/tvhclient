@@ -223,4 +223,8 @@
     <string name="set_cat_info">Information</string>
     <string name="info_app_version">App version</string>
     <string name="info_active_server">Active server</string>
+    <string name="set_leave_title">Leave settings?</string>
+    <string name="set_leave_msg">You made changes. Do you really want to leave?</string>
+    <string name="set_leave_yes">Leave</string>
+    <string name="set_leave_no">Stay</string>
 </resources>
