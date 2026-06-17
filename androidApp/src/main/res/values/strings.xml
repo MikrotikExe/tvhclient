@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TVH Client</string>
-    <string name="servers_title">Servers</string>
     <string name="no_servers">No servers configured yet. Add your Tvheadend server.</string>
     <string name="add_server">Add server</string>
     <string name="edit_server">Edit server</string>
@@ -30,7 +29,6 @@
     <string name="no_active_server">No active server. Add one in the Servers tab.</string>
     <string name="playback_error">Playback failed: %1$s</string>
     <string name="field_profile">Stream profile</string>
-    <string name="show_epg">Show EPG</string>
     <string name="genre_film">Movie / Drama</string>
     <string name="genre_news">News</string>
     <string name="genre_show">Show / Entertainment</string>
@@ -45,9 +43,6 @@
     <string name="epg_age">Rating: %1$d+</string>
     <string name="tab_dvr">Archive</string>
     <string name="dvr_empty">No recordings.</string>
-    <string name="dvr_delete">Delete</string>
-    <string name="dvr_delete_confirm">Delete this recording?</string>
-    <string name="dvr_play">Play</string>
     <string name="cat_film">Movies</string>
     <string name="cat_serial">Series</string>
     <string name="cat_sport">Sport</string>
@@ -59,9 +54,6 @@
     <string name="cat_documentary">Documentaries</string>
     <string name="cat_hobby">Hobby</string>
     <string name="cat_other">Uncategorized</string>
-    <string name="epg_record">Record</string>
-    <string name="epg_record_done">Recording scheduled</string>
-    <string name="epg_record_fail">Failed to schedule recording</string>
     <string name="dvr_archive">Archive</string>
     <string name="dvr_by_channel">By channel</string>
     <string name="dvr_by_genre">By genre</string>
@@ -91,7 +83,6 @@
     <string name="sub_sp_zimne">Winter sports</string>
     <string name="sub_sp_vodne">Water sports</string>
     <string name="sub_sp_news">Sport news</string>
-    <string name="sub_sp_ine">Other</string>
     <string name="sub_nw_hlavne">Main news</string>
     <string name="sub_nw_politika">Politics / Debates</string>
     <string name="sub_nw_krimi">Crime news</string>
@@ -169,8 +160,6 @@
     <string name="ch_profile">Playback profile</string>
     <string name="ch_hide">Hide from player</string>
     <string name="ch_unhide">Show in player</string>
-    <string name="welcome_title">Welcome</string>
-    <string name="welcome_subtitle">Connect to your Tvheadend server to get started.</string>
     <string name="login_connect">Sign in</string>
     <string name="login_more_options">More options</string>
     <string name="tv_guide">TV Guide</string>
@@ -191,12 +180,10 @@
     <string name="plock_enter_new">Enter new PIN</string>
     <string name="plock_confirm">Confirm PIN</string>
     <string name="plock_enter">Enter PIN</string>
-    <string name="plock_mismatch">PIN does not match</string>
     <string name="plock_lock">Lock channel (PIN)</string>
     <string name="plock_unlock">Unlock channel (PIN)</string>
     <string name="plock_unlock_settings">Enter PIN to open settings</string>
     <string name="plock_hint">4 digits (0000-9999)</string>
-    <string name="plock_no_pin">Set a PIN first</string>
     <string name="tab_settings">Settings</string>
     <string name="exit_title">Exit</string>
     <string name="exit_msg">Really exit TVH Client?</string>
@@ -206,9 +193,6 @@
     <string name="autostart_enable">Start app after device boot</string>
     <string name="autostart_wake">Start app on wake from sleep</string>
     <string name="autostart_note">May not work on all devices</string>
-    <string name="autostart_open_settings">App permissions (system settings)</string>
-    <string name="autostart_battery">Allow background run (battery)</string>
-    <string name="autostart_overlay">Allow display over other apps</string>
     <string name="backup_section">Backup / restore</string>
     <string name="backup_export">Back up data</string>
     <string name="backup_import">Restore data</string>

@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -112,7 +111,6 @@ class PlayerActivity : ComponentActivity() {
 
     // D-pad / diaľkové: signál na zobrazenie ovládania, info pre seek a sw dekóder
     private val controlsPokeState = androidx.compose.runtime.mutableStateOf(0)
-    private val softwareDecodeState = androidx.compose.runtime.mutableStateOf(false)
     private val isPlayingState = androidx.compose.runtime.mutableStateOf(true)
     // D-pad navigacia zoznamu kanalov v prehravaci
     private val openChannelListState = androidx.compose.runtime.mutableStateOf(0)
@@ -132,7 +130,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun buildMedia(url: String): Media {
         val m = Media(libVlc, Uri.parse(url))
-        m.setHWDecoderEnabled(!DecoderPref.get(this), false)
+        m.setHWDecoderEnabled(true, false)
         // User-Agent: nech server vidi, ze sa pripaja TVH Client
         m.addOption(":http-user-agent=" + userAgent())
         return m
@@ -169,23 +167,6 @@ class PlayerActivity : ComponentActivity() {
         val curMs = (mediaPlayer.position.coerceIn(0f, 1f) * dur).toLong()
         val targetMs = (curMs + deltaMs).coerceIn(0, dur)
         mediaPlayer.position = (targetMs.toFloat() / dur).coerceIn(0f, 1f)
-    }
-
-    /** Znovu spusti aktualny stream (po zmene dekodera). */
-    private fun restartPlayback() {
-        val url = currentStreamUrl ?: return
-        if (!::mediaPlayer.isInitialized) return
-        val m = buildMedia(url)
-        mediaPlayer.media = m
-        m.release()
-        mediaPlayer.play()
-    }
-
-    private fun toggleSoftwareDecodeRemote() {
-        val newVal = !DecoderPref.get(this)
-        DecoderPref.set(this, newVal)
-        softwareDecodeState.value = newVal
-        restartPlayback()
     }
 
     /** Obnovi now/next pre vsetky kanaly v zozname (kym je otvoreny). */
@@ -414,7 +395,6 @@ class PlayerActivity : ComponentActivity() {
             "epg" -> openEpgInApp()
             "pip" -> enterPipIfPossible()
             "info" -> { toggleInfo(); pokeControls() }
-            "sw" -> { toggleSoftwareDecodeRemote(); pokeControls() }
         }
     }
 
@@ -488,16 +468,15 @@ class PlayerActivity : ComponentActivity() {
             if (down) {
                 when (kc) {
                     android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                        { optionsNavState.value = (optionsNavState.value + 2) % 3; return true }
+                        { optionsNavState.value = (optionsNavState.value + 1) % 2; return true }
                     android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                        { optionsNavState.value = (optionsNavState.value + 1) % 3; return true }
+                        { optionsNavState.value = (optionsNavState.value + 1) % 2; return true }
                     android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                     android.view.KeyEvent.KEYCODE_ENTER,
                     android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                         when (optionsNavState.value) {
                             0 -> { closeOptions(); openAudioMenuState.value = openAudioMenuState.value + 1 }
                             1 -> { closeOptions(); openSpuMenuState.value = openSpuMenuState.value + 1 }
-                            2 -> toggleSoftwareDecodeRemote()
                         }
                         return true
                     }
@@ -785,7 +764,6 @@ class PlayerActivity : ComponentActivity() {
         // predvolene zvyraznenie ovladacieho panela = play (nie krizik)
         controlNavState.value = playerControlOrder(canZap, seekablePlayback).indexOf("play").coerceAtLeast(0)
         currentStreamUrl = streamUrl
-        softwareDecodeState.value = DecoderPref.get(this)
 
         setContent {
             PlayerUi(
@@ -823,8 +801,6 @@ class PlayerActivity : ComponentActivity() {
                 centerLogoUrl = liveChannelsState.value.getOrNull(liveIndexState.value)?.piconUrl,
                 onOpenEpg = { openEpgInApp() },
                 onEnterPip = { enterPipIfPossible() },
-                softwareDecode = softwareDecodeState.value,
-                onToggleSoftwareDecode = { toggleSoftwareDecodeRemote() },
                 playing = isPlayingState.value,
                 channelNavIndex = navChannelIndexState.value,
                 openListSignal = openChannelListState.value,
@@ -1023,8 +999,6 @@ private fun PlayerUi(
     centerLogoUrl: String? = null,
     onOpenEpg: () -> Unit = {},
     onEnterPip: () -> Unit = {},
-    softwareDecode: Boolean = false,
-    onToggleSoftwareDecode: () -> Unit = {},
     playing: Boolean = true,
     channelNavIndex: Int = -1,
     openListSignal: Int = 0,
@@ -1777,8 +1751,7 @@ private fun PlayerUi(
         if (showOptions) {
             val opts = listOf(
                 "\uD83D\uDD0A  Zvuk (jazyk)",
-                "\uD83D\uDCAC  Titulky",
-                if (softwareDecode) "\u2699  SW dekódovanie: ZAP" else "\u2699  SW dekódovanie: VYP"
+                "\uD83D\uDCAC  Titulky"
             )
             Box(
                 Modifier
@@ -1814,7 +1787,6 @@ private fun PlayerUi(
                                     when (idx) {
                                         0 -> { showOptions = false; menu = "audio" }
                                         1 -> { showOptions = false; menu = "spu" }
-                                        else -> onToggleSoftwareDecode()
                                     }
                                 }
                                 .padding(horizontal = 16.dp, vertical = 14.dp),

@@ -26,8 +26,6 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewModule
@@ -252,7 +250,7 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
                         Text(stringResource(R.string.dvr_empty), Modifier.align(Alignment.Center))
                     } else {
                         androidx.compose.runtime.key(corpusReady, imdbTick) {
-                            DvrContent(s.entries, s.channelOrder, s.channelPicons, nav, context, progressTick, viewMode = viewMode, onReload = { vm.refresh() }, onNav = { nav = it })
+                            DvrContent(s.entries, s.channelOrder, s.channelPicons, nav, context, progressTick, viewMode = viewMode, onNav = { nav = it })
                         }
                     }
                 }
@@ -270,7 +268,6 @@ private fun DvrContent(
     context: Context,
     progressTick: Int,
     viewMode: ChannelViewMode = ChannelViewMode.LIST,
-    onReload: () -> Unit,
     onNav: (DvrNav) -> Unit
 ) {
     val server = remember { Tvh.store.active() }
@@ -695,27 +692,6 @@ private fun Header(text: String) {
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold
     )
-}
-
-@Composable
-private fun HeaderWithAction(text: String, onReload: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(start = 12.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text,
-            Modifier.weight(1f).padding(vertical = 8.dp),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
-        androidx.compose.material3.IconButton(onClick = onReload) {
-            androidx.compose.material3.Icon(Icons.Default.Refresh, contentDescription = null)
-        }
-    }
 }
 
 @Composable

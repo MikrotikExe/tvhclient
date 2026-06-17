@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TVH Klient</string>
-    <string name="servers_title">Servery</string>
     <string name="no_servers">Zatím žádný server. Přidej svůj Tvheadend server.</string>
     <string name="add_server">Přidat server</string>
     <string name="edit_server">Upravit server</string>
@@ -30,7 +29,6 @@
     <string name="no_active_server">Žádný aktivní server. Přidej ho v záložce Servery.</string>
     <string name="playback_error">Přehrávání selhalo: %1$s</string>
     <string name="field_profile">Stream profil</string>
-    <string name="show_epg">Zobrazit EPG</string>
     <string name="genre_film">Film / Drama</string>
     <string name="genre_news">Zpravodajství</string>
     <string name="genre_show">Show / Zábava</string>
@@ -45,9 +43,6 @@
     <string name="epg_age">Přístupnost: %1$d+</string>
     <string name="tab_dvr">Archiv</string>
     <string name="dvr_empty">Žádné nahrávky.</string>
-    <string name="dvr_delete">Smazat</string>
-    <string name="dvr_delete_confirm">Smazat tuto nahrávku?</string>
-    <string name="dvr_play">Přehrát</string>
     <string name="cat_film">Filmy</string>
     <string name="cat_serial">Seriály</string>
     <string name="cat_sport">Sport</string>
@@ -59,9 +54,6 @@
     <string name="cat_documentary">Dokumenty</string>
     <string name="cat_hobby">Hobby</string>
     <string name="cat_other">Nezařazené</string>
-    <string name="epg_record">Nahrát</string>
-    <string name="epg_record_done">Nahrávka naplánována</string>
-    <string name="epg_record_fail">Nahrávku se nepodařilo naplánovat</string>
     <string name="dvr_archive">Archiv</string>
     <string name="dvr_by_channel">Podle kanálů</string>
     <string name="dvr_by_genre">Podle žánru</string>
@@ -91,7 +83,6 @@
     <string name="sub_sp_zimne">Zimní sporty</string>
     <string name="sub_sp_vodne">Vodní sporty</string>
     <string name="sub_sp_news">Sportovní zprávy</string>
-    <string name="sub_sp_ine">Ostatní</string>
     <string name="sub_nw_hlavne">Hlavní zprávy</string>
     <string name="sub_nw_politika">Politika / Diskuse</string>
     <string name="sub_nw_krimi">Krimi zprávy</string>
@@ -169,8 +160,6 @@
     <string name="ch_profile">Profil přehrávání</string>
     <string name="ch_hide">Skrýt z přehrávače</string>
     <string name="ch_unhide">Zobrazit v přehrávači</string>
-    <string name="welcome_title">Vítejte</string>
-    <string name="welcome_subtitle">Připojte se ke svému Tvheadend serveru a můžete začít.</string>
     <string name="login_connect">Přihlásit se</string>
     <string name="login_more_options">Více možností</string>
     <string name="tv_guide">TV Program</string>
@@ -191,12 +180,10 @@
     <string name="plock_enter_new">Zadejte nový PIN</string>
     <string name="plock_confirm">Potvrďte PIN</string>
     <string name="plock_enter">Zadejte PIN</string>
-    <string name="plock_mismatch">PIN se neshoduje</string>
     <string name="plock_lock">Zamknout kanál (PIN)</string>
     <string name="plock_unlock">Odemknout kanál (PIN)</string>
     <string name="plock_unlock_settings">Zadejte PIN pro vstup do nastavení</string>
     <string name="plock_hint">4 číslice (0000-9999)</string>
-    <string name="plock_no_pin">Nejprve nastavte PIN</string>
     <string name="tab_settings">Nastavení</string>
     <string name="exit_title">Ukončit</string>
     <string name="exit_msg">Opravdu chcete ukončit TVH Client?</string>
@@ -206,9 +193,6 @@
     <string name="autostart_enable">Spustit aplikaci po zapnutí zařízení</string>
     <string name="autostart_wake">Automatické spuštění při probuzení z režimu spánku</string>
     <string name="autostart_note">Nemusí fungovat na všech zařízeních</string>
-    <string name="autostart_open_settings">Oprávnění aplikace (systémová nastavení)</string>
-    <string name="autostart_battery">Povolit běh na pozadí (baterie)</string>
-    <string name="autostart_overlay">Povolit zobrazení přes ostatní aplikace</string>
     <string name="backup_section">Záloha / obnova</string>
     <string name="backup_export">Zálohovat data</string>
     <string name="backup_import">Obnovit data</string>
