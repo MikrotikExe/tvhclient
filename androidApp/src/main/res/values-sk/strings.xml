@@ -227,4 +227,6 @@
     <string name="set_leave_msg">Vykonali ste zmeny. Naozaj chcete odísť?</string>
     <string name="set_leave_yes">Odísť</string>
     <string name="set_leave_no">Zostať</string>
+    <string name="pip_play">Prehrať</string>
+    <string name="pip_pause">Pauza</string>
 </resources>

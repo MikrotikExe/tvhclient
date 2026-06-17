@@ -227,4 +227,6 @@
     <string name="set_leave_msg">You made changes. Do you really want to leave?</string>
     <string name="set_leave_yes">Leave</string>
     <string name="set_leave_no">Stay</string>
+    <string name="pip_play">Play</string>
+    <string name="pip_pause">Pause</string>
 </resources>

@@ -87,6 +87,10 @@ class PlayerActivity : ComponentActivity() {
     // pre opatovne pripojenie videa po navrate z pozadia
     private var videoLayout: VLCVideoLayout? = null
     private var wasPlaying: Boolean = false
+    // Picture-in-Picture (obraz v obraze)
+    private val inPipState = androidx.compose.runtime.mutableStateOf(false)
+    private var pipReceiver: android.content.BroadcastReceiver? = null
+    private val PIP_ACTION = "sk.tvhclient.android.PIP_TOGGLE"
     private var liveServer: sk.tvhclient.shared.model.TvhServer? = null
     private val liveTitleState = androidx.compose.runtime.mutableStateOf("")
     private val liveUuidState = androidx.compose.runtime.mutableStateOf<String?>(null)
@@ -798,6 +802,7 @@ class PlayerActivity : ComponentActivity() {
                 },
                 controlsPoke = controlsPokeState.value,
                 infoPoke = infoPokeState.value,
+                inPip = inPipState.value,
                 onOpenEpg = { openEpgInApp() },
                 softwareDecode = softwareDecodeState.value,
                 onToggleSoftwareDecode = { toggleSoftwareDecodeRemote() },
@@ -842,6 +847,74 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    // ---- Picture-in-Picture ----
+    @androidx.annotation.RequiresApi(26)
+    private fun buildPipParams(): android.app.PictureInPictureParams {
+        val playing = ::mediaPlayer.isInitialized && mediaPlayer.isPlaying
+        val icon = android.graphics.drawable.Icon.createWithResource(
+            this,
+            if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+        )
+        val label = if (playing) getString(R.string.pip_pause) else getString(R.string.pip_play)
+        val pi = android.app.PendingIntent.getBroadcast(
+            this, 1,
+            android.content.Intent(PIP_ACTION).setPackage(packageName),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val action = android.app.RemoteAction(icon, label, label, pi)
+        return android.app.PictureInPictureParams.Builder()
+            .setActions(listOf(action))
+            .setAspectRatio(android.util.Rational(16, 9))
+            .build()
+    }
+
+    private fun enterPipIfPossible() {
+        if (android.os.Build.VERSION.SDK_INT >= 26 &&
+            packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
+            ::mediaPlayer.isInitialized
+        ) {
+            runCatching { enterPictureInPictureMode(buildPipParams()) }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Pri odchode z appky (Home) prejdi do PiP, ak sa prehrava
+        if (::mediaPlayer.isInitialized && mediaPlayer.isPlaying) enterPipIfPossible()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPipState.value = isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            if (pipReceiver == null) {
+                pipReceiver = object : android.content.BroadcastReceiver() {
+                    override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
+                        if (i?.action == PIP_ACTION) {
+                            togglePlayPause()
+                            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                                runCatching { setPictureInPictureParams(buildPipParams()) }
+                            }
+                        }
+                    }
+                }
+                val filter = android.content.IntentFilter(PIP_ACTION)
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    registerReceiver(pipReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    @Suppress("UnspecifiedRegisterReceiverFlag")
+                    registerReceiver(pipReceiver, filter)
+                }
+            }
+        } else {
+            pipReceiver?.let { runCatching { unregisterReceiver(it) } }
+            pipReceiver = null
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         // navrat z pozadia: znova pripoj video na surface a obnov prehravanie
@@ -853,6 +926,10 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onStop() {
         saveDvrProgress()
+        // v PiP rezime nechaj video bezat (PiP okno je stale viditelne)
+        if (android.os.Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode) {
+            super.onStop(); return
+        }
         wasPlaying = ::mediaPlayer.isInitialized && mediaPlayer.isPlaying
         super.onStop()
         if (::mediaPlayer.isInitialized) {
@@ -865,6 +942,8 @@ class PlayerActivity : ComponentActivity() {
     override fun onDestroy() {
         saveDvrProgress()
         super.onDestroy()
+        pipReceiver?.let { runCatching { unregisterReceiver(it) } }
+        pipReceiver = null
         if (::mediaPlayer.isInitialized) {
             mediaPlayer.stop()
             mediaPlayer.detachViews()
@@ -923,6 +1002,7 @@ private fun PlayerUi(
     numberEntry: String = "",
     controlsPoke: Int = 0,
     infoPoke: Int = 0,
+    inPip: Boolean = false,
     onOpenEpg: () -> Unit = {},
     softwareDecode: Boolean = false,
     onToggleSoftwareDecode: () -> Unit = {},
@@ -970,6 +1050,13 @@ private fun PlayerUi(
     // INFO signal -> prepni okno s detailom relacie
     LaunchedEffect(infoPoke) {
         if (infoPoke > 0) showInfo = !showInfo
+    }
+    // v PiP rezime skry vsetky ovladacie prvky (okno je male)
+    LaunchedEffect(inPip) {
+        if (inPip) {
+            controlsVisible = false; showInfo = false
+            showChannelList = false; menu = null; showOptions = false
+        }
     }
     // oznam Activity ci je ovladanie zobrazene (vtedy D-pad navigaciu riesi Activity)
     LaunchedEffect(controlsVisible) { onControlsVisibleChange(controlsVisible) }

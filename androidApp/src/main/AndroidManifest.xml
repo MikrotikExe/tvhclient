@@ -41,7 +41,9 @@
             android:name=".PlayerActivity"
             android:exported="false"
             android:screenOrientation="fullUser"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|screenLayout"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
 
         <receiver
