@@ -2,6 +2,7 @@ package sk.tvhclient.android
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.compose.foundation.focusGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -391,15 +392,18 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
             "info" to androidx.compose.ui.focus.FocusRequester()
         )
     }
+    val sectionFocus = remember { androidx.compose.ui.focus.FocusRequester() }
 
     LaunchedEffect(resetSignal) {
         if (resetSignal > 0) { section = null; TabController.settingsDirty.value = false }
     }
     // pri kazdej zmene sekcie zacni s "ciste" (zmeny oznaci az uzivatelska akcia)
     LaunchedEffect(section) { TabController.settingsDirty.value = false }
-    // po navrate do zoznamu vrat fokus na kategoriu, z ktorej sa odislo
+    // po navrate do zoznamu vrat fokus na kategoriu, z ktorej sa odislo;
+    // pri vstupe do sekcie daj fokus na prvy ovladaci prvok
     LaunchedEffect(section) {
         if (section == null) lastSection?.let { runCatching { catFocus[it]?.requestFocus() } }
+        else runCatching { sectionFocus.requestFocus() }
     }
 
     BackHandler(enabled = section != null) {
@@ -438,6 +442,8 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
                 .padding(padding)
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
+                .focusRequester(sectionFocus)
+                .focusGroup()
         ) {
             when (section) {
                 null -> {
