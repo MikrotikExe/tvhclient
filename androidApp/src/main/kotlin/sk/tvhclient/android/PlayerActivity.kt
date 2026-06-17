@@ -225,6 +225,7 @@ class PlayerActivity : ComponentActivity() {
     /** Prepne na konkretny kanal podla indexu, prebuduje URL a nacita. */
     private fun switchToIndex(i: Int) {
         if (i < 0 || i >= liveUuids.size) return
+        if (i == liveIndex) { pokeControls(); return }  // ten isty kanal -> nenacitavaj znova
         val srv = liveServer ?: return
         val uuid = liveUuids[i]
         // rodicovsky zamok: zamknuty kanal mimo 5-min okna -> vypytaj PIN
