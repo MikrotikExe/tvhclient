@@ -116,9 +116,16 @@ class PlayerActivity : ComponentActivity() {
     private var numJob: kotlinx.coroutines.Job? = null
 
     /** Vytvori Media s HW/SW dekoderom podla preferencie (lacne boxy = SW). */
+    private fun userAgent(): String {
+        val v = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
+        return "TVH Client/$v"
+    }
+
     private fun buildMedia(url: String): Media {
         val m = Media(libVlc, Uri.parse(url))
         m.setHWDecoderEnabled(!DecoderPref.get(this), false)
+        // User-Agent: nech server vidi, ze sa pripaja TVH Client
+        m.addOption(":http-user-agent=" + userAgent())
         return m
     }
 
@@ -703,7 +710,8 @@ class PlayerActivity : ComponentActivity() {
         val options = arrayListOf(
             "--network-caching=1500",
             "--no-drop-late-frames",
-            "--no-skip-frames"
+            "--no-skip-frames",
+            "--http-user-agent=" + userAgent()
         )
         libVlc = LibVLC(this, options)
         mediaPlayer = MediaPlayer(libVlc)
