@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.focusGroup
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ViewList
@@ -218,20 +217,9 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
                 .focusGroup()
         ) {
             when (val s = state) {
-                is DvrState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                is DvrState.NoServer -> Text(
-                    stringResource(R.string.no_active_server), Modifier.align(Alignment.Center)
-                )
-                is DvrState.Error -> Column(
-                    Modifier.align(Alignment.Center).padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(s.message, color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(12.dp))
-                    androidx.compose.material3.Button(onClick = { vm.load() }) {
-                        Text(stringResource(R.string.retry))
-                    }
-                }
+                is DvrState.Loading -> LoadingStatus()
+                is DvrState.NoServer -> NoServerStatus()
+                is DvrState.Error -> ErrorStatus(s.message, onRetry = { vm.load() })
                 is DvrState.Loaded -> {
                     if (search.isNotBlank()) {
                         val q = normalizeSearch(search)
@@ -240,14 +228,14 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
                                 .sortedByDescending { it.start }
                         }
                         if (results.isEmpty()) {
-                            Text(stringResource(R.string.dvr_search_empty), Modifier.align(Alignment.Center))
+                            EmptyStatus(stringResource(R.string.dvr_search_empty))
                         } else {
                             RecordingList(results, context, progressTick,
                                 header = stringResource(R.string.dvr_search_results) + " (${results.size})",
                                 viewMode = viewMode)
                         }
                     } else if (s.entries.isEmpty()) {
-                        Text(stringResource(R.string.dvr_empty), Modifier.align(Alignment.Center))
+                        EmptyStatus(stringResource(R.string.dvr_empty))
                     } else {
                         androidx.compose.runtime.key(corpusReady, imdbTick) {
                             DvrContent(s.entries, s.channelOrder, s.channelPicons, nav, context, progressTick, viewMode = viewMode, onNav = { nav = it })

@@ -215,4 +215,6 @@
     <string name="pip_pause">Pause</string>
     <string name="reconnecting">Reconnecting…</string>
     <string name="reconnect_failed">Could not reconnect to the stream</string>
+    <string name="error_connection_title">Connection error</string>
+    <string name="no_server_hint">Add a server in Settings</string>
 </resources>

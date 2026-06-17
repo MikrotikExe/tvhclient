@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewModule
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -130,26 +129,15 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
 
         Box(Modifier.fillMaxSize()) {
             when (val s = state) {
-                is RadioState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                is RadioState.NoServer -> Text(
-                    stringResource(R.string.no_active_server), Modifier.align(Alignment.Center)
-                )
-                is RadioState.Error -> Column(
-                    Modifier.align(Alignment.Center).padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(s.message, color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(12.dp))
-                    androidx.compose.material3.Button(onClick = { vm.load() }) {
-                        Text(stringResource(R.string.retry))
-                    }
-                }
+                is RadioState.Loading -> LoadingStatus()
+                is RadioState.NoServer -> NoServerStatus()
+                is RadioState.Error -> ErrorStatus(s.message, onRetry = { vm.load() })
                 is RadioState.Loaded -> {
                     val q = query.trim().lowercase()
                     val rows = if (q.isBlank()) s.rows
                                else s.rows.filter { it.channel.name.lowercase().contains(q) }
                     if (rows.isEmpty()) {
-                        Text(stringResource(R.string.radio_empty), Modifier.align(Alignment.Center))
+                        EmptyStatus(stringResource(R.string.radio_empty))
                     } else {
                         when (viewMode) {
                             ChannelViewMode.LIST -> LazyColumn(Modifier.fillMaxSize()) {

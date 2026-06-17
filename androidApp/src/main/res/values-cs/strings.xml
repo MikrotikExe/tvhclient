@@ -215,4 +215,6 @@
     <string name="pip_pause">Pauza</string>
     <string name="reconnecting">Opětovné připojování…</string>
     <string name="reconnect_failed">Nepodařilo se znovu připojit ke streamu</string>
+    <string name="error_connection_title">Chyba připojení</string>
+    <string name="no_server_hint">Přidejte server v Nastavení</string>
 </resources>

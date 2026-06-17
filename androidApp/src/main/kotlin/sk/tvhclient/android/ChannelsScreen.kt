@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -221,19 +220,9 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
         Spacer(Modifier.height(8.dp))
 
         when (val s = state) {
-            is ChannelsState.Loading -> CenterBox { CircularProgressIndicator() }
-            is ChannelsState.NoServer -> CenterBox {
-                Text(stringResource(R.string.no_active_server))
-            }
-            is ChannelsState.Error -> CenterBox {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(s.message, color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(12.dp))
-                    androidx.compose.material3.Button(onClick = { vm.load(true) }) {
-                        Text(stringResource(R.string.retry))
-                    }
-                }
-            }
+            is ChannelsState.Loading -> LoadingStatus()
+            is ChannelsState.NoServer -> NoServerStatus()
+            is ChannelsState.Error -> ErrorStatus(s.message, onRetry = { vm.load(true) })
             is ChannelsState.Loaded -> {
                 if (query.isNotBlank()) {
                     // Vyhladavanie: plochy filtrovany zoznam
@@ -559,7 +548,7 @@ private fun ChannelGrid(
     val server = remember { Tvh.store.active() }
     val loader = remember(server?.id) { PiconImageLoader.get(context, server) }
     if (rows.isEmpty()) {
-        CenterBox { Text(stringResource(R.string.no_channels)) }
+        EmptyStatus(stringResource(R.string.no_channels))
         return
     }
     val tiles = columns >= 4
@@ -661,7 +650,7 @@ private fun ChannelList(
     val loader = remember(server?.id) { PiconImageLoader.get(context, server) }
 
     if (rows.isEmpty()) {
-        CenterBox { Text(stringResource(R.string.no_channels)) }
+        EmptyStatus(stringResource(R.string.no_channels))
         return
     }
     // Pociatocny focus na posledny zvoleny (alebo prvy) kanal -> nech sa pri
@@ -851,9 +840,4 @@ private fun ChannelItem(
                 .padding(horizontal = 14.dp, vertical = 4.dp)
         )
     }
-}
-
-@Composable
-private fun CenterBox(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
 }
