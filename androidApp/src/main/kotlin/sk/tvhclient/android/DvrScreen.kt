@@ -17,12 +17,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.focusGroup
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -69,6 +77,8 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
     val context = LocalContext.current
     var nav by remember { mutableStateOf<DvrNav>(DvrNav.Root) }
     var search by remember { mutableStateOf("") }
+    var viewMode by remember { mutableStateOf(DvrViewPref.get(context)) }
+    var viewMenu by remember { mutableStateOf(false) }
     // Klik na tab Archiv (aj uz vybrany) vrati na zaciatok (root + zrusene hladanie)
     LaunchedEffect(resetSignal) {
         nav = DvrNav.Root
@@ -151,15 +161,50 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
     Column(Modifier.fillMaxSize()) {
         // Vyhladavanie nahravok (cez vsetky, podla nazvu) — klavesnica az po OK
         val searchFocus = remember { FocusRequester() }
-        TvSearchBar(
-            query = search,
-            placeholder = stringResource(R.string.dvr_search),
-            onQueryChange = { search = it },
-            focusRequester = searchFocus,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            TvSearchBar(
+                query = search,
+                placeholder = stringResource(R.string.dvr_search),
+                onQueryChange = { search = it },
+                focusRequester = searchFocus,
+                modifier = Modifier.weight(1f)
+            )
+            androidx.compose.material3.IconButton(onClick = { vm.refresh() }) {
+                androidx.compose.material3.Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.retry))
+            }
+            Box {
+                androidx.compose.material3.IconButton(onClick = { viewMenu = true }) {
+                    androidx.compose.material3.Icon(
+                        when (viewMode) {
+                            ChannelViewMode.LIST -> Icons.Default.ViewList
+                            ChannelViewMode.GRID -> Icons.Default.GridView
+                            ChannelViewMode.TILES -> Icons.Default.ViewModule
+                        },
+                        contentDescription = null
+                    )
+                }
+                androidx.compose.material3.DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(stringResource(R.string.view_list)) },
+                        leadingIcon = { androidx.compose.material3.Icon(Icons.Default.ViewList, null) },
+                        onClick = { viewMode = ChannelViewMode.LIST; DvrViewPref.set(context, viewMode); viewMenu = false }
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(stringResource(R.string.view_grid)) },
+                        leadingIcon = { androidx.compose.material3.Icon(Icons.Default.GridView, null) },
+                        onClick = { viewMode = ChannelViewMode.GRID; DvrViewPref.set(context, viewMode); viewMenu = false }
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(stringResource(R.string.view_tiles)) },
+                        leadingIcon = { androidx.compose.material3.Icon(Icons.Default.ViewModule, null) },
+                        onClick = { viewMode = ChannelViewMode.TILES; DvrViewPref.set(context, viewMode); viewMenu = false }
+                    )
+                }
+            }
+        }
         val contentFocus = remember { FocusRequester() }
         // Po nacitani / zmene urovne daj focus na obsah (prvu zlozku), nech sa
         // pri vstupe do archivu neoznaci hladanie a nevyskoci klavesnica.
@@ -199,13 +244,14 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
                             Text(stringResource(R.string.dvr_search_empty), Modifier.align(Alignment.Center))
                         } else {
                             RecordingList(results, context, progressTick,
-                                header = stringResource(R.string.dvr_search_results) + " (${results.size})")
+                                header = stringResource(R.string.dvr_search_results) + " (${results.size})",
+                                viewMode = viewMode)
                         }
                     } else if (s.entries.isEmpty()) {
                         Text(stringResource(R.string.dvr_empty), Modifier.align(Alignment.Center))
                     } else {
                         androidx.compose.runtime.key(corpusReady, imdbTick) {
-                            DvrContent(s.entries, s.channelOrder, s.channelPicons, nav, context, progressTick, onReload = { vm.refresh() }, onNav = { nav = it })
+                            DvrContent(s.entries, s.channelOrder, s.channelPicons, nav, context, progressTick, viewMode = viewMode, onReload = { vm.refresh() }, onNav = { nav = it })
                         }
                     }
                 }
@@ -222,6 +268,7 @@ private fun DvrContent(
     nav: DvrNav,
     context: Context,
     progressTick: Int,
+    viewMode: ChannelViewMode = ChannelViewMode.LIST,
     onReload: () -> Unit,
     onNav: (DvrNav) -> Unit
 ) {
@@ -272,7 +319,7 @@ private fun DvrContent(
                     WatchProgress.recent(context, server.id).mapNotNull { byUuid[it.first] }
                 }
             }
-            RecordingList(list, context, progressTick, header = stringResource(R.string.dvr_recent))
+            RecordingList(list, context, progressTick, header = stringResource(R.string.dvr_recent), viewMode = viewMode)
         }
 
         is DvrNav.Channels -> {
@@ -313,7 +360,7 @@ private fun DvrContent(
             val list = entries
                 .filter { it.channelName.ifBlank { "—" } == nav.channel && dateKey(it.start) == nav.dateKey }
                 .sortedByDescending { it.start }
-            RecordingList(list, context, progressTick, header = nav.channel)
+            RecordingList(list, context, progressTick, header = nav.channel, viewMode = viewMode)
         }
 
         is DvrNav.Category -> {
@@ -332,7 +379,7 @@ private fun DvrContent(
                     }
                 }
             } else {
-                RecordingList(inCat.sortedByDescending { it.start }, context, progressTick, header = catLabel(nav.catKey))
+                RecordingList(inCat.sortedByDescending { it.start }, context, progressTick, header = catLabel(nav.catKey), viewMode = viewMode)
             }
         }
 
@@ -357,7 +404,7 @@ private fun DvrContent(
                     }
                 }
             } else {
-                RecordingList(inSub.sortedByDescending { it.start }, context, progressTick, header = subLabel(nav.subKey))
+                RecordingList(inSub.sortedByDescending { it.start }, context, progressTick, header = subLabel(nav.subKey), viewMode = viewMode)
             }
         }
 
@@ -368,18 +415,124 @@ private fun DvrContent(
                 DvrClassifier.subgenreOf(it, nav.catKey, consensus) == nav.subKey &&
                 DvrClassifier.seriesCanonicalTitle(it.title) == nav.seriesTitle
             }.sortedByDescending { it.start }
-            RecordingList(eps, context, progressTick, header = nav.seriesTitle)
+            RecordingList(eps, context, progressTick, header = nav.seriesTitle, viewMode = viewMode)
         }
     }
 }
 
 @Composable
-private fun RecordingList(list: List<DvrEntry>, context: Context, progressTick: Int, header: String) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        item("hdr") { Header(header) }
-        items(list, key = { it.uuid }) { entry ->
-            RecordingRow(entry, context, progressTick)
+private fun RecordingList(
+    list: List<DvrEntry>,
+    context: Context,
+    progressTick: Int,
+    header: String,
+    viewMode: ChannelViewMode = ChannelViewMode.LIST
+) {
+    when (viewMode) {
+        ChannelViewMode.LIST -> LazyColumn(Modifier.fillMaxSize()) {
+            item("hdr") { Header(header) }
+            items(list, key = { it.uuid }) { entry ->
+                RecordingRow(entry, context, progressTick)
+            }
         }
+        ChannelViewMode.GRID, ChannelViewMode.TILES -> {
+            val cols = if (viewMode == ChannelViewMode.GRID) 2 else 3
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(cols),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                item(key = "hdr", span = { GridItemSpan(maxLineSpan) }) { Header(header) }
+                gridItems(list, key = { it.uuid }) { entry ->
+                    RecordingCard(entry, context, progressTick)
+                }
+            }
+        }
+    }
+}
+
+/** Spusti prehravanie DVR nahravky. */
+private fun playDvr(context: Context, entry: DvrEntry) {
+    val srv = Tvh.store.active() ?: return
+    val url = Tvh.dvrUrl(srv, entry.uuid)
+    val intent = Intent(context, PlayerActivity::class.java).apply {
+        putExtra(PlayerActivity.EXTRA_URL, url)
+        putExtra(PlayerActivity.EXTRA_TITLE, entry.title)
+        putExtra(PlayerActivity.EXTRA_DURATION_MS, entry.durationSec * 1000)
+        putExtra(PlayerActivity.EXTRA_DVR_UUID, entry.uuid)
+    }
+    context.startActivity(intent)
+}
+
+@Composable
+private fun RecordingCard(entry: DvrEntry, context: Context, progressTick: Int) {
+    val server = remember { Tvh.store.active() }
+    val info = remember(entry.uuid, progressTick) {
+        server?.let { WatchProgress.get(context, it.id, entry.uuid) }
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(6.dp)
+            .dpadFocusable()
+            .clickable { playDvr(context, entry) },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.fillMaxWidth().height(96.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .background(androidx.compose.ui.graphics.Color(0x22FFFFFF)),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.Icon(
+                Icons.Default.Movie,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(40.dp)
+            )
+            if (info?.completed == true) {
+                Text(
+                    "\u2605",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+                )
+            }
+            if (info != null && !info.completed && info.fraction > 0f) {
+                LinearProgressIndicator(
+                    progress = { info.fraction },
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            entry.title,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        if (entry.channelName.isNotBlank()) {
+            Text(
+                entry.channelName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+object DvrViewPref {
+    private const val KEY = "dvr_view_mode"
+    fun get(c: Context): ChannelViewMode {
+        val v = c.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            .getString(KEY, null) ?: return ChannelViewMode.LIST
+        return runCatching { ChannelViewMode.valueOf(v) }.getOrDefault(ChannelViewMode.LIST)
+    }
+    fun set(c: Context, mode: ChannelViewMode) {
+        c.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            .edit().putString(KEY, mode.name).apply()
     }
 }
 
@@ -393,17 +546,7 @@ private fun RecordingRow(entry: DvrEntry, context: Context, progressTick: Int) {
         Modifier
             .fillMaxWidth()
             .dpadFocusable()
-            .clickable {
-                val srv = Tvh.store.active() ?: return@clickable
-                val url = Tvh.dvrUrl(srv, entry.uuid)
-                val intent = Intent(context, PlayerActivity::class.java).apply {
-                    putExtra(PlayerActivity.EXTRA_URL, url)
-                    putExtra(PlayerActivity.EXTRA_TITLE, entry.title)
-                    putExtra(PlayerActivity.EXTRA_DURATION_MS, entry.durationSec * 1000)
-                    putExtra(PlayerActivity.EXTRA_DVR_UUID, entry.uuid)
-                }
-                context.startActivity(intent)
-            }
+            .clickable { playDvr(context, entry) }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
