@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
             when (event.keyCode) {
                 // EPG / TV program kláves (ikona vlavo od 0)
                 android.view.KeyEvent.KEYCODE_GUIDE,
+                android.view.KeyEvent.KEYCODE_CAPTIONS,
                 android.view.KeyEvent.KEYCODE_TV_DATA_SERVICE,
                 android.view.KeyEvent.KEYCODE_TV_CONTENTS_MENU,
                 android.view.KeyEvent.KEYCODE_TV_MEDIA_CONTEXT_MENU -> {
