@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,11 +32,21 @@ import sk.tvhclient.shared.model.TvhServer
 // Obrazovky nastaveni (vyclenene z MainActivity.kt kvoli prehladnosti).
 
 @Composable
-internal fun SettingsCategory(label: String, onClick: () -> Unit) {
+internal fun SettingsCategory(
+    label: String,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
+    onClick: () -> Unit
+) {
     Box(
         Modifier
             .fillMaxWidth()
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .dpadFocusable()
+            .then(
+                if (focusRequester != null)
+                    Modifier.focusRequester(focusRequester)
+                else Modifier
+            )
             .clickable { onClick() }
             .padding(vertical = 16.dp, horizontal = 8.dp)
     ) {

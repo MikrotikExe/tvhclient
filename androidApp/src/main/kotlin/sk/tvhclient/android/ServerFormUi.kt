@@ -1,6 +1,21 @@
 package sk.tvhclient.android
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,12 +29,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -259,7 +271,9 @@ fun TestResultView(state: TestState) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// TV-friendly rozbalovacie pole: kotva je obycajny Box (ziadne textove pole =>
+// na boxoch nevyskoci klavesnica), vyber prebieha v dialogu s manualnou D-pad
+// navigaciou (sipky + OK), co na lacnych boxoch funguje spolahlivo.
 @Composable
 fun DropdownField(
     label: String,
@@ -268,30 +282,92 @@ fun DropdownField(
     optionLabel: @Composable (String) -> String,
     onSelect: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    androidx.compose.material3.ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it }
-    ) {
-        OutlinedTextField(
-            value = optionLabel(value),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor()
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
+        Spacer(Modifier.height(4.dp))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .dpadFocusable()
+                .clickable { open = true }
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            options.forEach { opt ->
-                DropdownMenuItem(
-                    text = { Text(optionLabel(opt)) },
-                    onClick = { onSelect(opt); expanded = false }
+            Text(optionLabel(value), style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+    if (open) {
+        TvSelectDialog(label, options, value, optionLabel, { open = false }) {
+            onSelect(it); open = false
+        }
+    }
+}
+
+@Composable
+private fun TvSelectDialog(
+    title: String,
+    options: List<String>,
+    current: String,
+    optionLabel: @Composable (String) -> String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    var sel by remember { mutableStateOf(options.indexOf(current).coerceAtLeast(0)) }
+    val fr = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 6.dp) {
+            Column(
+                Modifier
+                    .padding(16.dp)
+                    .focusRequester(fr)
+                    .focusable()
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (e.nativeKeyEvent.keyCode) {
+                            android.view.KeyEvent.KEYCODE_DPAD_UP -> { sel = (sel - 1 + options.size) % options.size; true }
+                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> { sel = (sel + 1) % options.size; true }
+                            android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                            android.view.KeyEvent.KEYCODE_ENTER,
+                            android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> { onSelect(options[sel]); true }
+                            else -> false
+                        }
+                    }
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    options.forEachIndexed { i, opt ->
+                        val selected = i == sel
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primary
+                                    else androidx.compose.ui.graphics.Color.Transparent
+                                )
+                                .clickable { onSelect(opt) }
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                optionLabel(opt),
+                                color = if (selected) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
             }
         }
     }

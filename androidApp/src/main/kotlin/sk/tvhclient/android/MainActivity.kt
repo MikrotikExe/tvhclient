@@ -380,12 +380,27 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
     val activeId by vm.activeId.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var section by remember { mutableStateOf<String?>(null) }
+    var lastSection by remember { mutableStateOf<String?>(null) }
+    val catFocus = remember {
+        mapOf(
+            "general" to androidx.compose.ui.focus.FocusRequester(),
+            "playback" to androidx.compose.ui.focus.FocusRequester(),
+            "plock" to androidx.compose.ui.focus.FocusRequester(),
+            "servers" to androidx.compose.ui.focus.FocusRequester(),
+            "remote" to androidx.compose.ui.focus.FocusRequester(),
+            "info" to androidx.compose.ui.focus.FocusRequester()
+        )
+    }
 
     LaunchedEffect(resetSignal) {
         if (resetSignal > 0) { section = null; TabController.settingsDirty.value = false }
     }
     // pri kazdej zmene sekcie zacni s "ciste" (zmeny oznaci az uzivatelska akcia)
     LaunchedEffect(section) { TabController.settingsDirty.value = false }
+    // po navrate do zoznamu vrat fokus na kategoriu, z ktorej sa odislo
+    LaunchedEffect(section) {
+        if (section == null) lastSection?.let { runCatching { catFocus[it]?.requestFocus() } }
+    }
 
     BackHandler(enabled = section != null) {
         section = null; TabController.settingsDirty.value = false
@@ -426,12 +441,12 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
         ) {
             when (section) {
                 null -> {
-                    SettingsCategory(stringResource(R.string.set_cat_general)) { section = "general" }
-                    SettingsCategory(stringResource(R.string.set_cat_playback)) { section = "playback" }
-                    SettingsCategory(stringResource(R.string.plock_title)) { section = "plock" }
-                    SettingsCategory(stringResource(R.string.set_cat_servers)) { section = "servers" }
-                    SettingsCategory(stringResource(R.string.set_cat_remote)) { section = "remote" }
-                    SettingsCategory(stringResource(R.string.set_cat_info)) { section = "info" }
+                    SettingsCategory(stringResource(R.string.set_cat_general), catFocus["general"]) { lastSection = "general"; section = "general" }
+                    SettingsCategory(stringResource(R.string.set_cat_playback), catFocus["playback"]) { lastSection = "playback"; section = "playback" }
+                    SettingsCategory(stringResource(R.string.plock_title), catFocus["plock"]) { lastSection = "plock"; section = "plock" }
+                    SettingsCategory(stringResource(R.string.set_cat_servers), catFocus["servers"]) { lastSection = "servers"; section = "servers" }
+                    SettingsCategory(stringResource(R.string.set_cat_remote), catFocus["remote"]) { lastSection = "remote"; section = "remote" }
+                    SettingsCategory(stringResource(R.string.set_cat_info), catFocus["info"]) { lastSection = "info"; section = "info" }
                 }
                 "general" -> GeneralSettings(ctx)
                 "playback" -> PlaybackSettings(ctx)
