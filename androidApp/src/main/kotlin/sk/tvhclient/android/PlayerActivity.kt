@@ -84,6 +84,9 @@ class PlayerActivity : ComponentActivity() {
     private var liveUuids: List<String> = emptyList()
     private var liveNames: List<String> = emptyList()
     private var liveIndex: Int = -1
+    // pre opatovne pripojenie videa po navrate z pozadia
+    private var videoLayout: VLCVideoLayout? = null
+    private var wasPlaying: Boolean = false
     private var liveServer: sk.tvhclient.shared.model.TvhServer? = null
     private val liveTitleState = androidx.compose.runtime.mutableStateOf("")
     private val liveUuidState = androidx.compose.runtime.mutableStateOf<String?>(null)
@@ -771,7 +774,7 @@ class PlayerActivity : ComponentActivity() {
                 resumeMs = resumeMs,
                 dvrUuid = dvrUuid,
                 serverId = server.id,
-                onAttach = { layout -> mediaPlayer.attachViews(layout, null, false, false) },
+                onAttach = { layout -> videoLayout = layout; mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
                     val doPlay: () -> Unit = {
                         currentStreamUrl = streamUrl
@@ -813,7 +816,7 @@ class PlayerActivity : ComponentActivity() {
                 onNextChannel = if (canZap) ({ switchLive(+1) }) else null,
                 liveChannels = if (canZap) liveChannelsState.value else emptyList(),
                 liveCurrentIndex = liveIndexState.value,
-                onSelectChannel = { idx -> switchToIndex(idx) },
+                onSelectChannel = { idx -> if (idx != liveIndex) switchToIndex(idx) else pokeControls() },
                 onRefreshEpg = {
                     lifecycleScope.launch { refreshOverlayEpg() }
                 },
@@ -831,11 +834,23 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // navrat z pozadia: znova pripoj video na surface a obnov prehravanie
+        if (::mediaPlayer.isInitialized) {
+            videoLayout?.let { runCatching { mediaPlayer.attachViews(it, null, false, false) } }
+            if (wasPlaying) { runCatching { mediaPlayer.play() } }
+        }
+    }
+
     override fun onStop() {
         saveDvrProgress()
+        wasPlaying = ::mediaPlayer.isInitialized && mediaPlayer.isPlaying
         super.onStop()
-        if (::mediaPlayer.isInitialized && mediaPlayer.isPlaying) {
-            mediaPlayer.pause()
+        if (::mediaPlayer.isInitialized) {
+            if (mediaPlayer.isPlaying) mediaPlayer.pause()
+            // uvolni surface, nech sa po navrate da znova pripojit (inak cierna obrazovka)
+            runCatching { mediaPlayer.detachViews() }
         }
     }
 
