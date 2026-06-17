@@ -150,6 +150,8 @@ class PlayerActivity : ComponentActivity() {
     private fun openEpgInApp() {
         val i = android.content.Intent(this, MainActivity::class.java).apply {
             putExtra("open_epg", true)
+            // zapamataj aktualny zivy kanal, nech BACK z EPG vrati do prehravaca nan
+            if (!seekablePlayback) liveUuids.getOrNull(liveIndex)?.let { putExtra("epg_return_uuid", it) }
         }
         runCatching { startActivity(i) }
     }

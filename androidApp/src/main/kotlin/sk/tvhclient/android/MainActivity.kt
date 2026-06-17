@@ -60,7 +60,13 @@ object TabController {
     fun request(tab: Int) { requested.value = tab }
     // EPG (TV program) kláves dialkoveho -> otvor mriezku v Kanaloch
     val epgGrid = mutableStateOf(0)
-    fun openEpgGrid() { epgGrid.value = epgGrid.value + 1 }
+    var epgFromPlayer = false
+    var epgReturnUuid: String? = null
+    fun openEpgGrid(fromPlayer: Boolean = false, returnUuid: String? = null) {
+        epgFromPlayer = fromPlayer
+        epgReturnUuid = returnUuid
+        epgGrid.value = epgGrid.value + 1
+    }
     // INFO kláves -> detail vybranej relacie (v mriezke)
     val infoKey = mutableStateOf(0)
     fun pressInfo() { infoKey.value = infoKey.value + 1 }
@@ -76,7 +82,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (intent?.getBooleanExtra("open_epg", false) == true) {
-            TabController.openEpgGrid()
+            TabController.openEpgGrid(fromPlayer = true, returnUuid = intent.getStringExtra("epg_return_uuid"))
         }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -89,7 +95,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra("open_epg", false)) {
-            TabController.openEpgGrid()
+            TabController.openEpgGrid(fromPlayer = true, returnUuid = intent.getStringExtra("epg_return_uuid"))
         }
     }
 

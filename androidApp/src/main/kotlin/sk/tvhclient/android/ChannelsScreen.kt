@@ -75,10 +75,18 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
     var hiddenTick by remember { mutableStateOf(0) }
     // Pri zamknutom kanali / nastaveniach: akcia, ktora sa vykona po spravnom PINe
     var pinAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var showGrid by remember { mutableStateOf(false) }
-    // EPG kláves dialkoveho -> otvor TV program (mriezku)
+    // EPG kláves dialkoveho -> otvor TV program (mriezku). Odvodene priamo zo
+    // signalu (nie cez oneskoreny LaunchedEffect), nech sa neblikne zoznam.
     val epgSignal by TabController.epgGrid
-    LaunchedEffect(epgSignal) { if (epgSignal > 0) showGrid = true }
+    // baseline: pri cerstvom vstupe sa mriezka neotvori; pri cold-starte z
+    // prehravaca (epgFromPlayer, signal uz zvyseny v onCreate) sa otvori
+    var epgDismissedGen by remember {
+        mutableStateOf(
+            if (TabController.epgFromPlayer) TabController.epgGrid.value - 1
+            else TabController.epgGrid.value
+        )
+    }
+    val showGrid = epgSignal > epgDismissedGen
     // Zdielany DvrViewModel — vieme ktore kanaly sa prave nahravaju
     val dvrVm: DvrViewModel = viewModel()
     val dvrState by dvrVm.state.collectAsState()
@@ -128,7 +136,8 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
     LaunchedEffect(resetSignal) {
         if (!resetInitDone) { resetInitDone = true; return@LaunchedEffect }
         epgFor = null
-        showGrid = false
+        epgDismissedGen = epgSignal
+        TabController.epgFromPlayer = false
         selectedTag = null
         favOnly = false
         contextRow = null
@@ -157,8 +166,36 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
     }
 
     val st0 = state
-    if (showGrid && st0 is ChannelsState.Loaded) {
-        EpgGridScreen(rows = st0.allRows, seed = epgMap, onBack = { showGrid = false })
+    if (showGrid) {
+        if (st0 is ChannelsState.Loaded) {
+            EpgGridScreen(
+                rows = st0.allRows,
+                seed = epgMap,
+                onBack = {
+                    epgDismissedGen = epgSignal
+                    if (TabController.epgFromPlayer) {
+                        val uuid = TabController.epgReturnUuid
+                        TabController.epgFromPlayer = false
+                        TabController.epgReturnUuid = null
+                        if (uuid != null) {
+                            LivePlaylist.setIndexForUuid(uuid)
+                            val title = LivePlaylist.channels.firstOrNull { it.uuid == uuid }?.name ?: ""
+                            val pi = android.content.Intent(ctx, PlayerActivity::class.java).apply {
+                                putExtra(PlayerActivity.EXTRA_UUID, uuid)
+                                putExtra(PlayerActivity.EXTRA_TITLE, title)
+                            }
+                            runCatching { ctx.startActivity(pi) }
+                        }
+                    }
+                }
+            )
+        } else {
+            // kym sa kanaly nacitaju, nech sa neblikne zoznam
+            androidx.compose.foundation.layout.Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) { androidx.compose.material3.CircularProgressIndicator() }
+        }
         return
     }
 
@@ -172,7 +209,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                 onUp = onGoToNav,
                 modifier = Modifier.weight(1f)
             )
-            androidx.compose.material3.IconButton(onClick = { showGrid = true }) {
+            androidx.compose.material3.IconButton(onClick = { TabController.openEpgGrid() }) {
                 androidx.compose.material3.Icon(
                     Icons.Default.CalendarViewDay,
                     contentDescription = stringResource(R.string.tv_guide)
