@@ -223,5 +223,5 @@
     <string name="set_cat_remote">Remote control</string>
     <string name="remote_debug_title">Key code diagnostics</string>
     <string name="remote_debug_enable">Show pressed key codes</string>
-    <string name="remote_debug_note">In the player, pressing an unusual key briefly shows its code. Use it to find the code of your remote's EPG button.</string>
+    <string name="remote_debug_note">In the player, pressing an unusual key briefly shows its code. Use it to find the code of the EPG button on your remote.</string>
 </resources>
