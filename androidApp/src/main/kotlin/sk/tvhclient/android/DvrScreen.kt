@@ -285,30 +285,48 @@ private fun DvrContent(
                     WatchProgress.recent(context, server.id).count { it.first in uuids }
                 }
             }
-            LazyColumn(Modifier.fillMaxSize()) {
-                item("hdr") { Header(stringResource(R.string.dvr_archive)) }
-                if (recentCount > 0) {
-                    item("recent") {
+            val cats = DvrClassifier.order.filter { byCat.containsKey(it) }
+            val chCount = entries.map { it.channelName }.distinct().size
+            if (viewMode == ChannelViewMode.LIST) {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item("hdr") { Header(stringResource(R.string.dvr_archive)) }
+                    if (recentCount > 0) {
+                        item("recent") {
+                            FolderRow("\u25B6  " + stringResource(R.string.dvr_recent), sub = "$recentCount") { onNav(DvrNav.Recent) }
+                        }
+                    }
+                    item("by_channel") {
                         FolderRow(
-                            "\u25B6  " + stringResource(R.string.dvr_recent),
-                            sub = "$recentCount"
-                        ) { onNav(DvrNav.Recent) }
+                            "\uD83D\uDCFA  " + stringResource(R.string.dvr_by_channel),
+                            sub = "$chCount " + stringResource(R.string.dvr_channels_count)
+                        ) { onNav(DvrNav.Channels) }
+                    }
+                    item("cat_hdr") { Header(stringResource(R.string.dvr_by_genre)) }
+                    items(cats, key = { it }) { cat ->
+                        FolderRow("\uD83D\uDCC1  " + catLabel(cat), sub = "${byCat[cat]?.size ?: 0}") {
+                            onNav(DvrNav.Category(cat))
+                        }
                     }
                 }
-                item("by_channel") {
-                    FolderRow(
-                        "\uD83D\uDCFA  " + stringResource(R.string.dvr_by_channel),
-                        sub = "${entries.map { it.channelName }.distinct().size} " +
-                            stringResource(R.string.dvr_channels_count)
-                    ) { onNav(DvrNav.Channels) }
-                }
-                item("cat_hdr") { Header(stringResource(R.string.dvr_by_genre)) }
-                items(DvrClassifier.order.filter { byCat.containsKey(it) }, key = { it }) { cat ->
-                    val cnt = byCat[cat]?.size ?: 0
-                    FolderRow(
-                        "\uD83D\uDCC1  " + catLabel(cat),
-                        sub = "$cnt"
-                    ) { onNav(DvrNav.Category(cat)) }
+            } else {
+                val cols = if (viewMode == ChannelViewMode.GRID) 2 else 3
+                LazyVerticalGrid(columns = GridCells.Fixed(cols), modifier = Modifier.fillMaxSize()) {
+                    item(key = "hdr", span = { GridItemSpan(maxLineSpan) }) { Header(stringResource(R.string.dvr_archive)) }
+                    if (recentCount > 0) {
+                        item(key = "recent", span = { GridItemSpan(maxLineSpan) }) {
+                            FolderRow("\u25B6  " + stringResource(R.string.dvr_recent), sub = "$recentCount") { onNav(DvrNav.Recent) }
+                        }
+                    }
+                    item(key = "by_channel", span = { GridItemSpan(maxLineSpan) }) {
+                        FolderRow(
+                            "\uD83D\uDCFA  " + stringResource(R.string.dvr_by_channel),
+                            sub = "$chCount " + stringResource(R.string.dvr_channels_count)
+                        ) { onNav(DvrNav.Channels) }
+                    }
+                    item(key = "cat_hdr", span = { GridItemSpan(maxLineSpan) }) { Header(stringResource(R.string.dvr_by_genre)) }
+                    gridItems(cats, key = { it }) { cat ->
+                        FolderCard(catLabel(cat), sub = "${byCat[cat]?.size ?: 0}") { onNav(DvrNav.Category(cat)) }
+                    }
                 }
             }
         }
@@ -330,12 +348,36 @@ private fun DvrContent(
             val channels = byChannel.keys.sortedWith(
                 compareBy({ channelOrder[it] ?: Int.MAX_VALUE }, { it.lowercase() })
             )
-            LazyColumn(Modifier.fillMaxSize()) {
-                item("hdr") { Header(stringResource(R.string.dvr_by_channel)) }
-                items(channels, key = { it }) { ch ->
-                    val cnt = byChannel[ch]?.size ?: 0
-                    ChannelFolderRow(ch, channelPicons[ch], piconLoader, context, sub = "$cnt") {
-                        onNav(DvrNav.Dates(ch))
+            if (viewMode == ChannelViewMode.LIST) {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item("hdr") { Header(stringResource(R.string.dvr_by_channel)) }
+                    items(channels, key = { it }) { ch ->
+                        val cnt = byChannel[ch]?.size ?: 0
+                        ChannelFolderRow(ch, channelPicons[ch], piconLoader, context, sub = "$cnt") {
+                            onNav(DvrNav.Dates(ch))
+                        }
+                    }
+                }
+            } else {
+                val cols = if (viewMode == ChannelViewMode.GRID) 2 else 3
+                LazyVerticalGrid(columns = GridCells.Fixed(cols), modifier = Modifier.fillMaxSize()) {
+                    item(key = "hdr", span = { GridItemSpan(maxLineSpan) }) { Header(stringResource(R.string.dvr_by_channel)) }
+                    gridItems(channels, key = { it }) { ch ->
+                        val cnt = byChannel[ch]?.size ?: 0
+                        val picon = channelPicons[ch]
+                        FolderCard(ch, sub = "$cnt", onClick = { onNav(DvrNav.Dates(ch)) }, leading = {
+                            if (picon != null) {
+                                coil.compose.AsyncImage(
+                                    model = coil.request.ImageRequest.Builder(context).data(picon).build(),
+                                    contentDescription = ch,
+                                    imageLoader = piconLoader,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize().padding(8.dp)
+                                )
+                            } else {
+                                Text(ch.take(2).uppercase(), style = MaterialTheme.typography.titleMedium)
+                            }
+                        })
                     }
                 }
             }
@@ -345,13 +387,25 @@ private fun DvrContent(
             val chEntries = entries.filter { it.channelName.ifBlank { "—" } == nav.channel }
             val byDate = chEntries.groupBy { dateKey(it.start) }
             val dates = byDate.keys.sortedDescending()
-            LazyColumn(Modifier.fillMaxSize()) {
-                item("hdr") { Header(nav.channel) }
-                items(dates, key = { it }) { dk ->
-                    val list = byDate[dk] ?: emptyList()
-                    val label = list.firstOrNull()?.let { formatDateFull(it.start) } ?: dk
-                    FolderRow("\uD83D\uDCC5  $label", sub = "${list.size}") {
-                        onNav(DvrNav.Day(nav.channel, dk))
+            if (viewMode == ChannelViewMode.LIST) {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item("hdr") { Header(nav.channel) }
+                    items(dates, key = { it }) { dk ->
+                        val list = byDate[dk] ?: emptyList()
+                        val label = list.firstOrNull()?.let { formatDateFull(it.start) } ?: dk
+                        FolderRow("\uD83D\uDCC5  $label", sub = "${list.size}") {
+                            onNav(DvrNav.Day(nav.channel, dk))
+                        }
+                    }
+                }
+            } else {
+                val cols = if (viewMode == ChannelViewMode.GRID) 2 else 3
+                LazyVerticalGrid(columns = GridCells.Fixed(cols), modifier = Modifier.fillMaxSize()) {
+                    item(key = "hdr", span = { GridItemSpan(maxLineSpan) }) { Header(nav.channel) }
+                    gridItems(dates, key = { it }) { dk ->
+                        val list = byDate[dk] ?: emptyList()
+                        val label = list.firstOrNull()?.let { formatDateFull(it.start) } ?: dk
+                        FolderCard(label, sub = "${list.size}") { onNav(DvrNav.Day(nav.channel, dk)) }
                     }
                 }
             }
@@ -371,11 +425,21 @@ private fun DvrContent(
                 val consensus = DvrClassifier.consensusSubgenres(inCat, nav.catKey)
                 val bySub = inCat.groupBy { DvrClassifier.subgenreOf(it, nav.catKey, consensus) }
                 val order = DvrClassifier.subOrderFor(nav.catKey)
-                LazyColumn(Modifier.fillMaxSize()) {
-                    item("hdr") { Header(catLabel(nav.catKey)) }
-                    items(order.filter { bySub.containsKey(it) }, key = { it }) { sub ->
-                        FolderRow("\uD83D\uDCC1  " + subLabel(sub), sub = "${bySub[sub]?.size ?: 0}") {
-                            onNav(DvrNav.Subgenre(nav.catKey, sub))
+                if (viewMode == ChannelViewMode.LIST) {
+                    LazyColumn(Modifier.fillMaxSize()) {
+                        item("hdr") { Header(catLabel(nav.catKey)) }
+                        items(order.filter { bySub.containsKey(it) }, key = { it }) { sub ->
+                            FolderRow("\uD83D\uDCC1  " + subLabel(sub), sub = "${bySub[sub]?.size ?: 0}") {
+                                onNav(DvrNav.Subgenre(nav.catKey, sub))
+                            }
+                        }
+                    }
+                } else {
+                    val cols = if (viewMode == ChannelViewMode.GRID) 2 else 3
+                    LazyVerticalGrid(columns = GridCells.Fixed(cols), modifier = Modifier.fillMaxSize()) {
+                        item(key = "hdr", span = { GridItemSpan(maxLineSpan) }) { Header(catLabel(nav.catKey)) }
+                        gridItems(order.filter { bySub.containsKey(it) }, key = { it }) { sub ->
+                            FolderCard(subLabel(sub), sub = "${bySub[sub]?.size ?: 0}") { onNav(DvrNav.Subgenre(nav.catKey, sub)) }
                         }
                     }
                 }
@@ -395,12 +459,23 @@ private fun DvrContent(
                 // aj ked ma serial len jednu epizodu (konzistentne).
                 val bySeries = inSub.groupBy { DvrClassifier.seriesCanonicalTitle(it.title) }
                 val titles = bySeries.keys.sortedBy { it.lowercase() }
-                LazyColumn(Modifier.fillMaxSize()) {
-                    item("hdr") { Header(subLabel(nav.subKey)) }
-                    items(titles, key = { it }) { t ->
-                        val grp = bySeries[t] ?: emptyList()
-                        FolderRow("\uD83D\uDCFA  $t", sub = "${grp.size}") {
-                            onNav(DvrNav.Series(nav.catKey, nav.subKey, t))
+                if (viewMode == ChannelViewMode.LIST) {
+                    LazyColumn(Modifier.fillMaxSize()) {
+                        item("hdr") { Header(subLabel(nav.subKey)) }
+                        items(titles, key = { it }) { t ->
+                            val grp = bySeries[t] ?: emptyList()
+                            FolderRow("\uD83D\uDCFA  $t", sub = "${grp.size}") {
+                                onNav(DvrNav.Series(nav.catKey, nav.subKey, t))
+                            }
+                        }
+                    }
+                } else {
+                    val cols = if (viewMode == ChannelViewMode.GRID) 2 else 3
+                    LazyVerticalGrid(columns = GridCells.Fixed(cols), modifier = Modifier.fillMaxSize()) {
+                        item(key = "hdr", span = { GridItemSpan(maxLineSpan) }) { Header(subLabel(nav.subKey)) }
+                        gridItems(titles, key = { it }) { t ->
+                            val grp = bySeries[t] ?: emptyList()
+                            FolderCard(t, sub = "${grp.size}") { onNav(DvrNav.Series(nav.catKey, nav.subKey, t)) }
                         }
                     }
                 }
@@ -702,6 +777,40 @@ private fun FolderRow(label: String, sub: String, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("  \u203A", style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Priecinok ako dlazdica (mriezka/dlazdice) — zachovava nazov aj pocet. */
+@Composable
+private fun FolderCard(
+    label: String,
+    sub: String,
+    onClick: () -> Unit,
+    leading: (@Composable () -> Unit)? = null
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(6.dp).dpadFocusable().clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.fillMaxWidth().height(72.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .background(androidx.compose.ui.graphics.Color(0x22FFFFFF)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (leading != null) leading()
+            else Text("\uD83D\uDCC1", style = MaterialTheme.typography.headlineMedium)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            label, style = MaterialTheme.typography.bodySmall, maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Text(
+            sub, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
