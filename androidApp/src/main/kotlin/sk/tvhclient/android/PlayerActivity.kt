@@ -1639,7 +1639,8 @@ private fun PlayerUi(
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                     Row(verticalAlignment = Alignment.Top) {
-                        // cislo + logo + nazov kanala
+                        // cislo + logo + nazov kanala (len live; pri DVR netreba)
+                        if (!seekable) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.width((76 * k).dp)
@@ -1672,15 +1673,17 @@ private fun PlayerUi(
                             )
                         }
                         Spacer(Modifier.width(14.dp))
+                        }
                         // popis relacie: nazov, cas, priebeh, popis, dalej
                         Column(Modifier.weight(1f)) {
-                            if (progTitle.isNotBlank()) {
+                            val headline = if (seekable) title else progTitle
+                            if (headline.isNotBlank()) {
                                 Text(
-                                    progTitle,
+                                    headline,
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = (16 * k).sp,
-                                    maxLines = 1,
+                                    maxLines = if (seekable) 2 else 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                             }
