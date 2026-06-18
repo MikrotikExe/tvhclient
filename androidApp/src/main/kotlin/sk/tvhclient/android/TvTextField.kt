@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -23,7 +28,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -34,6 +41,9 @@ import androidx.compose.ui.unit.dp
  * zvyraznene pole s popisom a hodnotou. Klavesnica nabehne az po stlaceni OK;
  * vtedy sa zobrazi skutocne OutlinedTextField s IME. Done/BACK ho zatvori a fokus
  * sa vrati na pole. Tym sa klavesnica pri prechadzani formulara nikdy nevyskoci sama.
+ *
+ * Autokorekcia a velke zaciatocne pismena su vypnute (host/meno/heslo su technicke udaje).
+ * Pri password=true je v editacii tlacidlo oka na zobrazenie/skrytie hesla.
  */
 @Composable
 fun TvTextField(
@@ -46,6 +56,7 @@ fun TvTextField(
 ) {
     var editing by remember { mutableStateOf(false) }
     var everEdited by remember { mutableStateOf(false) }
+    var revealed by remember { mutableStateOf(false) }
     val boxFocus = remember { FocusRequester() }
 
     if (editing) {
@@ -56,10 +67,24 @@ fun TvTextField(
             label = { Text(label) },
             singleLine = true,
             visualTransformation =
-                if (password) PasswordVisualTransformation() else VisualTransformation.None,
+                if (password && !revealed) PasswordVisualTransformation() else VisualTransformation.None,
+            trailingIcon = if (password) {
+                {
+                    IconButton(onClick = { revealed = !revealed }) {
+                        Icon(
+                            if (revealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = stringResource(
+                                if (revealed) R.string.hide_password else R.string.show_password
+                            )
+                        )
+                    }
+                }
+            } else null,
             keyboardOptions = KeyboardOptions(
                 keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
-                imeAction = ImeAction.Done
+                imeAction = ImeAction.Done,
+                autoCorrectEnabled = false,
+                capitalization = KeyboardCapitalization.None
             ),
             keyboardActions = KeyboardActions(onDone = { editing = false }),
             modifier = modifier
@@ -92,7 +117,7 @@ fun TvTextField(
             )
             val shown = when {
                 value.isBlank() -> "\u2014"
-                password -> "\u2022".repeat(value.length)
+                password && !revealed -> "\u2022".repeat(value.length)
                 else -> value
             }
             Text(

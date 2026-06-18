@@ -53,9 +53,10 @@ object Tvh {
     @Throws(CancellationException::class)
     suspend fun testConnectionAuto(server: TvhServer): Pair<ConnectionResult, TvhServer> {
         val first = testConnection(server)
-        if (server.connectionMode != "htsp" &&
-            (first is ConnectionResult.NetworkError || first is ConnectionResult.HttpError)
-        ) {
+        if (first is ConnectionResult.Success) return first to server
+        // Ak HTTP rezim zlyhal z akehokolvek dovodu (web rozhranie 9981 vypnute moze vratit aj
+        // 401/403, nielen sietovu chybu), skus HTSP 9982. Ak HTSP prejde, pouzi ho.
+        if (server.connectionMode != "htsp") {
             val htspServer = server.copy(connectionMode = "htsp")
             val second = testConnection(htspServer)
             if (second is ConnectionResult.Success) return second to htspServer
