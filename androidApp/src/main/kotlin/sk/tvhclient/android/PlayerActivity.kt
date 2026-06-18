@@ -1432,8 +1432,7 @@ private fun PlayerUi(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                if (orientationLocked) { /* zamknute: tap ignoruj */ }
-                else if (menu != null) menu = null else controlsVisible = !controlsVisible
+                if (menu != null) menu = null else controlsVisible = !controlsVisible
             }
     ) {
         AndroidView(
@@ -1533,12 +1532,6 @@ private fun PlayerUi(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                // Zamok orientacie + ovladania (hlavne pre telefony)
-                CircleButton(
-                    label = "\uD83D\uDD12", selected = false, scale = 0.62f,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp),
-                    onClick = { orientationLocked = true; controlsVisible = false; onOrientationLockChange(true) }
-                )
                 val order = playerControlOrder(onPrevChannel != null, seekable, pipSupported)
                 val selCtrl = order.getOrNull(controlNavIndex)
                 val curCh = liveChannels.getOrNull(liveCurrentIndex)
@@ -1766,6 +1759,13 @@ private fun PlayerUi(
                                 label = "\uD83D\uDCAC", selected = selCtrl == "subs", scale = bk,
                                 onClick = { menu = if (menu == "spu") null else "spu" }
                             )
+                            "lock" -> CircleButton(
+                                label = "\uD83D\uDD12", selected = orientationLocked, scale = bk,
+                                onClick = {
+                                    orientationLocked = !orientationLocked
+                                    onOrientationLockChange(orientationLocked)
+                                }
+                            )
                         }
                     }
                     val gap = Arrangement.spacedBy((8 * k).dp)
@@ -1789,6 +1789,7 @@ private fun PlayerUi(
                             barCtrl("subs")
                             barCtrl("sleep")
                             barCtrl("info")
+                            if (pipSupported) barCtrl("lock")
                         }
                     } else
                     Row(
@@ -1827,20 +1828,10 @@ private fun PlayerUi(
                             barCtrl("subs")
                             barCtrl("sleep")
                             barCtrl("info")
+                            if (pipSupported) barCtrl("lock")
                         }
                     }
                 }
-            }
-        }
-
-        // Zamknute: zobraz len odomykacie tlacidlo (ovladanie aj rotacia su zamknute)
-        if (orientationLocked) {
-            Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                CircleButton(
-                    label = "\uD83D\uDD13", selected = false, scale = 0.7f,
-                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp),
-                    onClick = { orientationLocked = false; onOrientationLockChange(false) }
-                )
             }
         }
 
