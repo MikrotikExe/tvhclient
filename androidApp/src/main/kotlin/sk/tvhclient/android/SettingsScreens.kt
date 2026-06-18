@@ -80,7 +80,28 @@ internal fun GeneralSettings(ctx: android.content.Context) {
     )
     Spacer(Modifier.height(16.dp))
 
-    Text(stringResource(R.string.autostart_title), style = MaterialTheme.typography.titleSmall)
+    // Tema aplikacie: automaticky (system) / svetla / tmava
+    var theme by remember { mutableStateOf(ThemePref.get(ctx)) }
+    val themeLabel: @Composable (String) -> String = { v ->
+        when (v) {
+            ThemePref.LIGHT -> stringResource(R.string.theme_light)
+            ThemePref.DARK -> stringResource(R.string.theme_dark)
+            else -> stringResource(R.string.theme_auto)
+        }
+    }
+    DropdownField(
+        label = stringResource(R.string.theme_title),
+        value = theme,
+        options = ThemePref.options,
+        optionLabel = themeLabel,
+        onSelect = { v ->
+            theme = v
+            ThemePref.set(ctx, v)
+            TabController.settingsDirty.value = true
+        }
+    )
+    Spacer(Modifier.height(16.dp))
+
     Spacer(Modifier.height(4.dp))
     fun requestOverlay() {
         if (android.os.Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(ctx)) {

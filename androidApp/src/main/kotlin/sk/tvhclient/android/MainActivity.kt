@@ -36,6 +36,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -85,7 +87,13 @@ class MainActivity : ComponentActivity() {
             TabController.openEpgGrid(fromPlayer = true, returnUuid = intent.getStringExtra("epg_return_uuid"))
         }
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            val themeMode = ThemePref.stateOf(this).value
+            val dark = when (themeMode) {
+                ThemePref.DARK -> true
+                ThemePref.LIGHT -> false
+                else -> isSystemInDarkTheme()
+            }
+            MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                 App()
             }
         }
