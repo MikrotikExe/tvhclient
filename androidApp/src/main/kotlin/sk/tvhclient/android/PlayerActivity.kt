@@ -760,6 +760,10 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Zavri predoslu instanciu prehravaca (napr. visiacu v PiP so starym kanalom),
+        // nech pri prepnuti kanala nezostane stara PiP visiet. Nova sa otvori na celu obrazovku.
+        liveInstance?.get()?.let { old -> if (old !== this) runCatching { old.finish() } }
+        liveInstance = java.lang.ref.WeakReference(this)
         remoteDebug = RemoteDebugPref.isEnabled(this)
         // Drz obrazovku zapnutu od startu prehravaca (setric/ambient na boxoch sa nesmie spustit)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -1135,6 +1139,8 @@ class PlayerActivity : ComponentActivity() {
     override fun onDestroy() {
         saveDvrProgress()
         super.onDestroy()
+        // uvolni odkaz, len ak stale ukazuje na tuto instanciu (nie na novsiu)
+        if (liveInstance?.get() === this) liveInstance = null
         videoCheckHandler.removeCallbacksAndMessages(null)
         reconnectHandler.removeCallbacksAndMessages(null)
         sleepHandler.removeCallbacksAndMessages(null)
@@ -1160,6 +1166,10 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_PROG_TITLE = "prog_title"
         const val EXTRA_DVR_UUID = "dvr_uuid"
         const val EXTRA_REQUIRE_PIN = "require_pin"
+
+        // Odkaz na prave zijucu instanciu prehravaca. Pri otvoreni noveho kanala zavrieme predoslu
+        // (aj tu visiacu v PiP), inak by stara PiP zostala visiet so starym kanalom.
+        private var liveInstance: java.lang.ref.WeakReference<PlayerActivity>? = null
     }
 }
 
@@ -1760,7 +1770,7 @@ private fun PlayerUi(
                     }
                     Spacer(Modifier.height((6 * k).dp))
                     // Tlacidla: zavriet, zoznam, prev, play, next, audio, titulky, sw
-                    val bk = if (portrait) 0.6f else (0.78f * k)
+                    val bk = if (portrait) 0.95f else (0.78f * k)
                     fun has(id: String) = order.contains(id)
                     // jedno tlacidlo podla id (zachytava okolity stav)
                     @Composable
@@ -1819,36 +1829,30 @@ private fun PlayerUi(
                     }
                     val gap = Arrangement.spacedBy((8 * k).dp)
                     if (portrait) {
-                        // PORTRET: play je presne v strede, ostatne tlacidla po stranach.
-                        // Dve rovnako vazene skupiny (weight 1f) => play + spacery su v strede obrazovky.
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        // PORTRET: tlacidla vo viacerych radoch a vacsie (jeden rad bol nepouzitelne maly).
+                        // Rad 1: navigacia/okno, Rad 2: prehravanie (play v strede), Rad 3: zvuk/extra.
+                        val rowGap = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.End),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
+                            Row(horizontalArrangement = rowGap, verticalAlignment = Alignment.CenterVertically) {
                                 barCtrl("close")
                                 if (has("pip")) barCtrl("pip")
                                 if (has("list") && liveChannels.isNotEmpty()) barCtrl("list")
                                 if (has("epg")) barCtrl("epg")
-                                if (has("prev")) barCtrl("prev")
+                                barCtrl("info")
                             }
-                            Spacer(Modifier.width((3 * k).dp))
-                            barCtrl("play")
-                            Spacer(Modifier.width((3 * k).dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.Start),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
+                            Row(horizontalArrangement = rowGap, verticalAlignment = Alignment.CenterVertically) {
+                                if (has("prev")) barCtrl("prev")
+                                barCtrl("play")
                                 if (has("next")) barCtrl("next")
+                            }
+                            Row(horizontalArrangement = rowGap, verticalAlignment = Alignment.CenterVertically) {
                                 barCtrl("audio")
                                 barCtrl("subs")
                                 barCtrl("sleep")
-                                barCtrl("info")
                                 if (pipSupported) barCtrl("lock")
                             }
                         }
