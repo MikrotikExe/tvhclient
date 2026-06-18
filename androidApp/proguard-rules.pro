@@ -1,5 +1,5 @@
 # ============================================================================
-# TvhClient — R8 / ProGuard keep pravidla pre release build
+# Headent Client — R8 / ProGuard keep pravidla pre release build
 # ============================================================================
 
 # --- kotlinx.serialization -------------------------------------------------

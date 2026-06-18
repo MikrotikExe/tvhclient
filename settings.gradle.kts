@@ -11,6 +11,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "TvhClient"
+rootProject.name = "HeadentClient"
 include(":shared")
 include(":androidApp")

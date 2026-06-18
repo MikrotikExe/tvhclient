@@ -124,7 +124,7 @@ object LegalText {
     private val PRIVACY_SK = LegalDoc(
         title = "Zásady ochrany osobných údajov",
         meta = "Účinné od: 17.6.2026 • Prevádzkovateľ: Juraj Chudý • Kontakt: juraj.chudy@outlook.com",
-        intro = "TvhClient je klientská aplikácia pre Tvheadend — open-source server na živé TV " +
+        intro = "Headent Client je klientská aplikácia pre Tvheadend — open-source server na živé TV " +
             "vysielanie a nahrávanie. Aplikácia sa pripája k Tvheadend serveru, ku ktorému má " +
             "používateľ prístup a ktorý si sám nakonfiguruje. Aplikácia neposkytuje žiadny " +
             "televízny obsah ani kanály.",
@@ -161,7 +161,7 @@ object LegalText {
     private val PRIVACY_EN = LegalDoc(
         title = "Privacy Policy",
         meta = "Effective date: 17 June 2026 • Operator: Juraj Chudý • Contact: juraj.chudy@outlook.com",
-        intro = "TvhClient is a client application for Tvheadend — an open-source server for live " +
+        intro = "Headent Client is a client application for Tvheadend — an open-source server for live " +
             "TV and recording. The app connects to a Tvheadend server that the user has access " +
             "to and configures themselves. The app does not provide any TV content or channels.",
         sections = listOf(
@@ -196,7 +196,7 @@ object LegalText {
     private val TERMS_SK = LegalDoc(
         title = "Podmienky používania",
         meta = "Účinné od: 17.6.2026 • Poskytovateľ: Juraj Chudý • Kontakt: juraj.chudy@outlook.com",
-        intro = "TvhClient je klient pre Tvheadend — open-source server na živé TV vysielanie a " +
+        intro = "Headent Client je klient pre Tvheadend — open-source server na živé TV vysielanie a " +
             "nahrávanie. Používaním aplikácie súhlasíte s týmito podmienkami.",
         sections = listOf(
             "Účel aplikácie" to
@@ -219,7 +219,7 @@ object LegalText {
     private val TERMS_EN = LegalDoc(
         title = "Terms of Use",
         meta = "Effective date: 17 June 2026 • Provider: Juraj Chudý • Contact: juraj.chudy@outlook.com",
-        intro = "TvhClient is a client for Tvheadend — an open-source server for live TV and " +
+        intro = "Headent Client is a client for Tvheadend — an open-source server for live TV and " +
             "recording. By using the app you agree to these terms.",
         sections = listOf(
             "Purpose" to

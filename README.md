@@ -1,10 +1,10 @@
-# TvhClient
+# Headent Client
 
 Android client for [Tvheadend](https://tvheadend.org/) — live TV, EPG, recordings (DVR)
 and radio, built for **Android TV boxes and phones**. Written in Kotlin Multiplatform with
 Jetpack Compose and libVLC.
 
-> **Disclaimer:** TvhClient is an independent client application and is **not** an
+> **Disclaimer:** Headent Client is an independent client application and is **not** an
 > official product of the Tvheadend project. The app contains **no** TV channels or
 > media content — it only connects to a Tvheadend server that **you** have access to and
 > configure yourself. A running Tvheadend server and valid credentials are required.
@@ -61,8 +61,8 @@ still installable for testing.
 The app stores connection settings (incl. credentials) only locally on the device and
 sends them solely to the Tvheadend server you configure. No data is sent to the developer
 or any third party. See the
-[Privacy Policy](https://tvhclient.jurajchudy.sk/privacy-policy.html) and
-[Terms of Use](https://tvhclient.jurajchudy.sk/terms-of-use.html). Both are also available
+[Privacy Policy](https://headentclient.com/privacy-policy.html) and
+[Terms of Use](https://headentclient.com/terms-of-use.html). Both are also available
 in-app under Settings → Information.
 
 ## License

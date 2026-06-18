@@ -131,13 +131,13 @@ class PlayerActivity : ComponentActivity() {
     /** Vytvori Media s HW/SW dekoderom podla preferencie (lacne boxy = SW). */
     private fun userAgent(): String {
         val v = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
-        return "TVH Client/$v"
+        return "HeadentClient/$v"
     }
 
     private fun buildMedia(url: String): Media {
         val m = Media(libVlc, Uri.parse(url))
         m.setHWDecoderEnabled(true, false)
-        // User-Agent: nech server vidi, ze sa pripaja TVH Client
+        // User-Agent: nech server vidi, ze sa pripaja HeadentClient
         m.addOption(":http-user-agent=" + userAgent())
         return m
     }

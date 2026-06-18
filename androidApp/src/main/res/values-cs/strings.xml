@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TVH Klient</string>
+    <string name="app_name">Headent Client</string>
     <string name="no_servers">Zatím žádný server. Přidej svůj Tvheadend server.</string>
     <string name="add_server">Přidat server</string>
     <string name="edit_server">Upravit server</string>
@@ -189,7 +189,7 @@
     <string name="plock_hint">4 číslice (0000-9999)</string>
     <string name="tab_settings">Nastavení</string>
     <string name="exit_title">Ukončit</string>
-    <string name="exit_msg">Opravdu chcete ukončit TVH Client?</string>
+    <string name="exit_msg">Opravdu chcete ukončit Headent Client?</string>
     <string name="exit_yes">Ukončit</string>
     <string name="exit_no">Zrušit</string>
     <string name="autostart_title">Automatické spuštění</string>
