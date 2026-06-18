@@ -1757,10 +1757,13 @@ private fun PlayerUi(
                                             ) {
                                                 val thumb = 10.dp.toPx()
                                                 val usable = (size.width - 2 * thumb).coerceAtLeast(0f)
-                                                val w = 2.dp.toPx()
+                                                val w = 3.dp.toPx()
+                                                // vyska len cez listu (nie cela dotykova plocha)
+                                                val half = 7.dp.toPx()
+                                                val cy = size.height / 2f
                                                 fun tick(f: Float, c: Color) {
                                                     val x = thumb + f.coerceIn(0f, 1f) * usable
-                                                    drawLine(c, Offset(x, 0f), Offset(x, size.height), w)
+                                                    drawLine(c, Offset(x, cy - half), Offset(x, cy + half), w)
                                                 }
                                                 if (progStopFrac < 0.998f)
                                                     tick(progStopFrac, Color(0x80FF5252))
