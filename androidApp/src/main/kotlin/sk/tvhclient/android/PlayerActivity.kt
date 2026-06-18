@@ -1004,10 +1004,14 @@ class PlayerActivity : ComponentActivity() {
      */
     private fun autoPipIfPossible(): Boolean {
         if (pipSupported && isPlayingState.value &&
-            !(android.os.Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode)
+            android.os.Build.VERSION.SDK_INT >= 26 &&
+            packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
+            ::mediaPlayer.isInitialized &&
+            !isInPictureInPictureMode
         ) {
-            enterPipIfPossible()
-            return android.os.Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode
+            // enterPictureInPictureMode vrati true, ak realne vstupil do PiP (nespoliehaj sa
+            // na isInPictureInPictureMode hned po volani - aktualizuje sa az asynchronne)
+            return runCatching { enterPictureInPictureMode(buildPipParams()) }.getOrDefault(false)
         }
         return false
     }
@@ -1099,14 +1103,20 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onStop() {
         saveDvrProgress()
-        // v PiP rezime nechaj video bezat (PiP okno je stale viditelne)
-        if (android.os.Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode) {
+        // PiP okno nechaj hrat LEN ak je stale viditelne na pozadi (appka len minimalizovana).
+        // Ak sa aktivita ukoncuje (pouzivatel zavrel PiP okno cez X / odsunul ho), prepadni dole
+        // a zastav prehravanie, inak by zvuk hral dalej az do zabitia appky.
+        if (android.os.Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode && !isFinishing) {
             super.onStop(); return
         }
         wasPlaying = ::mediaPlayer.isInitialized && mediaPlayer.isPlaying
         super.onStop()
         if (::mediaPlayer.isInitialized) {
-            if (mediaPlayer.isPlaying) mediaPlayer.pause()
+            if (isFinishing) {
+                runCatching { mediaPlayer.stop() }
+            } else if (mediaPlayer.isPlaying) {
+                mediaPlayer.pause()
+            }
             // uvolni surface, nech sa po navrate da znova pripojit (inak cierna obrazovka)
             runCatching { mediaPlayer.detachViews() }
         }
@@ -1799,26 +1809,38 @@ private fun PlayerUi(
                     }
                     val gap = Arrangement.spacedBy((8 * k).dp)
                     if (portrait) {
-                        // PORTRET: vsetky tlacidla v jednom vycentrovanom rade (zmensene, aby sa zmestili)
+                        // PORTRET: play je presne v strede, ostatne tlacidla po stranach.
+                        // Dve rovnako vazene skupiny (weight 1f) => play + spacery su v strede obrazovky.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(
-                                3.dp, Alignment.CenterHorizontally
-                            ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            barCtrl("close")
-                            if (has("pip")) barCtrl("pip")
-                            if (has("list") && liveChannels.isNotEmpty()) barCtrl("list")
-                            if (has("epg")) barCtrl("epg")
-                            if (has("prev")) barCtrl("prev")
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.End),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                barCtrl("close")
+                                if (has("pip")) barCtrl("pip")
+                                if (has("list") && liveChannels.isNotEmpty()) barCtrl("list")
+                                if (has("epg")) barCtrl("epg")
+                                if (has("prev")) barCtrl("prev")
+                            }
+                            Spacer(Modifier.width((3 * k).dp))
                             barCtrl("play")
-                            if (has("next")) barCtrl("next")
-                            barCtrl("audio")
-                            barCtrl("subs")
-                            barCtrl("sleep")
-                            barCtrl("info")
-                            if (pipSupported) barCtrl("lock")
+                            Spacer(Modifier.width((3 * k).dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.Start),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                if (has("next")) barCtrl("next")
+                                barCtrl("audio")
+                                barCtrl("subs")
+                                barCtrl("sleep")
+                                barCtrl("info")
+                                if (pipSupported) barCtrl("lock")
+                            }
                         }
                     } else
                     Row(
