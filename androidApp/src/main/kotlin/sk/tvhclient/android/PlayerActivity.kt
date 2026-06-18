@@ -21,6 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1569,20 +1570,24 @@ private fun PlayerUi(
                 val fracNow = elapsed.toFloat() / total.toFloat()
                 val remainMin = if (hasNow) ((progStop - liveNowSec) / 60).coerceAtLeast(0) else 0
                 // skalovanie podla rozlisenia boxu (kompaktny, citatelny pruh)
-                val cfg = androidx.compose.ui.platform.LocalConfiguration.current
-                val k = (cfg.screenWidthDp / 640f).coerceIn(0.9f, 1.25f)
-                // pouzi sirkovy breakpoint (nie height>=width): siroke obrazovky (landscape/TV/tablet)
-                // dostanu konzistentne landscape layout, uzke (telefon na vysku) kompaktny
-                val portrait = cfg.screenWidthDp < 600
-
-                // Jeden spolocny info+ovladaci pruh dole
-                Column(
+                // Meraj skutocnu sirku okna (BoxWithConstraints), nie Configuration.screenWidthDp —
+                // ten na niektorych zariadeniach hlasi zlu hodnotu (kompaktny layout na sirku).
+                // maxWidth odraza realne pixely okna, takze siroke okno vzdy dostane landscape layout.
+                BoxWithConstraints(
                     Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
-                        .background(Color(0xE6000000))
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
+                    val k = (maxWidth.value / 640f).coerceIn(0.9f, 1.25f)
+                    val portrait = maxWidth < 600.dp
+
+                    // Jeden spolocny info+ovladaci pruh dole
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xE6000000))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
                     Row(verticalAlignment = Alignment.Top) {
                         // cislo + logo + nazov kanala
                         Column(
@@ -1855,6 +1860,7 @@ private fun PlayerUi(
                             if (pipSupported) barCtrl("lock")
                         }
                     }
+                }
                 }
             }
         }
