@@ -352,13 +352,20 @@ private fun DvrContent(
                         val picon = channelPicons[ch]
                         FolderCard(ch, sub = "$cnt", onClick = { onNav(DvrNav.Dates(ch)) }, leading = {
                             if (picon != null) {
-                                coil.compose.AsyncImage(
-                                    model = coil.request.ImageRequest.Builder(context).data(picon).build(),
-                                    contentDescription = ch,
-                                    imageLoader = piconLoader,
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                    modifier = Modifier.fillMaxSize().padding(8.dp)
-                                )
+                                Box(
+                                    Modifier.fillMaxSize()
+                                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                        .background(piconBackground()),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    coil.compose.AsyncImage(
+                                        model = coil.request.ImageRequest.Builder(context).data(picon).build(),
+                                        contentDescription = ch,
+                                        imageLoader = piconLoader,
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                        modifier = Modifier.fillMaxSize().padding(8.dp)
+                                    )
+                                }
                             } else {
                                 Text(ch.take(2).uppercase(), style = MaterialTheme.typography.titleMedium)
                             }
@@ -702,7 +709,9 @@ private fun ChannelFolderRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(width = 56.dp, height = 40.dp),
+            Modifier.size(width = 56.dp, height = 40.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                .background(piconBackground()),
             contentAlignment = Alignment.Center
         ) {
             if (piconUrl != null) {
