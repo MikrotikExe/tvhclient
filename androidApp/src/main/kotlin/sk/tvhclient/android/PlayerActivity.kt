@@ -1752,15 +1752,15 @@ private fun PlayerUi(
                                 onClick = onOpenSleep
                             )
                             "audio" -> CircleButton(
-                                label = "\uD83D\uDD0A", selected = selCtrl == "audio", scale = bk,
+                                label = "\u266A", selected = selCtrl == "audio", scale = bk,
                                 onClick = { menu = if (menu == "audio") null else "audio" }
                             )
                             "subs" -> CircleButton(
-                                label = "\uD83D\uDCAC", selected = selCtrl == "subs", scale = bk,
+                                label = "CC", selected = selCtrl == "subs", scale = bk,
                                 onClick = { menu = if (menu == "spu") null else "spu" }
                             )
                             "lock" -> CircleButton(
-                                label = "\uD83D\uDD12", selected = orientationLocked, scale = bk,
+                                label = "\u26BF", selected = orientationLocked, scale = bk,
                                 onClick = {
                                     orientationLocked = !orientationLocked
                                     onOrientationLockChange(orientationLocked)
