@@ -935,6 +935,13 @@ class PlayerActivity : ComponentActivity() {
                 openSpuSignal = openSpuMenuState.value,
                 onOptionsChange = { optionsOpen = it },
                 onControlsVisibleChange = { controlsShown = it },
+                onOrientationLockChange = { locked ->
+                    runCatching {
+                        requestedOrientation =
+                            if (locked) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    }
+                },
                 onPrevChannel = if (canZap) ({ switchLive(-1) }) else null,
                 onNextChannel = if (canZap) ({ switchLive(+1) }) else null,
                 liveChannels = if (canZap) liveChannelsState.value else emptyList(),
@@ -1062,6 +1069,16 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Auto-PiP na telefonoch pri odchode z aplikacie.
+        // TV boxy nemaju FEATURE_PICTURE_IN_PICTURE, takze pipSupported = telefon/tablet.
+        if (pipSupported && isPlayingState.value &&
+            !(android.os.Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode)) {
+            enterPipIfPossible()
+        }
+    }
+
     override fun onStop() {
         saveDvrProgress()
         // v PiP rezime nechaj video bezat (PiP okno je stale viditelne)
@@ -1177,6 +1194,7 @@ private fun PlayerUi(
     progNextStart: Long = 0,
     progNextStop: Long = 0,
     zapPoke: Int = 0,
+    onOrientationLockChange: (Boolean) -> Unit = {},
     onClose: () -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(false) }
@@ -1414,7 +1432,8 @@ private fun PlayerUi(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                if (menu != null) menu = null else controlsVisible = !controlsVisible
+                if (orientationLocked) { /* zamknute: tap ignoruj */ }
+                else if (menu != null) menu = null else controlsVisible = !controlsVisible
             }
     ) {
         AndroidView(
@@ -1514,6 +1533,11 @@ private fun PlayerUi(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(Modifier.fillMaxSize().systemBarsPadding()) {
+                // Zamok orientacie + ovladania (hlavne pre telefony)
+                CircleButton(
+                    label = "\uD83D\uDD12", selected = false, scale = 0.62f,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
+                ) { orientationLocked = true; controlsVisible = false; onOrientationLockChange(true) }
                 val order = playerControlOrder(onPrevChannel != null, seekable, pipSupported)
                 val selCtrl = order.getOrNull(controlNavIndex)
                 val curCh = liveChannels.getOrNull(liveCurrentIndex)
@@ -1733,20 +1757,14 @@ private fun PlayerUi(
                                 label = "\u23F2", selected = selCtrl == "sleep", scale = bk,
                                 onClick = onOpenSleep
                             )
-                            "audio" -> if (portrait) CircleButton(
+                            "audio" -> CircleButton(
                                 label = "\uD83D\uDD0A", selected = selCtrl == "audio", scale = bk,
                                 onClick = { menu = if (menu == "audio") null else "audio" }
                             )
-                            else TextChip("\uD83D\uDD0A Audio", selected = selCtrl == "audio", scale = bk) {
-                                menu = if (menu == "audio") null else "audio"
-                            }
-                            "subs" -> if (portrait) CircleButton(
+                            "subs" -> CircleButton(
                                 label = "\uD83D\uDCAC", selected = selCtrl == "subs", scale = bk,
                                 onClick = { menu = if (menu == "spu") null else "spu" }
                             )
-                            else TextChip("\uD83D\uDCAC Titulky", selected = selCtrl == "subs", scale = bk) {
-                                menu = if (menu == "spu") null else "spu"
-                            }
                         }
                     }
                     val gap = Arrangement.spacedBy((8 * k).dp)
@@ -1811,6 +1829,16 @@ private fun PlayerUi(
                         }
                     }
                 }
+            }
+        }
+
+        // Zamknute: zobraz len odomykacie tlacidlo (ovladanie aj rotacia su zamknute)
+        if (orientationLocked) {
+            Box(Modifier.fillMaxSize().systemBarsPadding()) {
+                CircleButton(
+                    label = "\uD83D\uDD13", selected = false, scale = 0.7f,
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp)
+                ) { orientationLocked = false; onOrientationLockChange(false) }
             }
         }
 

@@ -299,7 +299,11 @@ fun DropdownField(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            Text(optionLabel(value), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                optionLabel(value),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
     if (open) {
