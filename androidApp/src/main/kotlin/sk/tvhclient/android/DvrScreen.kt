@@ -518,8 +518,10 @@ internal fun playDvr(context: Context, entry: DvrEntry) {
     val intent = Intent(context, PlayerActivity::class.java).apply {
         putExtra(PlayerActivity.EXTRA_URL, url)
         putExtra(PlayerActivity.EXTRA_TITLE, entry.title)
-        putExtra(PlayerActivity.EXTRA_DURATION_MS, entry.durationSec * 1000)
+        putExtra(PlayerActivity.EXTRA_DURATION_MS, entry.realLengthSec * 1000)
         putExtra(PlayerActivity.EXTRA_DVR_UUID, entry.uuid)
+        putExtra(PlayerActivity.EXTRA_PROG_START_FRAC, entry.programStartFraction)
+        putExtra(PlayerActivity.EXTRA_PROG_STOP_FRAC, entry.programStopFraction)
     }
     context.startActivity(intent)
 }

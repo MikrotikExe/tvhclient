@@ -150,6 +150,8 @@ object HtspData {
             channelName = strOf(d, "channelName"),
             start = start,
             stop = stop,
+            startExtra = longOf(d, "startExtra") ?: 0,
+            stopExtra = longOf(d, "stopExtra") ?: 0,
             duration = if (stop > start) stop - start else 0,
             fileSize = longOf(d, "dataSize") ?: 0,
             status = strOf(d, "state"),

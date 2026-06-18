@@ -19,6 +19,13 @@ data class DvrEntry(
     @SerialName("channelname") val channelName: String = "",
     val start: Long = 0,
     val stop: Long = 0,
+    // Skutocne hranice suboru (vratane okraja pred/po). HTTP grid ich dava
+    // priamo (start_real/stop_real), HTSP ich dopocita z okraja (start_extra).
+    @SerialName("start_real") val startReal: Long = 0,
+    @SerialName("stop_real") val stopReal: Long = 0,
+    // Okraj nahravania v minutach (pred/po) — fallback ked nie su *_real.
+    @SerialName("start_extra") val startExtra: Long = 0,
+    @SerialName("stop_extra") val stopExtra: Long = 0,
     @SerialName("duration") val duration: Long = 0,
     @SerialName("filesize") val fileSize: Long = 0,
     @SerialName("status") val status: String = "",
@@ -30,6 +37,38 @@ data class DvrEntry(
 
     val durationSec: Long
         get() = if (duration > 0) duration else (if (stop > start) stop - start else 0)
+
+    /** Skutocny zaciatok nahravaneho suboru (vratane okraja pred relaciou). */
+    val realStartSec: Long get() = when {
+        startReal in 1 until start -> startReal
+        startExtra > 0 && start > 0 -> start - startExtra * 60
+        else -> start
+    }
+
+    /** Skutocny koniec nahravaneho suboru (vratane okraja po relacii). */
+    val realStopSec: Long get() = when {
+        stopReal > stop -> stopReal
+        stopExtra > 0 && stop > 0 -> stop + stopExtra * 60
+        else -> stop
+    }
+
+    /** Dlzka skutocneho suboru v sekundach (s okrajmi), fallback na trvanie relacie. */
+    val realLengthSec: Long
+        get() = (realStopSec - realStartSec).let { if (it > 0) it else durationSec }
+
+    /** Pozicia (0..1) zaciatku relacie v subore — kde sa koreci okraj pred. 0 = bez okraja. */
+    val programStartFraction: Float get() {
+        val len = realStopSec - realStartSec
+        val off = start - realStartSec
+        return if (len > 0 && off > 0) (off.toFloat() / len).coerceIn(0f, 1f) else 0f
+    }
+
+    /** Pozicia (0..1) konca relacie v subore — kde zacina okraj po. 1 = bez okraja. */
+    val programStopFraction: Float get() {
+        val len = realStopSec - realStartSec
+        val off = stop - realStartSec
+        return if (len > 0 && off in 1 until len) (off.toFloat() / len).coerceIn(0f, 1f) else 1f
+    }
 
     /** DVB top nibble z content_type pre klasifikator.
      *  HTTP API (grid_finished) vracia uz horny nibble (0-11), HTSP vracia

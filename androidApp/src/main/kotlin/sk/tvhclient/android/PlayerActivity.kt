@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -792,6 +794,8 @@ class PlayerActivity : ComponentActivity() {
         val progStop = intent.getLongExtra(EXTRA_PROG_STOP, 0L)
         val progTitle = intent.getStringExtra(EXTRA_PROG_TITLE) ?: ""
         dvrUuid = intent.getStringExtra(EXTRA_DVR_UUID)
+        val progStartFrac = intent.getFloatExtra(EXTRA_PROG_START_FRAC, 0f)
+        val progStopFrac = intent.getFloatExtra(EXTRA_PROG_STOP_FRAC, 1f)
         dvrDurationMs = durationMs
         val requirePin = intent.getBooleanExtra(EXTRA_REQUIRE_PIN, false)
 
@@ -896,6 +900,8 @@ class PlayerActivity : ComponentActivity() {
                 player = mediaPlayer,
                 seekable = directUrl != null,  // DVR nahravka = da sa pretacat; live nie
                 knownDurationMs = durationMs,  // dlzka z DVR entry (TS subor ju nenese)
+                progStartFrac = progStartFrac,
+                progStopFrac = progStopFrac,
                 progStartSec = liveProgStartState.value,
                 progStopSec = liveProgStopState.value,
                 progTitleArg = liveProgTitleState.value,
@@ -1173,6 +1179,8 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_PROG_STOP = "prog_stop"
         const val EXTRA_PROG_TITLE = "prog_title"
         const val EXTRA_DVR_UUID = "dvr_uuid"
+        const val EXTRA_PROG_START_FRAC = "prog_start_frac"
+        const val EXTRA_PROG_STOP_FRAC = "prog_stop_frac"
         const val EXTRA_REQUIRE_PIN = "require_pin"
 
         // Odkaz na prave zijucu instanciu prehravaca. Pri otvoreni noveho kanala zavrieme predoslu
@@ -1196,6 +1204,8 @@ private fun PlayerUi(
     player: MediaPlayer,
     seekable: Boolean,
     knownDurationMs: Long,
+    progStartFrac: Float = 0f,
+    progStopFrac: Float = 1f,
     progStartSec: Long = 0,
     progStopSec: Long = 0,
     progTitleArg: String = "",
@@ -1725,16 +1735,40 @@ private fun PlayerUi(
                                 ) {
                                     Text(fmtMs(cur), color = Color.White,
                                         style = MaterialTheme.typography.bodySmall)
-                                    androidx.compose.material3.Slider(
-                                        value = frac.coerceIn(0f, 1f),
-                                        onValueChange = { dragging = true; dragValue = it },
-                                        onValueChangeFinished = {
-                                            player.position = dragValue
-                                            posFraction = dragValue
-                                            dragging = false
-                                        },
-                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                                    )
+                                    Box(
+                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        androidx.compose.material3.Slider(
+                                            value = frac.coerceIn(0f, 1f),
+                                            onValueChange = { dragging = true; dragValue = it },
+                                            onValueChangeFinished = {
+                                                player.position = dragValue
+                                                posFraction = dragValue
+                                                dragging = false
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        // Znacky relacie: cervena = zaciatok (koniec okraja pred),
+                                        // svetlejsia = koniec relacie (zaciatok okraja po).
+                                        if (progStartFrac > 0.002f || progStopFrac < 0.998f) {
+                                            androidx.compose.foundation.Canvas(
+                                                modifier = Modifier.matchParentSize()
+                                            ) {
+                                                val thumb = 10.dp.toPx()
+                                                val usable = (size.width - 2 * thumb).coerceAtLeast(0f)
+                                                val w = 2.dp.toPx()
+                                                fun tick(f: Float, c: Color) {
+                                                    val x = thumb + f.coerceIn(0f, 1f) * usable
+                                                    drawLine(c, Offset(x, 0f), Offset(x, size.height), w)
+                                                }
+                                                if (progStopFrac < 0.998f)
+                                                    tick(progStopFrac, Color(0x80FF5252))
+                                                if (progStartFrac > 0.002f)
+                                                    tick(progStartFrac, Color(0xFFFF1744))
+                                            }
+                                        }
+                                    }
                                     Text(fmtMs(lengthMs), color = Color.White,
                                         style = MaterialTheme.typography.bodySmall)
                                 }
