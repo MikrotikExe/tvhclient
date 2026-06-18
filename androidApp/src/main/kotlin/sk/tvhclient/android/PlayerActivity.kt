@@ -1079,6 +1079,16 @@ class PlayerActivity : ComponentActivity() {
         } else {
             pipReceiver?.let { runCatching { unregisterReceiver(it) } }
             pipReceiver = null
+            // PiP okno zatvorene pouzivatelom kym bola appka na pozadi: aktivita je uz STOPnuta
+            // (stav CREATED, onStop uz prebehol a nechal video bezat). Tu doraz zastav prehravanie,
+            // inak by zvuk hral dalej. Ak pouzivatel PiP rozbalil na celu obrazovku, stav je
+            // STARTED/RESUMED a prehravac nezastavujeme.
+            if (lifecycle.currentState < androidx.lifecycle.Lifecycle.State.STARTED &&
+                ::mediaPlayer.isInitialized
+            ) {
+                runCatching { if (mediaPlayer.isPlaying) mediaPlayer.pause() }
+                runCatching { mediaPlayer.detachViews() }
+            }
         }
     }
 
@@ -1103,10 +1113,10 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onStop() {
         saveDvrProgress()
-        // PiP okno nechaj hrat LEN ak je stale viditelne na pozadi (appka len minimalizovana).
-        // Ak sa aktivita ukoncuje (pouzivatel zavrel PiP okno cez X / odsunul ho), prepadni dole
-        // a zastav prehravanie, inak by zvuk hral dalej az do zabitia appky.
-        if (android.os.Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode && !isFinishing) {
+        // PiP okno nechaj hrat LEN ak sme realne v PiP (vlastny priznak z callbacku, nie zivy
+        // isInPictureInPictureMode - ten pri zatvarani PiP casto este hlasi true) a appka len ide
+        // na pozadie. Ak sa aktivita ukoncuje, prepadni dole a zastav prehravanie.
+        if (android.os.Build.VERSION.SDK_INT >= 24 && inPipState.value && !isFinishing) {
             super.onStop(); return
         }
         wasPlaying = ::mediaPlayer.isInitialized && mediaPlayer.isPlaying
