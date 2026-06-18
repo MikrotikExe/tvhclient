@@ -1709,69 +1709,6 @@ private fun PlayerUi(
                                     )
                                 }
                             }
-                            // DVR: pretacacia lista (zvyraznena pri vybere "seek")
-                            if (seekable && lengthMs > 0) {
-                                val seekFocused = selCtrl == "seek"
-                                val frac = when {
-                                    seekFocused -> scrubFrac
-                                    dragging -> dragValue
-                                    else -> posFraction
-                                }
-                                val cur = (frac * lengthMs).toLong()
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .then(
-                                            if (seekFocused) Modifier.border(
-                                                2.dp, Color.White, RoundedCornerShape(8.dp)
-                                            ) else Modifier
-                                        )
-                                        .padding(horizontal = 4.dp)
-                                ) {
-                                    Text(fmtMs(cur), color = Color.White,
-                                        style = MaterialTheme.typography.bodySmall)
-                                    Box(
-                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        androidx.compose.material3.Slider(
-                                            value = frac.coerceIn(0f, 1f),
-                                            onValueChange = { dragging = true; dragValue = it },
-                                            onValueChangeFinished = {
-                                                player.position = dragValue
-                                                posFraction = dragValue
-                                                dragging = false
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        // Znacky relacie: cervena = zaciatok (koniec okraja pred),
-                                        // svetlejsia = koniec relacie (zaciatok okraja po).
-                                        if (progStartFrac > 0.002f || progStopFrac < 0.998f) {
-                                            androidx.compose.foundation.Canvas(
-                                                modifier = Modifier.matchParentSize()
-                                            ) {
-                                                val thumb = 10.dp.toPx()
-                                                val usable = (size.width - 2 * thumb).coerceAtLeast(0f)
-                                                val w = 3.dp.toPx()
-                                                // vyska presne cez listu (~16 dp track), vystredene
-                                                val half = 8.dp.toPx()
-                                                val cy = size.height / 2f
-                                                fun tick(f: Float, c: Color) {
-                                                    val x = thumb + f.coerceIn(0f, 1f) * usable
-                                                    drawLine(c, Offset(x, cy - half), Offset(x, cy + half), w)
-                                                }
-                                                if (progStopFrac < 0.998f)
-                                                    tick(progStopFrac, Color(0x80FF5252))
-                                                if (progStartFrac > 0.002f)
-                                                    tick(progStartFrac, Color(0xFFFF1744))
-                                            }
-                                        }
-                                    }
-                                    Text(fmtMs(lengthMs), color = Color.White,
-                                        style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
                             if (progDesc.isNotBlank()) {
                                 Text(
                                     progDesc,
@@ -1809,6 +1746,71 @@ private fun PlayerUi(
                                     softWrap = false
                                 )
                             }
+                        }
+                    }
+                    Spacer(Modifier.height((4 * k).dp))
+                    // DVR: pretacacia lista (zvyraznena pri vybere "seek")
+                    if (seekable && lengthMs > 0) {
+                        val seekFocused = selCtrl == "seek"
+                        val frac = when {
+                            seekFocused -> scrubFrac
+                            dragging -> dragValue
+                            else -> posFraction
+                        }
+                        val cur = (frac * lengthMs).toLong()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                                .then(
+                                    if (seekFocused) Modifier.border(
+                                        2.dp, Color.White, RoundedCornerShape(8.dp)
+                                    ) else Modifier
+                                )
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Text(fmtMs(cur), color = Color.White,
+                                style = MaterialTheme.typography.bodySmall)
+                            Box(
+                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.material3.Slider(
+                                    value = frac.coerceIn(0f, 1f),
+                                    onValueChange = { dragging = true; dragValue = it },
+                                    onValueChangeFinished = {
+                                        player.position = dragValue
+                                        posFraction = dragValue
+                                        dragging = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                // Znacky relacie: cervena = zaciatok (koniec okraja pred),
+                                // svetlejsia = koniec relacie (zaciatok okraja po).
+                                if (progStartFrac > 0.002f || progStopFrac < 0.998f) {
+                                    androidx.compose.foundation.Canvas(
+                                        modifier = Modifier.matchParentSize()
+                                    ) {
+                                        val thumb = 10.dp.toPx()
+                                        val usable = (size.width - 2 * thumb).coerceAtLeast(0f)
+                                        val w = 3.dp.toPx()
+                                        // vyska presne cez listu (~16 dp track), vystredene
+                                        val half = 8.dp.toPx()
+                                        val cy = size.height / 2f
+                                        fun tick(f: Float, c: Color) {
+                                            val x = thumb + f.coerceIn(0f, 1f) * usable
+                                            drawLine(c, Offset(x, cy - half), Offset(x, cy + half), w)
+                                        }
+                                        if (progStopFrac < 0.998f)
+                                            tick(progStopFrac, Color(0x80FF5252))
+                                        if (progStartFrac > 0.002f)
+                                            tick(progStartFrac, Color(0xFFFF1744))
+                                    }
+                                }
+                            }
+                            Text(fmtMs(lengthMs), color = Color.White,
+                                style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     Spacer(Modifier.height((6 * k).dp))
