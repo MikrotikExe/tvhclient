@@ -60,6 +60,21 @@ class ServersViewModel : ViewModel() {
         }
     }
 
+    // Server s funkcnym rezimom po poslednom testAuto (HTTP -> fallback HTSP). Ulozi sa tento.
+    var resolvedServer: TvhServer? = null
+        private set
+
+    /** Test s auto-detekciou pripojenia (HTTP 9981 -> ak vypnute, skusi HTSP 9982). */
+    fun testAuto(server: TvhServer) {
+        _testState.value = TestState.Running
+        resolvedServer = null
+        viewModelScope.launch {
+            val (result, working) = withContext(Dispatchers.IO) { Tvh.testConnectionAuto(server) }
+            resolvedServer = working
+            _testState.value = TestState.Done(result)
+        }
+    }
+
     fun resetTest() {
         _testState.value = TestState.Idle
     }

@@ -65,7 +65,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
     LaunchedEffect(testState) {
         val st = testState
         if (st is TestState.Done && st.result is ConnectionResult.Success) {
-            pending?.let { vm.save(it); vm.setActive(it.id); vm.resetTest() }
+            (vm.resolvedServer ?: pending)?.let { vm.save(it); vm.setActive(it.id); vm.resetTest() }
             pending = null
         }
     }
@@ -178,7 +178,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
                         htspPort = htspPort.toIntOrNull() ?: 9982
                     )
                     pending = srv
-                    vm.test(srv)
+                    vm.testAuto(srv)
                 }
             },
             enabled = testState !is TestState.Running,

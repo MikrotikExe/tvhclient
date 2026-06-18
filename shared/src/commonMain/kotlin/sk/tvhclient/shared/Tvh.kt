@@ -45,6 +45,24 @@ object Tvh {
         try { return api.testConnection() } finally { api.close() }
     }
 
+    /**
+     * Test s automatickou detekciou: ak je rezim HTTP a pripojenie zlyha (web rozhranie 9981
+     * je vypnute -> sietova/HTTP chyba, nie zle heslo), skusi sa HTSP na htspPort (9982).
+     * Vrati vysledok a server s rezimom, ktory funguje (volajuci ten server ulozi).
+     */
+    @Throws(CancellationException::class)
+    suspend fun testConnectionAuto(server: TvhServer): Pair<ConnectionResult, TvhServer> {
+        val first = testConnection(server)
+        if (server.connectionMode != "htsp" &&
+            (first is ConnectionResult.NetworkError || first is ConnectionResult.HttpError)
+        ) {
+            val htspServer = server.copy(connectionMode = "htsp")
+            val second = testConnection(htspServer)
+            if (second is ConnectionResult.Success) return second to htspServer
+        }
+        return first to server
+    }
+
     fun newServerId(): String {
         val chars = "abcdefghijklmnopqrstuvwxyz0123456789"
         return buildString { repeat(16) { append(chars.random()) } }
