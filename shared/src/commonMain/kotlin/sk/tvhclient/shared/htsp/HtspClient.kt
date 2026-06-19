@@ -356,9 +356,16 @@ class HtspClient(
                             val typ = sm["type"] as? String ?: return@mapNotNull null
                             TsMuxer.Stream(idx, typ)
                         }
-                        val mx = TsMuxer(streams)
-                        muxer = mx
-                        if (mx.hasTracks()) onTs(mx.start())
+                        val existing = muxer
+                        if (existing == null) {
+                            val mx = TsMuxer(streams)
+                            muxer = mx
+                            if (mx.hasTracks()) onTs(mx.start())
+                        } else {
+                            // dalsi subscriptionStart (napr. po skoku) — zachovaj spojitu
+                            // casovu os, len znova posli PAT/PMT
+                            onTs(existing.start())
+                        }
                     }
                     "muxpkt" -> {
                         val mx = muxer ?: continue

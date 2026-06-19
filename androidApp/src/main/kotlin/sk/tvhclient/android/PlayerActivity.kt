@@ -284,11 +284,14 @@ class PlayerActivity : ComponentActivity() {
     private fun timeshiftSkip(seconds: Int) {
         if (!htspLive) return
         htspFeeder?.skip(seconds)
-        // pocas pauzy najprv zloz doteraz nazbierany cas, potom aplikuj skok
+        // ak je pauza, po skoku spusti prehravanie (nech vidno vysledok skoku)
         if (tsPauseStartedAt > 0L) {
             val now = System.currentTimeMillis()
             tsAccumMs += now - tsPauseStartedAt
-            tsPauseStartedAt = now
+            tsPauseStartedAt = 0L
+            stopTimeshiftTicker()
+            htspFeeder?.resume()
+            if (::mediaPlayer.isInitialized && !mediaPlayer.isPlaying) mediaPlayer.play()
         }
         // vzad (zaporne sekundy) => vacsi posun za zivym; vpred => mensi
         tsAccumMs = (tsAccumMs - seconds.toLong() * 1000L).coerceAtLeast(0L)
@@ -1777,22 +1780,6 @@ private fun PlayerUi(
             ) {
                 Text(numberEntry, color = playerFg(), fontSize = 48.sp)
             }
-        } else if (timeshiftOffsetMs > 0L) {
-            // timeshift — ako daleko za zivym (rastie pocas pauzy)
-            Box(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(playerScrim())
-                    .padding(horizontal = 18.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    "TIMESHIFT  −" + fmtMs(timeshiftOffsetMs),
-                    color = playerFg(),
-                    fontSize = 18.sp
-                )
-            }
         }
 
         AnimatedVisibility(
@@ -1907,6 +1894,17 @@ private fun PlayerUi(
                                         maxLines = 1,
                                         softWrap = false
                                     )
+                                    if (timeshiftOffsetMs > 0L) {
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            "\u2212" + fmtMs(timeshiftOffsetMs),
+                                            color = androidx.compose.ui.graphics.Color(0xFFFF3B30),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = (12 * k).sp,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                             if (progDesc.isNotBlank()) {
