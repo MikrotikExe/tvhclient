@@ -285,8 +285,14 @@ fun EpgGridScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            // Vyber dna (minule -7 az +6); minule dni = nahravky z DVR
-            val offsets = remember { (-7..6).toList() }
+            // Vyber dna; rozsah dozadu/dopredu podla nastavenia (EpgRangePref)
+            val daysBack = EpgRangePref.backStateOf(context).value
+            val daysForward = EpgRangePref.fwdStateOf(context).value
+            LaunchedEffect(daysBack, daysForward) {
+                if (dayOffset < -daysBack) dayOffset = -daysBack
+                if (dayOffset > daysForward) dayOffset = daysForward
+            }
+            val offsets = remember(daysBack, daysForward) { (-daysBack..daysForward).toList() }
             val dayListState = androidx.compose.foundation.lazy.rememberLazyListState()
             LaunchedEffect(Unit) {
                 val idx = offsets.indexOf(0).coerceAtLeast(0)
@@ -331,7 +337,7 @@ fun EpgGridScreen(
             LazyColumn(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
+                    .pointerInput(daysBack, daysForward) {
                         val edgePx = DAY_SWITCH_DP.dp.toPx()
                         awaitEachGesture {
                             awaitFirstDown(requireUnconsumed = false)
@@ -344,11 +350,11 @@ fun EpgGridScreen(
                                 val dx = ch.position.x - ch.previousPosition.x
                                 val atStart = hScroll.value <= 0
                                 val atEnd = hScroll.maxValue > 0 && hScroll.value >= hScroll.maxValue
-                                if (!switched && atStart && dx > 0f && dayOffset > -7) {
+                                if (!switched && atStart && dx > 0f && dayOffset > -daysBack) {
                                     // zaciatok dna, tahám doprava (do minulosti) -> predosly den
                                     accum += dx
                                     if (accum >= edgePx) { pendingJump = DayJump.END; dayOffset--; switched = true }
-                                } else if (!switched && atEnd && dx < 0f && dayOffset < 6) {
+                                } else if (!switched && atEnd && dx < 0f && dayOffset < daysForward) {
                                     // koniec dna, tahám dolava (do buducnosti) -> dalsi den
                                     accum += -dx
                                     if (accum >= edgePx) { pendingJump = DayJump.START; dayOffset++; switched = true }

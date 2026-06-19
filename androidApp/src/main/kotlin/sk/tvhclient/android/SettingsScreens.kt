@@ -102,6 +102,37 @@ internal fun GeneralSettings(ctx: android.content.Context) {
     )
     Spacer(Modifier.height(16.dp))
 
+    // EPG: kolko dni dozadu si appka pamata (lokalny cache) a kolko dopredu nacita
+    var epgBack by remember { mutableStateOf(EpgRangePref.daysBack(ctx)) }
+    DropdownField(
+        label = stringResource(R.string.epg_days_back_title),
+        value = epgBack.toString(),
+        options = EpgRangePref.dayOptions,
+        optionLabel = { it },
+        onSelect = { v ->
+            val n = v.toIntOrNull() ?: epgBack
+            epgBack = n
+            EpgRangePref.setBack(ctx, n)
+            TabController.settingsDirty.value = true
+        }
+    )
+    Spacer(Modifier.height(16.dp))
+
+    var epgFwd by remember { mutableStateOf(EpgRangePref.daysForward(ctx)) }
+    DropdownField(
+        label = stringResource(R.string.epg_days_forward_title),
+        value = epgFwd.toString(),
+        options = EpgRangePref.dayOptions,
+        optionLabel = { it },
+        onSelect = { v ->
+            val n = v.toIntOrNull() ?: epgFwd
+            epgFwd = n
+            EpgRangePref.setForward(ctx, n)
+            TabController.settingsDirty.value = true
+        }
+    )
+    Spacer(Modifier.height(16.dp))
+
     Spacer(Modifier.height(4.dp))
     fun requestOverlay() {
         if (android.os.Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(ctx)) {

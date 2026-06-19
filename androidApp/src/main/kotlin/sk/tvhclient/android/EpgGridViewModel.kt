@@ -1,6 +1,7 @@
 package sk.tvhclient.android
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,19 +10,35 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sk.tvhclient.shared.Tvh
 import sk.tvhclient.shared.model.EpgEvent
+import sk.tvhclient.shared.storage.EpgCacheCodec
 
 /**
  * EPG pre mriezku. Drzi sa v cache (Activity-scoped ViewModel), takze prepnutie
  * kariet ani znovuotvorenie mriezky uz nestahuje to iste.
  *
+ * Navyse je EPG perzistovane na disk (EpgCache) — appka si tak pamata uplynule dni
+ * aj ked ich Tvheadend z EPG uz vymazal. Pri starte sa cache nacita (orezany podla
+ * EpgRangePref.daysBack), cerstve data sa s nim zlucuju a priebezne ukladaju.
+ *
  * HTTP: per-kanal na poziadanie (ensureChannel) ked je riadok viditelny.
- * HTSP: JEDNO spojenie, vsetky kanaly progresivne (loadHtsp) — server nezvlada
- *       spojenie per kanal, preto sa to robi naraz na jednom spojeni, ale
- *       eventy pribudaju priebezne (po kanaloch).
+ * HTSP: JEDNO spojenie, vsetky kanaly progresivne (loadHtsp).
  */
-class EpgGridViewModel : ViewModel() {
+class EpgGridViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val _epg = MutableStateFlow<Map<String, List<EpgEvent>>>(emptyMap())
+    private val appCtx = app.applicationContext
+
+    private fun serverId(): String = Tvh.store.active()?.id ?: "default"
+    private fun daysBack(): Int = EpgRangePref.daysBack(appCtx)
+    private fun nowSec(): Long = System.currentTimeMillis() / 1000
+
+    private val _epg = MutableStateFlow<Map<String, List<EpgEvent>>>(
+        EpgCache.load(
+            app.applicationContext,
+            Tvh.store.active()?.id ?: "default",
+            System.currentTimeMillis() / 1000,
+            EpgRangePref.daysBack(app.applicationContext)
+        )
+    )
     val epg: StateFlow<Map<String, List<EpgEvent>>> = _epg
 
     private val _loading = MutableStateFlow(false)
@@ -38,7 +55,7 @@ class EpgGridViewModel : ViewModel() {
     fun ensureChannel(uuid: String) {
         val server = Tvh.store.active() ?: return
         if (server.connectionMode == "htsp") return   // HTSP ide cez loadHtsp()
-        if (_epg.value.containsKey(uuid) || inFlight.contains(uuid)) return
+        if (inFlight.contains(uuid)) return
         inFlight.add(uuid)
         _loading.value = true
         viewModelScope.launch {
@@ -47,11 +64,14 @@ class EpgGridViewModel : ViewModel() {
                     val api = Tvh.apiFor(server)
                     try { Tvh.fetchEpgForChannel(server, api, uuid) } finally { api.close() }
                 }
-                _epg.value = _epg.value + (uuid to evs)
+                _epg.value = EpgCacheCodec.mergeChannel(_epg.value, uuid, evs)
             } catch (_: Exception) {
             } finally {
                 inFlight.remove(uuid)
-                if (inFlight.isEmpty()) _loading.value = false
+                if (inFlight.isEmpty()) {
+                    _loading.value = false
+                    persist()
+                }
             }
         }
     }
@@ -67,19 +87,31 @@ class EpgGridViewModel : ViewModel() {
             try {
                 withContext(Dispatchers.IO) {
                     Tvh.fetchEpgGridProgressive(server) { uuid, evs ->
-                        _epg.value = _epg.value + (uuid to evs)
+                        _epg.value = EpgCacheCodec.mergeChannel(_epg.value, uuid, evs)
                     }
                 }
             } catch (_: Exception) {
             } finally {
                 _loading.value = false
+                persist()
             }
         }
     }
 
-    /** Vynutene obnovenie - zahodi cache, nacitanie sa spusti nanovo. */
+    /** Ulozi aktualny EPG na disk (orezany podla daysBack). */
+    private fun persist() {
+        val snapshot = _epg.value
+        val sid = serverId()
+        val db = daysBack()
+        val n = nowSec()
+        viewModelScope.launch(Dispatchers.IO) {
+            EpgCache.save(appCtx, sid, snapshot, n, db)
+        }
+    }
+
+    /** Vynutene obnovenie — z disku znova nacita pamatane dni a stiahne cerstve data. */
     fun refresh() {
-        _epg.value = emptyMap()
+        _epg.value = EpgCache.load(appCtx, serverId(), nowSec(), daysBack())
         inFlight.clear()
         htspStarted = false
         _gen.value = _gen.value + 1
