@@ -108,6 +108,7 @@ class PlayerActivity : ComponentActivity() {
     private val timeshiftOffsetState = androidx.compose.runtime.mutableStateOf(0L)
     private var tsAccumMs = 0L
     private var tsPauseStartedAt = 0L
+    private var htspStartedAt = 0L
     private var timeshiftTickerJob: kotlinx.coroutines.Job? = null
     private lateinit var mediaPlayer: MediaPlayer
 
@@ -240,6 +241,7 @@ class PlayerActivity : ComponentActivity() {
                 tsPauseStartedAt = System.currentTimeMillis()
                 startTimeshiftTicker()
             }
+            isPlayingState.value = false
             mediaPlayer.pause()
         } else {
             if (htspLive) {
@@ -251,6 +253,7 @@ class PlayerActivity : ComponentActivity() {
                 stopTimeshiftTicker()
                 timeshiftOffsetState.value = tsAccumMs
             }
+            isPlayingState.value = true
             mediaPlayer.play()
         }
     }
@@ -277,13 +280,20 @@ class PlayerActivity : ComponentActivity() {
         stopTimeshiftTicker()
         tsAccumMs = 0L
         tsPauseStartedAt = 0L
+        htspStartedAt = System.currentTimeMillis()
         timeshiftOffsetState.value = 0L
+    }
+
+    /** Reálna hĺbka bufferu = čas od otvorenia kanála, najviac timeshiftPeriod (3600 s). */
+    private fun maxRewindMs(): Long {
+        if (htspStartedAt <= 0L) return 0L
+        val elapsed = System.currentTimeMillis() - htspStartedAt
+        return elapsed.coerceAtMost(3600_000L)
     }
 
     /** Relativny skok v timeshifte (sekundy; zaporne = vzad). Aktualizuje aj ukazovatel. */
     private fun timeshiftSkip(seconds: Int) {
         if (!htspLive) return
-        htspFeeder?.skip(seconds)
         // ak je pauza, po skoku spusti prehravanie (nech vidno vysledok skoku)
         if (tsPauseStartedAt > 0L) {
             val now = System.currentTimeMillis()
@@ -291,10 +301,16 @@ class PlayerActivity : ComponentActivity() {
             tsPauseStartedAt = 0L
             stopTimeshiftTicker()
             htspFeeder?.resume()
+            isPlayingState.value = true
             if (::mediaPlayer.isInitialized && !mediaPlayer.isPlaying) mediaPlayer.play()
         }
-        // vzad (zaporne sekundy) => vacsi posun za zivym; vpred => mensi
-        tsAccumMs = (tsAccumMs - seconds.toLong() * 1000L).coerceAtLeast(0L)
+        // cielova pozicia za zivym, orezana na <0 .. hlbka bufferu>
+        val target = (tsAccumMs - seconds.toLong() * 1000L).coerceIn(0L, maxRewindMs())
+        val deltaMs = target - tsAccumMs            // kladne = dozadu, zaporne = dopredu
+        if (deltaMs == 0L) return                   // niet kam (zaciatok bufferu alebo zive)
+        val skipSec = (-deltaMs / 1000L).toInt()    // dozadu => zaporne sekundy
+        if (skipSec != 0) htspFeeder?.skip(skipSec)
+        tsAccumMs = target
         timeshiftOffsetState.value = tsAccumMs
     }
 
