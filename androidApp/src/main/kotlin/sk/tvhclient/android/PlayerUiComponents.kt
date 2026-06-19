@@ -25,11 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.PlatformTextStyle
-import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -162,53 +157,6 @@ internal fun PlayPauseButton(isPlaying: Boolean, selected: Boolean, scale: Float
                 drawPath(p, Color.White)
             }
         }
-    }
-}
-
-@Composable
-internal fun CircleButton(
-    label: String,
-    onClick: () -> Unit,
-    big: Boolean = false,
-    selected: Boolean = false,
-    active: Boolean = false,
-    scale: Float = 1f,
-    labelScale: Float = 1f,
-    modifier: Modifier = Modifier
-) {
-    val s = (if (big) 76 else 44).dp * scale
-    Box(
-        modifier
-            .size(s)
-            .clip(CircleShape)
-            .background(
-                when {
-                    selected -> Color(0xCC1E88E5)
-                    active -> Color(0x9943A047)
-                    else -> if (isLightTheme()) Color(0x88000000) else Color(0xCC4D4D4D)
-                }
-            )
-            .then(if (selected) Modifier.border(3.dp, Color.White, CircleShape) else Modifier)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        val fs = (if (big) 34f else 22f).sp * scale * labelScale
-        Text(
-            label,
-            color = Color.White,
-            maxLines = 1,
-            style = TextStyle(
-                fontSize = fs,
-                lineHeight = fs,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both
-                )
-            )
-        )
     }
 }
 
