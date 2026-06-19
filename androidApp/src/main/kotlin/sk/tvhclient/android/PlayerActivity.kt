@@ -84,6 +84,7 @@ import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 import sk.tvhclient.shared.Tvh
+import sk.tvhclient.shared.htsp.HtspData
 
 /**
  * Live prehravac na libVLC. Dekoduje MPEG-2 + MP2/AC3/EAC3/DTS softverovo.
@@ -97,6 +98,8 @@ class PlayerActivity : ComponentActivity() {
 
 
     private lateinit var libVlc: LibVLC
+    private var htspFeeder: HtspTsFeeder? = null
+    private var htspLive = false
     private lateinit var mediaPlayer: MediaPlayer
 
     // Live zapping (prepinanie kanalov v prehravaci)
@@ -157,6 +160,32 @@ class PlayerActivity : ComponentActivity() {
         // User-Agent: nech server vidi, ze sa pripaja HeadentClient
         m.addOption(":http-user-agent=" + userAgent())
         return m
+    }
+
+    /**
+     * M162 — zivy kanal cez HTSP (premuxovany na MPEG-TS, podavany libVLC cez pipe).
+     * Vracia true ak sa podarilo spustit. Pouzite len ak je timeshift zapnuty a server
+     * ho podporuje; inak ostava HTTP cesta.
+     */
+    private fun playHtspLive(server: sk.tvhclient.shared.model.TvhServer, channelId: Long): Boolean {
+        return try {
+            htspFeeder?.stop()
+            val feeder = HtspTsFeeder(server)
+            htspFeeder = feeder
+            val fd = feeder.start(channelId, lifecycleScope)
+            val media = Media(libVlc, fd)
+            media.setHWDecoderEnabled(true, false)
+            media.addOption(":demux=ts")
+            media.addOption(":file-caching=1500")
+            mediaPlayer.media = media
+            media.release()
+            mediaPlayer.play()
+            true
+        } catch (e: Throwable) {
+            htspFeeder?.stop()
+            htspFeeder = null
+            false
+        }
     }
 
     private fun pokeControls() { controlsPokeState.value = controlsPokeState.value + 1 }
@@ -274,6 +303,12 @@ class PlayerActivity : ComponentActivity() {
         currentStreamUrl = url
         cancelReconnect()  // nove pripojenie -> zrus stare pokusy
         hasVideoState.value = true  // predpokladaj video; kontrola po Playing to opravi
+        val cid = uuid.toLongOrNull()
+        if (htspLive && cid != null && playHtspLive(srv, cid)) {
+            pokeControls()
+            return
+        }
+        htspFeeder?.stop(); htspFeeder = null
         val media = buildMedia(url)
         mediaPlayer.media = media
         media.release()
@@ -820,6 +855,18 @@ class PlayerActivity : ComponentActivity() {
         }
         dvrServerId = server.id
 
+        // M162 — zivy kanal cez HTSP timeshift? Iba ak: je to live (nie DVR), uuid je
+        // numericke (HTSP channelId), pref zapnuty a server podporuje (z cache). Cold cache
+        // -> HTTP teraz a na pozadi sa over, nech dalsi raz ide HTSP.
+        val cidLive = if (directUrl == null) channelUuid?.toLongOrNull() else null
+        htspLive = cidLive != null && TimeshiftPref.get(this) &&
+            HtspData.timeshiftCapableCached(server.id)
+        if (cidLive != null && TimeshiftPref.get(this) && !HtspData.timeshiftCapableCached(server.id)) {
+            lifecycleScope.launch {
+                runCatching { HtspData.timeshiftAvailable(server, System.currentTimeMillis() / 1000) }
+            }
+        }
+
         // Ulozena pozicia: ponuknut obnovenie ak nie je dopozerane a nie je
         // tesne na zaciatku/konci
         val saved = dvrUuid?.let { WatchProgress.get(this, server.id, it) }
@@ -937,12 +984,17 @@ class PlayerActivity : ComponentActivity() {
                 onAttach = { layout -> videoLayout = layout; mediaPlayer.attachViews(layout, null, false, false) },
                 onStart = {
                     val doPlay: () -> Unit = {
-                        currentStreamUrl = streamUrl
-                        val media = buildMedia(streamUrl)
-                        mediaPlayer.media = media
-                        media.release()
-                        mediaPlayer.play()
-                        pokeControls()
+                        val cid = channelUuid?.toLongOrNull()
+                        if (htspLive && cid != null && playHtspLive(server, cid)) {
+                            pokeControls()
+                        } else {
+                            currentStreamUrl = streamUrl
+                            val media = buildMedia(streamUrl)
+                            mediaPlayer.media = media
+                            media.release()
+                            mediaPlayer.play()
+                            pokeControls()
+                        }
                     }
                     if (requirePin && ParentalLock.needsPin(this) && ParentalLock.protectChannels(this)) {
                         requestPin(onOk = doPlay, onCancel = { finish() })
@@ -1197,6 +1249,8 @@ class PlayerActivity : ComponentActivity() {
             mediaPlayer.detachViews()
             mediaPlayer.release()
         }
+        htspFeeder?.stop()
+        htspFeeder = null
         if (::libVlc.isInitialized) {
             libVlc.release()
         }

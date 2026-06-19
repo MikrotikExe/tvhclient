@@ -306,4 +306,70 @@ class HtspClient(
             timeshiftSeen, tsFull, tsStart, tsEnd, statuses, stopped
         )
     }
+
+    /**
+     * M162 — zivy HTSP subscription premuxovany na MPEG-TS. Po subscriptionStart
+     * postavi TsMuxer a cez `onTs` posiela TS bajty (PAT/PMT + PES). Ziada 90khz
+     * timebase a normts (vhodne pre PES). timeshiftPeriodSec>0 zapne aj server
+     * buffer (pre buduce ovladanie); 0 = ciste zive. Bezi kym sa korutina nezrusi
+     * alebo nepride subscriptionStop. Na konci unsubscribe.
+     */
+    suspend fun streamSubscribe(
+        channelId: Long,
+        timeshiftPeriodSec: Int = 0,
+        profile: String? = null,
+        onTs: suspend (ByteArray) -> Unit,
+        onStop: (String?) -> Unit = {}
+    ) {
+        seq += 1
+        val subId = seq
+        val args = HashMap<String, Any?>()
+        args["channelId"] = channelId
+        args["subscriptionId"] = subId.toLong()
+        args["90khz"] = 1L
+        args["normts"] = 1L
+        if (timeshiftPeriodSec > 0) args["timeshiftPeriod"] = timeshiftPeriodSec.toLong()
+        if (!profile.isNullOrBlank()) args["profile"] = profile
+        send("subscribe", args, withSeq = false)
+
+        var muxer: TsMuxer? = null
+        try {
+            while (true) {
+                val m = recv()
+                val sid = (m["subscriptionId"] as? Long)?.toInt()
+                if (sid != null && sid != subId) continue
+                when (m["method"] as? String) {
+                    "subscriptionStart" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val sl = (m["streams"] as? List<Any?>) ?: emptyList()
+                        val streams = sl.mapNotNull {
+                            val sm = it as? Map<*, *> ?: return@mapNotNull null
+                            val idx = (sm["index"] as? Long)?.toInt() ?: return@mapNotNull null
+                            val typ = sm["type"] as? String ?: return@mapNotNull null
+                            TsMuxer.Stream(idx, typ)
+                        }
+                        val mx = TsMuxer(streams)
+                        muxer = mx
+                        if (mx.hasTracks()) onTs(mx.start())
+                    }
+                    "muxpkt" -> {
+                        val mx = muxer ?: continue
+                        val es = (m["payload"] as? ByteArray) ?: continue
+                        val streamIdx = (m["stream"] as? Long)?.toInt() ?: continue
+                        val pts = m["pts"] as? Long
+                        val dts = m["dts"] as? Long
+                        val rap = ((m["frametype"] as? Long)?.toInt() ?: 0) == 'I'.code
+                        val ts = mx.mux(streamIdx, es, pts, dts, rap)
+                        if (ts.isNotEmpty()) onTs(ts)
+                    }
+                    "subscriptionStop" -> {
+                        onStop(m["subscriptionError"] as? String)
+                        return
+                    }
+                }
+            }
+        } finally {
+            try { send("unsubscribe", mapOf("subscriptionId" to subId.toLong()), withSeq = false) } catch (_: Throwable) {}
+        }
+    }
 }

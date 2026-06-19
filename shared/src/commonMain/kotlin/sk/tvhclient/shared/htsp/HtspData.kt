@@ -126,6 +126,10 @@ object HtspData {
         return reachable && caps.contains("timeshift")
     }
 
+    /** Synchronne z cache (bez siete). False ak este neoverene alebo nepodporovane. */
+    fun timeshiftCapableCached(serverId: String): Boolean =
+        capCache[serverId]?.let { it.reachable && it.caps.contains("timeshift") } ?: false
+
     /** M159 — diagnostika timeshiftu na prvom kanali servera. */
     data class TimeshiftProbeResult(
         val channelName: String,
