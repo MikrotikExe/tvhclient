@@ -729,10 +729,27 @@ private fun EpgGridRow(
                 val recBlocks = remember(dvr, inProgress, now) {
                     mergeRecordings(dvr.filter { it.stop <= now }, inProgress)
                 }
-                recBlocks.forEach { rb ->
-                    val startMin = (((rb.start - dayStart) / 60).toInt()).coerceAtLeast(0)
-                    val endMin = (((rb.stop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN)
-                    if (endMin <= visStartMin || startMin >= visEndMin) return@forEach
+                // Susedne nahravky roznych relacii sa casto prekryvaju o okraj (padding).
+                // Orezeme prekryv v jeho strede, nech bloky na seba nadvazuju a neprekryvaju sa.
+                val recBounds = remember(recBlocks) {
+                    val n = recBlocks.size
+                    val vs = LongArray(n) { recBlocks[it].start }
+                    val ve = LongArray(n) { recBlocks[it].stop }
+                    for (i in 1 until n) {
+                        if (recBlocks[i].start < ve[i - 1]) {
+                            val mid = (recBlocks[i].start + ve[i - 1]) / 2
+                            ve[i - 1] = mid
+                            if (vs[i] < mid) vs[i] = mid
+                        }
+                    }
+                    vs to ve
+                }
+                recBlocks.forEachIndexed { i, rb ->
+                    val vStart = recBounds.first[i]
+                    val vStop = recBounds.second[i]
+                    val startMin = (((vStart - dayStart) / 60).toInt()).coerceAtLeast(0)
+                    val endMin = (((vStop - dayStart) / 60).toInt()).coerceAtMost(DAY_MIN)
+                    if (endMin <= visStartMin || startMin >= visEndMin || startMin >= endMin) return@forEachIndexed
                     if (rb.inProgress) {
                         GridBlock(
                             startMin = startMin,
@@ -741,7 +758,7 @@ private fun EpgGridRow(
                             timeLabel = formatTimeHm(rb.start) + " - " + formatTimeHm(rb.stop),
                             bg = Color(0x2EEF5350),       // svetlejsia = este sa nenahralo (za ciarou)
                             recorded = false,
-                            progressMin = ((now - rb.start) / 60).toInt(),
+                            progressMin = ((now - vStart) / 60).toInt(),
                             progressColor = Color(0x80EF5350),  // tmavsia = uz nahrate (pred ciarou)
                             prefix = "\u25CF ",
                             onClick = { onInProgress(rb.entry) },
