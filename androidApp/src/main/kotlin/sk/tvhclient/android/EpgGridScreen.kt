@@ -700,7 +700,10 @@ private fun EpgGridRow(
                         title = ev.title.ifBlank { "—" },
                         timeLabel = formatTimeHm(ev.start) + " - " + formatTimeHm(ev.stop),
                         bg = when {
-                            isNow -> lerp(MaterialTheme.colorScheme.primaryContainer, Color.Black, 0.38f)
+                            isNow -> if (isLightTheme())
+                                lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.50f)
+                            else
+                                lerp(MaterialTheme.colorScheme.primaryContainer, Color.Black, 0.38f)
                             isPast -> if (isLightTheme()) Color(0x0F000000) else Color(0x14FFFFFF)
                             else -> if (isLightTheme()) Color(0x1F000000) else Color(0x22FFFFFF)
                         },
