@@ -366,7 +366,7 @@ fun EpgGridScreen(
         val cells = ArrayList<NavCell>()
         recBlocks.forEach { rb ->
             cells.add(NavCell(rb.start, rb.stop,
-                if (rb.inProgress) GridDetail.InProgress(r, rb.entry) else GridDetail.Dvr(rb.entry)))
+                if (rb.inProgress) GridDetail.InProgress(r, rb.entry) else GridDetail.Dvr(r, rb.entry)))
         }
         evs.filter { ev -> recBlocks.none { it.start < ev.stop && it.stop > ev.start } }
             .forEach { ev -> cells.add(NavCell(ev.start, ev.stop, GridDetail.Epg(r, ev))) }
@@ -581,7 +581,7 @@ fun EpgGridScreen(
                         loader = loader,
                         selectedStart = if (idx == selRow) selStart else null,
                         onClick = { ev -> detail = GridDetail.Epg(row, ev) },
-                        onDvr = { e -> detail = GridDetail.Dvr(e) },
+                        onDvr = { e -> detail = GridDetail.Dvr(row, e) },
                         onInProgress = { rec -> detail = GridDetail.InProgress(row, rec) },
                         onFocusDetail = { lastFocused = it }
                     )
@@ -620,7 +620,7 @@ fun EpgGridScreen(
 
 private sealed class GridDetail {
     data class Epg(val row: ChannelRow, val ev: EpgEvent) : GridDetail()
-    data class Dvr(val rec: sk.tvhclient.shared.model.DvrEntry) : GridDetail()
+    data class Dvr(val row: ChannelRow, val rec: sk.tvhclient.shared.model.DvrEntry) : GridDetail()
     // Prave prebiehajuca nahravka — da sa pustit naživo aj od zaciatku
     data class InProgress(val row: ChannelRow, val rec: sk.tvhclient.shared.model.DvrEntry) : GridDetail()
 }
@@ -662,7 +662,7 @@ private fun GridDetailContent(
             title = detail.rec.title
             subtitle = detail.rec.dispSubtitle
             channelName = detail.rec.channelName
-            piconUrl = null
+            piconUrl = detail.row.piconUrl
             start = detail.rec.start; stop = detail.rec.stop
             desc = detail.rec.dispDescription
             ageRating = 0
@@ -896,7 +896,7 @@ private fun EpgGridRow(
                             recorded = true,
                             selected = selectedStart == rb.start,
                             onClick = { onDvr(rb.entry) },
-                            onFocused = { onFocusDetail(GridDetail.Dvr(rb.entry)) }
+                            onFocused = { onFocusDetail(GridDetail.Dvr(row, rb.entry)) }
                         )
                     }
                 }
