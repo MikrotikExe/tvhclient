@@ -22,12 +22,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.focus.onFocusEvent
-import androidx.compose.foundation.focusGroup
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -114,6 +124,9 @@ private data class RecBlock(
     val inProgress: Boolean,
     val entry: sk.tvhclient.shared.model.DvrEntry
 )
+
+/** Navigacna bunka (D-pad): casovy rozsah + co sa otvori pri OK. Zhodna s renderom. */
+private class NavCell(val start: Long, val stop: Long, val detail: GridDetail)
 
 /** Normalizuje nazov pre porovnanie duplicit: mala pismena, bez "(ST)" a bez "(cislo)". */
 private fun normRecTitle(t: String): String {
@@ -331,6 +344,95 @@ fun EpgGridScreen(
         pendingJump = null
     }
 
+    // --- D-pad navigacia (TV): dole/hore drzi casovy stlpec (linia "teraz"),
+    // vlavo/vpravo prechadza relacie v case. Vlastny model vyberu — automaticky
+    // fokus Compose to negarantoval (uletoval na sipku spat / mimo casovy stlpec). ---
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val gridFocus = remember { FocusRequester() }
+    var selRow by remember { mutableStateOf(0) }
+    var anchorTime by remember { mutableStateOf(now) }        // cas, na ktorom drzime stlpec
+    var selStart by remember { mutableStateOf<Long?>(null) }  // zaciatok vybranej bunky
+
+    // Bunky jedneho kanala — zhodne s renderom: zlucene nahravky + relacie bez prekryvu, podla casu
+    fun navCells(idx: Int): List<NavCell> {
+        val r = rows.getOrNull(idx) ?: return emptyList()
+        val uuid = r.channel.uuid
+        val evs = (epg[uuid] ?: emptyList()).filter { it.stop > dayStart && it.start < dayEnd }
+        val dvr = (dvrByChannel[r.channel.name] ?: emptyList()).filter { it.stop > dayStart && it.start < dayEnd }
+        val inProg = (inProgressByChannel[r.channel.name] ?: emptyList()).filter { it.stop > dayStart && it.start < dayEnd }
+        val recBlocks = mergeRecordings(dvr.filter { it.stop <= now }, inProg)
+        val cells = ArrayList<NavCell>()
+        recBlocks.forEach { rb ->
+            cells.add(NavCell(rb.start, rb.stop,
+                if (rb.inProgress) GridDetail.InProgress(r, rb.entry) else GridDetail.Dvr(rb.entry)))
+        }
+        evs.filter { ev -> recBlocks.none { it.start < ev.stop && it.stop > ev.start } }
+            .forEach { ev -> cells.add(NavCell(ev.start, ev.stop, GridDetail.Epg(r, ev))) }
+        cells.sortBy { it.start }
+        return cells
+    }
+    fun cellAt(cells: List<NavCell>, t: Long): NavCell? =
+        cells.firstOrNull { it.start <= t && t < it.stop }
+            ?: cells.minByOrNull { kotlin.math.abs(((it.start + it.stop) / 2) - t) }
+    fun selectRowAt(idx: Int, t: Long) {
+        val c = cellAt(navCells(idx), t)
+        selRow = idx
+        selStart = c?.start
+        lastFocused = c?.detail
+    }
+    fun moveVertical(delta: Int): Boolean {
+        val target = selRow + delta
+        if (target < 0 || target > rows.lastIndex) return false  // okraj -> nechaj unik (dni hore / dolu)
+        selectRowAt(target, anchorTime)
+        return true
+    }
+    fun moveHorizontal(dir: Int): Boolean {
+        val cells = navCells(selRow)
+        if (cells.isEmpty()) return true
+        var cur = cells.indexOfFirst { it.start == selStart }
+        if (cur < 0) cur = cells.indexOfFirst { it.start <= anchorTime && anchorTime < it.stop }
+        val ni = (if (cur < 0) 0 else cur) + dir
+        if (ni < 0 || ni > cells.lastIndex) return true          // klampuj (neunikaj na sipku spat)
+        val c = cells[ni]
+        selStart = c.start
+        anchorTime = c.start
+        lastFocused = c.detail
+        return true
+    }
+    val onGridKey: (androidx.compose.ui.input.key.KeyEvent) -> Boolean = handler@{ e ->
+        if (e.type != KeyEventType.KeyDown) return@handler false
+        when (e.key) {
+            Key.DirectionDown -> moveVertical(1)
+            Key.DirectionUp -> moveVertical(-1)
+            Key.DirectionLeft -> moveHorizontal(-1)
+            Key.DirectionRight -> moveHorizontal(1)
+            Key.DirectionCenter, Key.Enter -> {
+                navCells(selRow).firstOrNull { it.start == selStart }?.let { detail = it.detail }
+                true
+            }
+            else -> false
+        }
+    }
+    // Pociatocny vyber + reset pri zmene dna: na aktualnom dni linia "teraz", inak poludnie
+    LaunchedEffect(dayOffset, rows.size) {
+        if (rows.isEmpty()) return@LaunchedEffect
+        anchorTime = if (dayOffset == 0) now else dayStart + 12L * 3600
+        selectRowAt(selRow.coerceIn(0, rows.lastIndex), anchorTime)
+    }
+    // Fokus na mriezku po otvoreni (TV)
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(150)
+        runCatching { gridFocus.requestFocus() }
+    }
+    // Auto-skrol na vybrany riadok / bunku
+    LaunchedEffect(selRow) { runCatching { listState.animateScrollToItem(selRow) } }
+    LaunchedEffect(selStart) {
+        val s = selStart ?: return@LaunchedEffect
+        val startMin = (((s - dayStart) / 60).toInt()).coerceIn(0, DAY_MIN)
+        val target = with(density) { (startMin * PX_PER_MIN).dp.toPx() - 40.dp.toPx() }
+        runCatching { hScroll.animateScrollTo(target.toInt().coerceAtLeast(0)) }
+    }
+
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
@@ -413,9 +515,12 @@ fun EpgGridScreen(
 
             // Riadky kanalov
             LazyColumn(
-                Modifier
+                state = listState,
+                modifier = Modifier
                     .fillMaxSize()
-                    .focusGroup()
+                    .focusRequester(gridFocus)
+                    .focusable()
+                    .onPreviewKeyEvent(onGridKey)
                     .pointerInput(daysBack, daysForward) {
                         val edgePx = DAY_SWITCH_DP.dp.toPx()
                         awaitEachGesture {
@@ -444,7 +549,7 @@ fun EpgGridScreen(
                         }
                     }
             ) {
-                items(rows, key = { it.channel.uuid }) { row ->
+                itemsIndexed(rows, key = { _, it -> it.channel.uuid }) { idx, row ->
                     val uuid = row.channel.uuid
                     // Progresivne: nacitaj EPG pre tento kanal ked je riadok viditelny
                     LaunchedEffect(uuid, epgGen) { epgVm.ensureChannel(uuid) }
@@ -462,6 +567,7 @@ fun EpgGridScreen(
                         visEndMin = visEndMin,
                         hScroll = hScroll,
                         loader = loader,
+                        selectedStart = if (idx == selRow) selStart else null,
                         onClick = { ev -> detail = GridDetail.Epg(row, ev) },
                         onDvr = { e -> detail = GridDetail.Dvr(e) },
                         onInProgress = { rec -> detail = GridDetail.InProgress(row, rec) },
@@ -688,6 +794,7 @@ private fun EpgGridRow(
     visEndMin: Int,
     hScroll: androidx.compose.foundation.ScrollState,
     loader: coil.ImageLoader,
+    selectedStart: Long? = null,
     onClick: (EpgEvent) -> Unit,
     onDvr: (sk.tvhclient.shared.model.DvrEntry) -> Unit,
     onInProgress: (sk.tvhclient.shared.model.DvrEntry) -> Unit,
@@ -763,6 +870,7 @@ private fun EpgGridRow(
                             progressMin = ((now - vStart) / 60).toInt(),
                             progressColor = Color(0x80EF5350),  // tmavsia = uz nahrate (pred ciarou)
                             prefix = "\u25CF ",
+                            selected = selectedStart == rb.start,
                             onClick = { onInProgress(rb.entry) },
                             onFocused = { onFocusDetail(GridDetail.InProgress(row, rb.entry)) }
                         )
@@ -774,6 +882,7 @@ private fun EpgGridRow(
                             timeLabel = formatTimeHm(rb.start) + " - " + formatTimeHm(rb.stop),
                             bg = if (isLightTheme()) Color(0xA643A047) else Color(0x5C43A047),  // zelena = nahrate
                             recorded = true,
+                            selected = selectedStart == rb.start,
                             onClick = { onDvr(rb.entry) },
                             onFocused = { onFocusDetail(GridDetail.Dvr(rb.entry)) }
                         )
@@ -812,6 +921,7 @@ private fun EpgGridRow(
                         } else null,
                         fg = if (isNow) MaterialTheme.colorScheme.onPrimaryContainer else null,
                         fgDim = if (isNow) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f) else null,
+                        selected = selectedStart == ev.start,
                         onClick = { onClick(ev) },
                         onFocused = { onFocusDetail(GridDetail.Epg(row, ev)) }
                     )
@@ -847,6 +957,7 @@ private fun GridBlock(
     prefix: String? = null,
     fg: Color? = null,
     fgDim: Color? = null,
+    selected: Boolean = false,
     onClick: () -> Unit,
     onFocused: () -> Unit = {}
 ) {
@@ -862,8 +973,11 @@ private fun GridBlock(
             .padding(2.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(bg)
-            .onFocusEvent { if (it.isFocused) onFocused() }
-            .clickable { onClick() }
+            .then(
+                if (selected) Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                else Modifier
+            )
+            .pointerInput(Unit) { detectTapGestures { onClick() } }
     ) {
         // Priebeh zlava: pri zivej relacii svetlejsia primarna, pri nahravke tmavsia cervena
         if (progressMin > 0) {
