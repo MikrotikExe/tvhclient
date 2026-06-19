@@ -90,12 +90,6 @@ object ImdbLookup {
         return cache[key]?.sub
     }
 
-    fun cachedTop(title: String): String? {
-        val key = DvrClassifier.canonicalForImdb(title)
-        if (key.isEmpty()) return null
-        return cache[key]?.top
-    }
-
     fun isCached(title: String): Boolean {
         val key = DvrClassifier.canonicalForImdb(title)
         return key.isEmpty() || cache.containsKey(key)

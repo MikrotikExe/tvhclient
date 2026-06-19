@@ -108,17 +108,4 @@ object StreamUrlBuilder {
         if (!ipu.startsWith("imagecache/")) return null
         return server.baseUrl.trimEnd('/') + "/" + ipu
     }
-
-    /** Cisty imagecache ID pre nazov suboru cache. */
-    fun imagecacheId(iconPublicUrl: String?): String? {
-        val ipu = iconPublicUrl?.trim()?.trimStart('/') ?: return null
-        if (!ipu.startsWith("imagecache/")) return null
-        var idpart = ipu.substringAfter("imagecache/").substringBefore("?").trim()
-        for (e in listOf(".png", ".jpg", ".jpeg")) {
-            if (idpart.lowercase().endsWith(e)) {
-                idpart = idpart.dropLast(e.length); break
-            }
-        }
-        return idpart.ifBlank { null }
-    }
 }

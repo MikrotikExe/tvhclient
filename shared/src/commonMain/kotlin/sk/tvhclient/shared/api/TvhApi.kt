@@ -12,7 +12,6 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.HttpResponse
-import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
@@ -24,7 +23,6 @@ import kotlinx.serialization.json.jsonObject
 import sk.tvhclient.shared.model.Channel
 import sk.tvhclient.shared.model.ChannelTag
 import sk.tvhclient.shared.model.EpgEvent
-import sk.tvhclient.shared.model.ServerInfo
 import sk.tvhclient.shared.model.TvhServer
 
 /**
@@ -159,12 +157,6 @@ class TvhApi(private val server: TvhServer) {
         json.decodeFromJsonElement<T>(obj)
 
     // ---- verejne API ----
-
-    suspend fun serverInfo(): ServerInfo {
-        val resp = client.get(url("api/serverinfo"))
-        if (resp.status != HttpStatusCode.OK) throw TvhHttpException(resp.status.value)
-        return json.decodeFromString(resp.body<String>())
-    }
 
     suspend fun testConnection(): ConnectionResult = try {
         val resp = client.get(url("api/serverinfo"))

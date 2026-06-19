@@ -192,7 +192,6 @@
     <string name="exit_msg">Opravdu chcete ukončit Headent Client?</string>
     <string name="exit_yes">Ukončit</string>
     <string name="exit_no">Zrušit</string>
-    <string name="autostart_title">Automatické spuštění</string>
     <string name="autostart_enable">Spustit aplikaci po zapnutí zařízení</string>
     <string name="autostart_wake">Automatické spuštění při probuzení z režimu spánku</string>
     <string name="autostart_note">Nemusí fungovat na všech zařízeních</string>
@@ -205,7 +204,6 @@
     <string name="backup_failed">Operace selhala</string>
     <string name="set_cat_general">Obecné</string>
     <string name="set_cat_playback">Přehrávání</string>
-    <string name="set_cat_playlist">Playlist</string>
     <string name="set_cat_servers">Servery</string>
     <string name="set_cat_info">Informace</string>
     <string name="privacy_policy">Zásady ochrany osobních údajů</string>

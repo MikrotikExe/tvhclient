@@ -192,7 +192,6 @@
     <string name="exit_msg">Really exit Headent Client?</string>
     <string name="exit_yes">Exit</string>
     <string name="exit_no">Cancel</string>
-    <string name="autostart_title">Autostart</string>
     <string name="autostart_enable">Start app after device boot</string>
     <string name="autostart_wake">Start app on wake from sleep</string>
     <string name="autostart_note">May not work on all devices</string>
@@ -205,7 +204,6 @@
     <string name="backup_failed">Operation failed</string>
     <string name="set_cat_general">General</string>
     <string name="set_cat_playback">Playback</string>
-    <string name="set_cat_playlist">Playlist</string>
     <string name="set_cat_servers">Servers</string>
     <string name="set_cat_info">Information</string>
     <string name="privacy_policy">Privacy Policy</string>

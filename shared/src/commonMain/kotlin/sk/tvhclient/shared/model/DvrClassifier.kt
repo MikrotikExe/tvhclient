@@ -280,9 +280,6 @@ object DvrClassifier {
         return stripAccentsLower(noYear)
     }
 
-    /** Public: kanonicky nazov (pre IMDb cache zhodny s korpusom). */
-    fun canonicalForCorpus(title: String): String = canonicalTitleForCorpus(title)
-
     /** Public: zakladny nazov bez pripony serie (pre IMDb query — viac zhod). */
     fun canonicalForImdb(title: String): String {
         val k = canonicalTitleForCorpus(title)
