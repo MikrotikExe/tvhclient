@@ -251,6 +251,7 @@ fun AppMain() {
                 0 -> { resetCh++; tab = 0 }
                 1 -> { resetRadio++; tab = 1 }
                 2 -> { resetDvr++; tab = 2 }
+                3 -> { resetSet++; tab = 3 }
                 else -> tab = reqTab
             }
             TabController.requested.value = -1
@@ -316,7 +317,10 @@ fun AppMain() {
                     resetSignal = resetCh,
                     onGoToNav = { runCatching { navFocus.requestFocus() } }
                 )
-                1 -> RadioScreen(resetSignal = resetRadio)
+                1 -> RadioScreen(
+                    resetSignal = resetRadio,
+                    onGoToNav = { runCatching { navFocus.requestFocus() } }
+                )
                 2 -> DvrScreen(resetSignal = resetDvr)
                 else -> {
                     val ctx = androidx.compose.ui.platform.LocalContext.current

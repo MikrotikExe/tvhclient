@@ -44,6 +44,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -56,7 +59,7 @@ import sk.tvhclient.shared.Tvh
 import sk.tvhclient.shared.api.ChannelRow
 
 @Composable
-fun RadioScreen(vm: RadioViewModel = viewModel(), resetSignal: Int = 0) {
+fun RadioScreen(vm: RadioViewModel = viewModel(), resetSignal: Int = 0, onGoToNav: () -> Unit = {}) {
     val state by vm.state.collectAsState()
     val query by vm.query.collectAsState()
     val context = LocalContext.current
@@ -77,6 +80,8 @@ fun RadioScreen(vm: RadioViewModel = viewModel(), resetSignal: Int = 0) {
 
     // D-pad fokus: pociatocny fokus na prve radio + presmerovanie pri reselect (znovu kliknutie na Radia)
     val firstFocus = remember { FocusRequester() }
+    val jumpFocus = remember { FocusRequester() }
+    var jumpTarget by remember { mutableStateOf(-1) }
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     // Po nacitani daj fokus na prvu polozku (nech sa da hned ist sipkou dole)
@@ -84,6 +89,16 @@ fun RadioScreen(vm: RadioViewModel = viewModel(), resetSignal: Int = 0) {
         if (state is RadioState.Loaded) {
             kotlinx.coroutines.delay(150)
             runCatching { firstFocus.requestFocus() }
+        }
+    }
+    // Skok o 5 (LEFT/RIGHT): doscrolluj, pockaj snimku, az potom zameraj
+    LaunchedEffect(jumpTarget) {
+        val t = jumpTarget
+        if (t >= 0) {
+            runCatching { listState.scrollToItem(t) }
+            androidx.compose.runtime.withFrameNanos { }
+            runCatching { jumpFocus.requestFocus() }
+            jumpTarget = -1
         }
     }
     // Znovu kliknutie na Radia v navigacii: skroluj na vrch a daj fokus na prve radio
@@ -114,6 +129,7 @@ fun RadioScreen(vm: RadioViewModel = viewModel(), resetSignal: Int = 0) {
                 placeholder = stringResource(R.string.search_channels),
                 onQueryChange = { vm.setQuery(it) },
                 focusRequester = searchFocus,
+                onUp = onGoToNav,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { vm.load() }) {
@@ -166,9 +182,34 @@ fun RadioScreen(vm: RadioViewModel = viewModel(), resetSignal: Int = 0) {
                         when (viewMode) {
                             ChannelViewMode.LIST -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                                 itemsIndexed(rows, key = { _, it -> it.channel.uuid }) { idx, row ->
+                                    val last = rows.lastIndex
+                                    val focusMod = when {
+                                        jumpTarget >= 0 && idx == jumpTarget -> Modifier.focusRequester(jumpFocus)
+                                        idx == 0 -> Modifier.focusRequester(firstFocus)
+                                        else -> Modifier
+                                    }
+                                    val keyMod = focusMod.onPreviewKeyEvent { e ->
+                                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                        when (e.nativeKeyEvent.keyCode) {
+                                            // Hore na 1. radiu -> vyhladavacie pole (a odtial hore na spodne menu)
+                                            android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                                                if (idx == 0) { runCatching { searchFocus.requestFocus() }; true } else false
+                                            // Vlavo: -5 (wrap na koniec)
+                                            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                                jumpTarget = if (idx == 0) last else (idx - 5).coerceAtLeast(0)
+                                                true
+                                            }
+                                            // Vpravo: +5 (wrap na zaciatok)
+                                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                                jumpTarget = if (idx == last) 0 else (idx + 5).coerceAtMost(last)
+                                                true
+                                            }
+                                            else -> false
+                                        }
+                                    }
                                     RadioRow(
                                         row, rows, loader, context,
-                                        modifier = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                                        modifier = keyMod,
                                         onContext = { contextRow = it }
                                     )
                                 }
