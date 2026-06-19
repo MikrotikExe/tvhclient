@@ -438,7 +438,7 @@ class PlayerActivity : ComponentActivity() {
     // --- Aktivacia zvyrazneneho prvku ovladacieho panela ---
     private fun activateControl(id: String?) {
         when (id) {
-            "close" -> finish()
+            "close" -> { if (!enterPipIfPossible()) finish() }
             "list" -> openChannelList()
             "prev" -> { switchLive(-1); pokeControls() }
             "play" -> { togglePlayPause(); pokeControls() }
@@ -446,7 +446,7 @@ class PlayerActivity : ComponentActivity() {
             "audio" -> openAudioMenu()
             "subs" -> openSpuMenu()
             "epg" -> openEpgInApp()
-            "pip" -> enterPipIfPossible()
+            "pip" -> enterPipAndMinimize()
             "info" -> { toggleInfo(); pokeControls() }
             "sleep" -> openSleepMenu()
         }
@@ -945,7 +945,7 @@ class PlayerActivity : ComponentActivity() {
                 reconnecting = reconnectingState.value,
                 centerLogoUrl = liveChannelsState.value.getOrNull(liveIndexState.value)?.piconUrl,
                 onOpenEpg = { openEpgInApp() },
-                onEnterPip = { enterPipIfPossible() },
+                onEnterPip = { enterPipAndMinimize() },
                 onOpenSleep = { openSleepMenu() },
                 playing = isPlayingState.value,
                 channelNavIndex = navChannelIndexState.value,
@@ -992,7 +992,7 @@ class PlayerActivity : ComponentActivity() {
                 progNextStart = liveNextStartState.value,
                 progNextStop = liveNextStopState.value,
                 zapPoke = zapPokeState.value,
-                onClose = { if (!autoPipIfPossible()) finish() }
+                onClose = { if (!enterPipIfPossible()) finish() }
             )
             }
         }
@@ -1019,12 +1019,20 @@ class PlayerActivity : ComponentActivity() {
             .build()
     }
 
-    private fun enterPipIfPossible() {
+    private fun enterPipIfPossible(): Boolean {
         if (android.os.Build.VERSION.SDK_INT >= 26 &&
             packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
             ::mediaPlayer.isInitialized
         ) {
-            runCatching { enterPictureInPictureMode(buildPipParams()) }
+            return runCatching { enterPictureInPictureMode(buildPipParams()) }.getOrDefault(false)
+        }
+        return false
+    }
+
+    /** Spusti PiP a minimalizuje appku (okno plava nad plochou / inou appkou). */
+    private fun enterPipAndMinimize() {
+        if (enterPipIfPossible()) {
+            runCatching { moveTaskToBack(true) }
         }
     }
 
@@ -1842,7 +1850,7 @@ private fun PlayerUi(
                     @Composable
                     fun barCtrl(c: String) {
                         when (c) {
-                            "close" -> CircleButton("\u2715", selected = selCtrl == "close", scale = bk, onClick = onClose)
+                            "close" -> CircleButton("\u2190", selected = selCtrl == "close", scale = bk, onClick = onClose)
                             "list" -> CircleButton(
                                 label = "\u2630", selected = selCtrl == "list", scale = bk,
                                 onClick = { showChannelList = true; controlsVisible = false }
