@@ -770,7 +770,7 @@ private fun EpgGridRow(
                             endMin = endMin,
                             title = rb.title,
                             timeLabel = formatTimeHm(rb.start) + " - " + formatTimeHm(rb.stop),
-                            bg = Color(0x5C43A047),       // zelena = nahrate, da sa prehrat
+                            bg = if (isLightTheme()) Color(0xA643A047) else Color(0x5C43A047),  // zelena = nahrate
                             recorded = true,
                             onClick = { onDvr(rb.entry) },
                             onFocused = { onFocusDetail(GridDetail.Dvr(rb.entry)) }
