@@ -153,6 +153,7 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
             TvTextField(
                 label = stringResource(R.string.field_host),
                 value = host, onValueChange = { host = it },
+                uri = true,
                 modifier = Modifier.fillMaxWidth()
             )
             TvTextField(
@@ -264,7 +265,7 @@ fun TestResultView(state: TestState) {
                 color = MaterialTheme.colorScheme.error
             )
             is ConnectionResult.NetworkError -> Text(
-                stringResource(R.string.test_network_error, r.message),
+                stringResource(R.string.test_network_error),
                 color = MaterialTheme.colorScheme.error
             )
         }

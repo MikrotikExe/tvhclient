@@ -121,6 +121,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
             label = stringResource(R.string.field_host),
             value = host,
             onValueChange = { host = it; localError = false },
+            uri = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(10.dp))

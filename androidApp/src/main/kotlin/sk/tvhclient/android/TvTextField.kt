@@ -52,6 +52,7 @@ fun TvTextField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     numeric: Boolean = false,
+    uri: Boolean = false,
     password: Boolean = false
 ) {
     var editing by remember { mutableStateOf(false) }
@@ -81,7 +82,12 @@ fun TvTextField(
                 }
             } else null,
             keyboardOptions = KeyboardOptions(
-                keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
+                keyboardType = when {
+                    numeric -> KeyboardType.Number
+                    password -> KeyboardType.Password
+                    uri -> KeyboardType.Uri
+                    else -> KeyboardType.Text
+                },
                 imeAction = ImeAction.Done,
                 autoCorrectEnabled = false,
                 capitalization = KeyboardCapitalization.None
