@@ -797,7 +797,7 @@ private fun EpgGridRow(
                                 MaterialTheme.colorScheme.primaryContainer
                             else
                                 lerp(MaterialTheme.colorScheme.primaryContainer, Color.Black, 0.38f)
-                            isPast -> if (isLightTheme()) Color(0x1F000000) else Color(0x22FFFFFF)
+                            isPast -> if (isLightTheme()) Color(0x33000000) else Color(0x22FFFFFF)
                             else -> if (isLightTheme()) Color(0x0F000000) else Color(0x14FFFFFF)
                         },
                         recorded = false,
