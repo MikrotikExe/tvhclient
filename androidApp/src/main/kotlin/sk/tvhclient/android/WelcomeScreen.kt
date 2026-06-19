@@ -86,6 +86,15 @@ fun WelcomeScreen(vm: ServersViewModel) {
         listOf(Color(0xFFEDEAF5), Color(0xFFF6F4FB), Color(0xFFFFFFFF))
     else
         listOf(Color(0xFF1B1430), Color(0xFF120F1A), Color(0xFF0C0B10))
+    // Kompaktnejsi layout na sirku (Android TV / setobox / tablet na sirku), nech sa zmesti vsetko vratane loga
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val compact = configuration.screenWidthDp > configuration.screenHeightDp
+    val logoSize = if (compact) 64.dp else 96.dp
+    val logoIcon = if (compact) 36.dp else 54.dp
+    val gapTop = if (compact) 8.dp else 24.dp
+    val gapLogo = if (compact) 10.dp else 18.dp
+    val gapForm = if (compact) 20.dp else 36.dp
+    val vPad = if (compact) 8.dp else 16.dp
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -98,15 +107,15 @@ fun WelcomeScreen(vm: ServersViewModel) {
             .widthIn(max = 520.dp)
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = 24.dp, vertical = vPad),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         ThemeSwitch(ctx)
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(gapTop))
         // Logo v jemnom zaoblenom rámiku
         Box(
             modifier = Modifier
-                .size(96.dp)
+                .size(logoSize)
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
             contentAlignment = Alignment.Center
@@ -115,10 +124,10 @@ fun WelcomeScreen(vm: ServersViewModel) {
                 Icons.Default.LiveTv,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(54.dp)
+                modifier = Modifier.size(logoIcon)
             )
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(gapLogo))
         Text(
             "Headent Client",
             style = MaterialTheme.typography.headlineMedium,
@@ -131,7 +140,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(gapForm))
 
         TvTextField(
             label = stringResource(R.string.field_host),
@@ -299,18 +308,15 @@ fun WelcomeScreen(vm: ServersViewModel) {
             // skryta moznost: obnova nastaveni zo zalohy
             BackupControls(compact = true, onImported = { vm.refresh() })
         }
-        Spacer(Modifier.height(56.dp))
-    }
-
+        Spacer(Modifier.height(28.dp))
         Text(
             "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) \u2022 ${BuildConfig.BUILD_DATE}",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 12.dp)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
+        Spacer(Modifier.height(8.dp))
+    }
+
     }
 }
 
