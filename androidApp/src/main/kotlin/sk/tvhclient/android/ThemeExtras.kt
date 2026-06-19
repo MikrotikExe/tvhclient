@@ -16,7 +16,7 @@ fun isLightTheme(): Boolean = MaterialTheme.colorScheme.surface.luminance() > 0.
  */
 @Composable
 fun piconBackground(): Color =
-    if (isLightTheme()) Color(0xFFB4B9C0) else Color(0x22FFFFFF)
+    if (isLightTheme()) Color(0xFFA2A8B4) else Color(0xFF353B47)
 
 // --- Farby overlay-u prehravaca ---
 // V tmavom rezime vracaju presne povodne hodnoty (vizualne nezmenene),
