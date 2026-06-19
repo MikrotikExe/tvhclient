@@ -345,7 +345,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 ThemeSwitch(ctx)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(32.dp))
                 branding()
                 Spacer(Modifier.height(gapForm))
                 formFields()
