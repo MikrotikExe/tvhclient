@@ -2,6 +2,7 @@ package sk.tvhclient.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Box
@@ -90,70 +91,48 @@ fun WelcomeScreen(vm: ServersViewModel) {
     // Kompaktnejsi layout na sirku (Android TV / setobox / tablet na sirku), nech sa zmesti vsetko vratane loga
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val compact = configuration.screenWidthDp > configuration.screenHeightDp
-    // Skutocna TV (Android TV / setobox), NIE telefon nalezato. Pripnuty prepinac + skryte logo len tu.
-    val isTv = remember {
-        val um = ctx.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
-        um?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
-    }
     val logoSize = if (compact) 64.dp else 96.dp
     val logoIcon = if (compact) 36.dp else 54.dp
     val gapLogo = if (compact) 10.dp else 18.dp
     val gapForm = if (compact) 20.dp else 36.dp
     val vPad = if (compact) 8.dp else 16.dp
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(bgColors))
-    ) {
-    Column(
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .fillMaxHeight()
-            .widthIn(max = 520.dp)
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
-            .padding(top = if (isTv) 56.dp else 0.dp)
-            .padding(horizontal = 24.dp, vertical = vPad),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Na telefone (aj nalezato) je prepinac temy v toku hore; na TV je pripnuty mimo skrolu (nizsie)
-        if (!isTv) {
-            ThemeSwitch(ctx)
-            Spacer(Modifier.height(8.dp))
+    val versionLabel = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) \u2022 ${BuildConfig.BUILD_DATE}"
+
+    // Branding (logo + nazov + popis) - zdielane pre oba layouty
+    val branding: @Composable () -> Unit = {
+        Box(
+            modifier = Modifier
+                .size(logoSize)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.Icon(
+                Icons.Default.LiveTv,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(logoIcon)
+            )
         }
-        // Logo (na TV ho skryvame - prekryval by ho pripnuty prepinac a niet na neho miesto)
-        if (!isTv) {
-            Box(
-                modifier = Modifier
-                    .size(logoSize)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.material3.Icon(
-                    Icons.Default.LiveTv,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(logoIcon)
-                )
-            }
-            Spacer(Modifier.height(gapLogo))
-        }
+        Spacer(Modifier.height(gapLogo))
         Text(
             "Headent Client",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         Spacer(Modifier.height(6.dp))
         Text(
             stringResource(R.string.welcome_tagline),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
-        Spacer(Modifier.height(gapForm))
+    }
 
+    // Formular (polia + tlacidlo + viac moznosti + pokrocile) - zdielane; prepinac temy sa prida zvlast
+    val formFields: @Composable () -> Unit = {
         TvTextField(
             label = stringResource(R.string.field_host),
             value = host,
@@ -177,7 +156,6 @@ fun WelcomeScreen(vm: ServersViewModel) {
             password = true,
             modifier = Modifier.fillMaxWidth()
         )
-
         if (localError) {
             Spacer(Modifier.height(8.dp))
             Text(
@@ -186,10 +164,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
                 style = MaterialTheme.typography.bodySmall
             )
         }
-
         Spacer(Modifier.height(12.dp))
-        // V prihlaseni nezobrazuj technicku verziu/API; pocas pripajania aj po uspesnom
-        // teste (kym sa vojde do appky) ukaz "Prihlasenie prebieha". Chyby zobraz cez TestResultView.
         when (val st = testState) {
             is TestState.Running -> Text(
                 stringResource(R.string.login_in_progress),
@@ -210,7 +185,6 @@ fun WelcomeScreen(vm: ServersViewModel) {
             else -> {}
         }
         Spacer(Modifier.height(12.dp))
-
         Button(
             onClick = {
                 val p = port.toIntOrNull()
@@ -247,12 +221,10 @@ fun WelcomeScreen(vm: ServersViewModel) {
                 Text(stringResource(R.string.login_connect))
             }
         }
-
         Spacer(Modifier.height(16.dp))
         androidx.compose.material3.TextButton(onClick = { advanced = !advanced }) {
             Text(stringResource(R.string.login_more_options))
         }
-
         if (advanced) {
             Spacer(Modifier.height(4.dp))
             TvTextField(
@@ -317,27 +289,70 @@ fun WelcomeScreen(vm: ServersViewModel) {
                 optionLabel = { it }
             ) { profile = it }
             Spacer(Modifier.height(8.dp))
-            // skryta moznost: obnova nastaveni zo zalohy
             BackupControls(compact = true, onImported = { vm.refresh() })
-        }
-        if (compact) {
-            // na sirku (TV/setobox): verzia v obsahu (pripnutie dole tu sposobovalo prekrytie)
-            Spacer(Modifier.height(24.dp))
-            Text(
-                "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) \u2022 ${BuildConfig.BUILD_DATE}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-            Spacer(Modifier.height(8.dp))
-        } else {
-            Spacer(Modifier.height(56.dp))
         }
     }
 
-        // na vysku (telefon): verzia pripnuta dole
-        if (!compact) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(bgColors))
+    ) {
+        if (compact) {
+            // Dva stlpce: vlavo logo+nazov, vpravo prepinac+formular. Vsetko sa zmesti na sirku (TV / box / tablet).
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 40.dp, vertical = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    branding()
+                    Spacer(Modifier.height(18.dp))
+                    Text(
+                        versionLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Spacer(Modifier.width(32.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    ThemeSwitch(ctx)
+                    Spacer(Modifier.height(12.dp))
+                    formFields()
+                }
+            }
+        } else {
+            // Jeden stlpec (telefon na vysku)
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxHeight()
+                    .widthIn(max = 520.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = vPad),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                ThemeSwitch(ctx)
+                Spacer(Modifier.height(8.dp))
+                branding()
+                Spacer(Modifier.height(gapForm))
+                formFields()
+                Spacer(Modifier.height(56.dp))
+            }
             Text(
-                "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) \u2022 ${BuildConfig.BUILD_DATE}",
+                versionLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier
@@ -345,21 +360,6 @@ fun WelcomeScreen(vm: ServersViewModel) {
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp)
             )
-        }
-
-        // Na TV: prepinac temy pripnuty hore, mimo skrolovania - nech sa neodreze (overscan) ani neodscrolluje
-        if (isTv) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .background(bgColors.first())
-                    .statusBarsPadding()
-                    .padding(top = 12.dp, bottom = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                ThemeSwitch(ctx)
-            }
         }
     }
 }
@@ -371,6 +371,7 @@ private fun ThemeSwitch(ctx: android.content.Context) {
     val mode = ThemePref.get(ctx)
     Row(
         modifier = Modifier
+            .focusGroup()
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             .padding(3.dp),
