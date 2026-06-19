@@ -299,6 +299,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
             // skryta moznost: obnova nastaveni zo zalohy
             BackupControls(compact = true, onImported = { vm.refresh() })
         }
+        Spacer(Modifier.height(56.dp))
     }
 
         Text(
