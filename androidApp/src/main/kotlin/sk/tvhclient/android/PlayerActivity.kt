@@ -1903,23 +1903,33 @@ private fun PlayerUi(
                                             .padding(horizontal = 8.dp),
                                         trackColor = playerTrack()
                                     )
-                                    Text(
-                                        "$remainMin min",
-                                        color = playerFgDim(),
-                                        fontSize = (12 * k).sp,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                    if (timeshiftOffsetMs > 0L) {
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
+                                    if (portrait) {
+                                        // jeden trailing prvok, nech sa bar (weight) nezuzi
+                                        if (timeshiftOffsetMs > 0L) Text(
                                             "\u2212" + fmtMs(timeshiftOffsetMs),
                                             color = androidx.compose.ui.graphics.Color(0xFFFF3B30),
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = (12 * k).sp,
-                                            maxLines = 1,
-                                            softWrap = false
+                                            fontSize = (12 * k).sp, maxLines = 1, softWrap = false
+                                        ) else Text(
+                                            "$remainMin min",
+                                            color = playerFgDim(),
+                                            fontSize = (12 * k).sp, maxLines = 1, softWrap = false
                                         )
+                                    } else {
+                                        Text(
+                                            "$remainMin min",
+                                            color = playerFgDim(),
+                                            fontSize = (12 * k).sp, maxLines = 1, softWrap = false
+                                        )
+                                        if (timeshiftOffsetMs > 0L) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                "\u2212" + fmtMs(timeshiftOffsetMs),
+                                                color = androidx.compose.ui.graphics.Color(0xFFFF3B30),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = (12 * k).sp, maxLines = 1, softWrap = false
+                                            )
+                                        }
                                     }
                                 }
                             }
