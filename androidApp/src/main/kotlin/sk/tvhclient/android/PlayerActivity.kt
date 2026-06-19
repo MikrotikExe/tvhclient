@@ -2140,20 +2140,33 @@ private fun PlayerUi(
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.width(34.dp)
                                 )
-                                if (ch.piconUrl != null) {
-                                    val req = remember(ch.piconUrl) {
-                                        ImageRequest.Builder(ctx).data(ch.piconUrl).size(120).build()
+                                Box(
+                                    Modifier
+                                        .size(48.dp, 40.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(piconBackground()),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (ch.piconUrl != null) {
+                                        val req = remember(ch.piconUrl) {
+                                            ImageRequest.Builder(ctx).data(ch.piconUrl).size(120).build()
+                                        }
+                                        AsyncImage(
+                                            model = req,
+                                            contentDescription = null,
+                                            imageLoader = loader,
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                            modifier = Modifier.fillMaxSize().padding(2.dp)
+                                        )
+                                    } else {
+                                        Text(
+                                            ch.name.take(3).uppercase(),
+                                            color = playerFg(),
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
                                     }
-                                    AsyncImage(
-                                        model = req,
-                                        contentDescription = null,
-                                        imageLoader = loader,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                } else {
-                                    Spacer(Modifier.width(10.dp))
                                 }
+                                Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
                                         ch.name,
