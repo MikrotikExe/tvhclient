@@ -349,6 +349,9 @@ fun EpgGridScreen(
     // fokus Compose to negarantoval (uletoval na sipku spat / mimo casovy stlpec). ---
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val gridFocus = remember { FocusRequester() }
+    val daysBack = EpgRangePref.backStateOf(context).value
+    val daysForward = EpgRangePref.fwdStateOf(context).value
+    var pendingCursorEdge by remember { mutableStateOf<DayJump?>(null) }
     var selRow by remember { mutableStateOf(0) }
     var anchorTime by remember { mutableStateOf(now) }        // cas, na ktorom drzime stlpec
     var selStart by remember { mutableStateOf<Long?>(null) }  // zaciatok vybranej bunky
@@ -392,7 +395,14 @@ fun EpgGridScreen(
         var cur = cells.indexOfFirst { it.start == selStart }
         if (cur < 0) cur = cells.indexOfFirst { it.start <= anchorTime && anchorTime < it.stop }
         val ni = (if (cur < 0) 0 else cur) + dir
-        if (ni < 0 || ni > cells.lastIndex) return true          // klampuj (neunikaj na sipku spat)
+        if (ni < 0) {                       // pred prvou bunkou -> predosly den, skoc na koniec dna
+            if (dayOffset > -daysBack) { pendingCursorEdge = DayJump.END; dayOffset-- }
+            return true
+        }
+        if (ni > cells.lastIndex) {          // za poslednou bunkou -> dalsi den, skoc na zaciatok dna
+            if (dayOffset < daysForward) { pendingCursorEdge = DayJump.START; dayOffset++ }
+            return true
+        }
         val c = cells[ni]
         selStart = c.start
         anchorTime = c.start
@@ -416,7 +426,12 @@ fun EpgGridScreen(
     // Pociatocny vyber + reset pri zmene dna: na aktualnom dni linia "teraz", inak poludnie
     LaunchedEffect(dayOffset, rows.size) {
         if (rows.isEmpty()) return@LaunchedEffect
-        anchorTime = if (dayOffset == 0) now else dayStart + 12L * 3600
+        anchorTime = when (pendingCursorEdge) {
+            DayJump.END -> dayStart + DAY_MIN.toLong() * 60 - 60   // koniec dna -> posledna bunka
+            DayJump.START -> dayStart                              // zaciatok dna -> prva bunka
+            null -> if (dayOffset == 0) now else dayStart + 12L * 3600
+        }
+        pendingCursorEdge = null
         selectRowAt(selRow.coerceIn(0, rows.lastIndex), anchorTime)
     }
     // Fokus na mriezku po otvoreni (TV)
@@ -465,9 +480,7 @@ fun EpgGridScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            // Vyber dna; rozsah dozadu/dopredu podla nastavenia (EpgRangePref)
-            val daysBack = EpgRangePref.backStateOf(context).value
-            val daysForward = EpgRangePref.fwdStateOf(context).value
+            // Vyber dna; rozsah dozadu/dopredu podla nastavenia (EpgRangePref) — daysBack/daysForward su definovane vyssie
             LaunchedEffect(daysBack, daysForward) {
                 if (dayOffset < -daysBack) dayOffset = -daysBack
                 if (dayOffset > daysForward) dayOffset = daysForward
