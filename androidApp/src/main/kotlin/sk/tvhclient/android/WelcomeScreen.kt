@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -59,6 +61,12 @@ fun WelcomeScreen(vm: ServersViewModel) {
     var htspPort by remember { mutableStateOf("9982") }
     var profile by remember { mutableStateOf("pass") }
     var localError by remember { mutableStateOf(false) }
+    val hostFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    // Pociatocny D-pad fokus (TV) na prve pole Host/IP, nech sa zacina zhora
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(200)
+        runCatching { hostFocus.requestFocus() }
+    }
 
     val testState by vm.testState.collectAsState()
     var pending by remember { mutableStateOf<TvhServer?>(null) }
@@ -85,7 +93,10 @@ fun WelcomeScreen(vm: ServersViewModel) {
     ) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .align(Alignment.TopCenter)
+            .fillMaxHeight()
+            .widthIn(max = 520.dp)
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -127,6 +138,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
             value = host,
             onValueChange = { host = it; localError = false },
             uri = true,
+            focusRequester = hostFocus,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(10.dp))

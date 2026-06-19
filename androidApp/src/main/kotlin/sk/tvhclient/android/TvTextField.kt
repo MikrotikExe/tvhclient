@@ -53,12 +53,14 @@ fun TvTextField(
     modifier: Modifier = Modifier,
     numeric: Boolean = false,
     uri: Boolean = false,
-    password: Boolean = false
+    password: Boolean = false,
+    focusRequester: FocusRequester? = null
 ) {
     var editing by remember { mutableStateOf(false) }
     var everEdited by remember { mutableStateOf(false) }
     var revealed by remember { mutableStateOf(false) }
-    val boxFocus = remember { FocusRequester() }
+    val internalFocus = remember { FocusRequester() }
+    val boxFocus = focusRequester ?: internalFocus
 
     if (editing) {
         val imeFocus = remember { FocusRequester() }
@@ -112,6 +114,19 @@ fun TvTextField(
                 .heightIn(min = 56.dp)
                 .focusRequester(boxFocus)
                 .dpadFocusable()
+                .onPreviewKeyEvent { e ->
+                    // Pripojena klavesnica: ak je pole zamerane a stlaci sa znakovy kláves,
+                    // rovno spusti editaciu a zapise ten znak (netreba najprv OK/Enter).
+                    if (e.type == KeyEventType.KeyDown) {
+                        val ch = e.nativeKeyEvent.unicodeChar
+                        if (ch != 0 && !Character.isISOControl(ch)) {
+                            onValueChange(value + ch.toChar())
+                            everEdited = true
+                            editing = true
+                            true
+                        } else false
+                    } else false
+                }
                 .clickable { editing = true; everEdited = true }
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
                 .padding(horizontal = 16.dp, vertical = 8.dp)
