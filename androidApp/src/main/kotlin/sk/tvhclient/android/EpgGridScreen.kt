@@ -793,7 +793,10 @@ private fun EpgGridRow(
                         title = ev.title.ifBlank { "—" },
                         timeLabel = formatTimeHm(ev.start) + " - " + formatTimeHm(ev.stop),
                         bg = when {
-                            isNow -> MaterialTheme.colorScheme.primaryContainer
+                            isNow -> if (isLightTheme())
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                lerp(MaterialTheme.colorScheme.primaryContainer, Color.Black, 0.38f)
                             isPast -> if (isLightTheme()) Color(0x1F000000) else Color(0x22FFFFFF)
                             else -> if (isLightTheme()) Color(0x0F000000) else Color(0x14FFFFFF)
                         },
@@ -803,7 +806,7 @@ private fun EpgGridRow(
                             if (isLightTheme())
                                 lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.50f)
                             else
-                                lerp(MaterialTheme.colorScheme.primaryContainer, Color.Black, 0.38f)
+                                MaterialTheme.colorScheme.primaryContainer
                         } else null,
                         fg = if (isNow) MaterialTheme.colorScheme.onPrimaryContainer else null,
                         fgDim = if (isNow) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f) else null,
