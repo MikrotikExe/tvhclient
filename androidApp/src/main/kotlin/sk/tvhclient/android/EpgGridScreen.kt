@@ -348,6 +348,11 @@ fun EpgGridScreen(
     // fokus Compose to negarantoval (uletoval na sipku spat / mimo casovy stlpec). ---
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val gridFocus = remember { FocusRequester() }
+    // Kurzorovy vyber (fialovy ramik) + D-pad maju zmysel len na TV; na dotyku (telefon/tablet) je zbytocny
+    val isTv = remember {
+        val um = context.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        um?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+    }
     val daysBack = EpgRangePref.backStateOf(context).value
     val daysForward = EpgRangePref.fwdStateOf(context).value
     var pendingCursorEdge by remember { mutableStateOf<DayJump?>(null) }
@@ -425,6 +430,7 @@ fun EpgGridScreen(
     // Pociatocny vyber + reset pri zmene dna: na aktualnom dni linia "teraz", inak poludnie
     LaunchedEffect(dayOffset, rows.size) {
         if (rows.isEmpty()) return@LaunchedEffect
+        if (!isTv) { selStart = null; return@LaunchedEffect }  // dotyk: ziadny kurzorovy vyber
         anchorTime = when (pendingCursorEdge) {
             DayJump.END -> dayStart + DAY_MIN.toLong() * 60 - 60   // koniec dna -> posledna bunka
             DayJump.START -> dayStart                              // zaciatok dna -> prva bunka
@@ -435,6 +441,7 @@ fun EpgGridScreen(
     }
     // Fokus na mriezku po otvoreni (TV)
     LaunchedEffect(Unit) {
+        if (!isTv) return@LaunchedEffect
         kotlinx.coroutines.delay(150)
         runCatching { gridFocus.requestFocus() }
     }
