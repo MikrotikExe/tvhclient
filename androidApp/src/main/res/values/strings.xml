@@ -257,4 +257,6 @@
     <string name="welcome_tagline">Tvheadend client app</string>
     <string name="login_in_progress">Logging in…</string>
     <string name="auto_pip_title">Automatic picture-in-picture</string>
+    <string name="ts_enable_title">Timeshift (pause / rewind live TV)</string>
+    <string name="ts_enable_note">Pause and rewind live TV. Works only if the server supports timeshift over HTSP; otherwise it stays off and playback is unaffected.</string>
 </resources>

@@ -272,6 +272,28 @@ internal fun PlaybackSettings(ctx: android.content.Context) {
             Text(stringResource(R.string.auto_pip_title))
         }
     }
+
+    // Timeshift (pauza/pretacanie zivej TV) — realne sa zapne iba ak ho podporuje server
+    Spacer(Modifier.height(16.dp))
+    var timeshift by remember { mutableStateOf(TimeshiftPref.get(ctx)) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(
+            checked = timeshift,
+            onCheckedChange = { on ->
+                timeshift = on
+                TimeshiftPref.set(ctx, on)
+                TabController.settingsDirty.value = true
+            }
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.ts_enable_title))
+    }
+    Spacer(Modifier.height(8.dp))
+    Text(
+        stringResource(R.string.ts_enable_note),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 // --- Playlist: rodicovsky zamok (PIN) ---
@@ -475,6 +497,9 @@ internal fun RemoteSettings(
                         val tp = res.probe
                         buildString {
                             append(srv.name); append(" / "); append(res.channelName); append('\n')
+                            append("HTSP port="); append(res.htspPort)
+                            append("  timeshift_capable="); append(res.timeshiftCapable); append('\n')
+                            append("caps: "); append(if (res.capabilities.isEmpty()) "—" else res.capabilities.joinToString(", ")); append('\n')
                             append("start="); append(tp.started)
                             append("  pakety="); append(tp.muxPackets)
                             append("  bajty="); append(tp.totalBytes); append('\n')

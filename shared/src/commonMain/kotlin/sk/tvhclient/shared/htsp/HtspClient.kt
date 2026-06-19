@@ -36,6 +36,8 @@ class HtspClient(
         private set
     var serverVersion: Long? = null
         private set
+    var serverCapabilities: List<String> = emptyList()
+        private set
     private var challenge: ByteArray? = null
 
     data class Metadata(
@@ -120,6 +122,9 @@ class HtspClient(
         serverVersion = r["htspversion"] as? Long
         serverName = r["servername"] as? String
         challenge = r["challenge"] as? ByteArray
+        @Suppress("UNCHECKED_CAST")
+        serverCapabilities = (r["servercapability"] as? List<Any?>)
+            ?.mapNotNull { it as? String } ?: emptyList()
     }
 
     private suspend fun auth(): Boolean {

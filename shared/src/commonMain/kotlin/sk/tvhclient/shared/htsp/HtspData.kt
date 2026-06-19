@@ -20,6 +20,8 @@ object HtspData {
     private data class NowCache(val ts: Long, val map: Map<String, List<EpgEvent>>)
     private val nowCache = HashMap<String, NowCache>()
     private val gridCache = HashMap<String, NowCache>()
+    private data class CapCache(val ts: Long, val reachable: Boolean, val caps: List<String>)
+    private val capCache = HashMap<String, CapCache>()
 
     private fun longOf(m: Map<String, Any?>, key: String): Long? = (m[key] as? Long)
     private fun strOf(m: Map<String, Any?>, key: String): String = (m[key] as? String) ?: ""
@@ -90,10 +92,48 @@ object HtspData {
         return result
     }
 
-    fun clear(serverId: String) { cache.remove(serverId); nowCache.remove(serverId); gridCache.remove(serverId) }
+    fun clear(serverId: String) { cache.remove(serverId); nowCache.remove(serverId); gridCache.remove(serverId); capCache.remove(serverId) }
+
+    /**
+     * M160 — schopnosti HTSP servera z `hello` (servercapability). Pripoji sa
+     * na server.htspPort (cokolvek si uzivatel nastavi, default 9982), precita
+     * capability a hned zavrie. Vysledok cachuje per server (TTL). Pri akomkolvek
+     * zlyhani (port vypnuty/firewall/auth) -> reachable=false, prazdne caps.
+     */
+    suspend fun capabilities(server: TvhServer, nowSec: Long, ttl: Long = 600): Pair<Boolean, List<String>> {
+        val c = capCache[server.id]
+        if (c != null && nowSec - c.ts < ttl) return c.reachable to c.caps
+        val client = HtspClient(server.host, server.htspPort, server.username, server.password)
+        val res = try {
+            client.connect()
+            true to client.serverCapabilities
+        } catch (e: Throwable) {
+            false to emptyList<String>()
+        } finally {
+            client.close()
+        }
+        capCache[server.id] = CapCache(nowSec, res.first, res.second)
+        return res
+    }
+
+    /**
+     * M160 — je timeshift na serveri dostupny? True len ak je HTSP port dostupny,
+     * auth presla a server hlasi capability "timeshift". Inak false (timeshift
+     * sa v prehravaci nezapne, appka bezi dalej cez hlavny rezim/9981).
+     */
+    suspend fun timeshiftAvailable(server: TvhServer, nowSec: Long): Boolean {
+        val (reachable, caps) = capabilities(server, nowSec)
+        return reachable && caps.contains("timeshift")
+    }
 
     /** M159 — diagnostika timeshiftu na prvom kanali servera. */
-    data class TimeshiftProbeResult(val channelName: String, val probe: HtspClient.TimeshiftProbe)
+    data class TimeshiftProbeResult(
+        val channelName: String,
+        val htspPort: Int,
+        val capabilities: List<String>,
+        val timeshiftCapable: Boolean,
+        val probe: HtspClient.TimeshiftProbe
+    )
 
     suspend fun probeTimeshift(
         server: TvhServer,
@@ -108,12 +148,13 @@ object HtspData {
         val name = strOf(first, "channelName").ifBlank { cid.toString() }
         val client = HtspClient(server.host, server.htspPort, server.username, server.password)
         client.connect()
+        val caps = client.serverCapabilities
         val probe = try {
             client.probeTimeshift(cid, timeshiftPeriodSec, durationMs)
         } finally {
             client.close()
         }
-        return TimeshiftProbeResult(name, probe)
+        return TimeshiftProbeResult(name, server.htspPort, caps, caps.contains("timeshift"), probe)
     }
 
     // ---- mapovanie ----
