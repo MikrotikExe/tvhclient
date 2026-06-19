@@ -11,12 +11,10 @@ import java.io.FileDescriptor
 import java.io.OutputStream
 
 /**
- * M162 — premostí HTSP zivy stream (premuxovany na MPEG-TS v HtspClient.streamSubscribe)
- * do libVLC cez lokalny pipe. `start` vytvori ParcelFileDescriptor pipe, spusti korutinu
- * ktora pise TS bajty do write-endu, a vrati read-end FileDescriptor pre Media(libVlc, fd).
- * Pri zatvoreni read-endu / `stop` sa write zlomi (broken pipe) a slucka skonci.
- *
- * libVLC nehovori HTSP, preto HTSP citame my a podavame mu hotovy TS.
+ * M162/M163 — premostí HTSP zivy stream (premuxovany na MPEG-TS) do libVLC cez lokalny pipe.
+ * `start` vytvori pipe, spusti korutinu ktora pise TS do write-endu a vrati read FileDescriptor
+ * pre Media(libVlc, fd). Subscribuje s timeshift bufferom, takze sa da pauzovat cez
+ * subscriptionSpeed. Pri `stop`/zatvoreni read-endu sa write zlomi a slucka skonci.
  */
 class HtspTsFeeder(private val server: TvhServer) {
 
@@ -24,9 +22,19 @@ class HtspTsFeeder(private val server: TvhServer) {
     private var readPfd: ParcelFileDescriptor? = null
     private var writePfd: ParcelFileDescriptor? = null
     private var out: OutputStream? = null
+    private var client: HtspClient? = null
+    private var scope: CoroutineScope? = null
+
+    /** Dlzka serveroveho timeshift bufferu pre subscription (server si to moze orezat). */
+    private val timeshiftPeriodSec = 3600
+
+    /** Posledny posun za zivym v 90kHz tikoch (z timeshiftStatus). 0 = zive. */
+    @Volatile var shiftTicks: Long = 0L
+        private set
 
     /** Spusti feed pre kanal a vrati read FileDescriptor pre libVLC. */
     fun start(channelId: Long, scope: CoroutineScope): FileDescriptor {
+        this.scope = scope
         val pipe = ParcelFileDescriptor.createPipe()
         val read = pipe[0]
         val write = pipe[1]
@@ -34,22 +42,43 @@ class HtspTsFeeder(private val server: TvhServer) {
         writePfd = write
         val os = ParcelFileDescriptor.AutoCloseOutputStream(write)
         out = os
+        val c = HtspClient(server.host, server.htspPort, server.username, server.password)
+        client = c
         job = scope.launch(Dispatchers.IO) {
-            val client = HtspClient(server.host, server.htspPort, server.username, server.password)
             try {
-                client.connect()
-                client.streamSubscribe(
+                c.connect()
+                c.streamSubscribe(
                     channelId = channelId,
-                    onTs = { bytes -> os.write(bytes) }   // blokujuci zapis = prirodzeny backpressure
+                    timeshiftPeriodSec = timeshiftPeriodSec,
+                    onTs = { bytes -> os.write(bytes) },
+                    onStatus = { shift, _ -> shiftTicks = shift }
                 )
             } catch (_: Throwable) {
-                // zrusenie korutiny / zlomeny pipe / chyba spojenia -> ticho ukonci
+                // zrusenie / zlomeny pipe / chyba spojenia
             } finally {
-                client.close()
+                c.close()
                 try { os.close() } catch (_: Throwable) {}
             }
         }
         return read.fileDescriptor
+    }
+
+    /** Pauza zivého prehravania (server drzi buffer). */
+    fun pause() {
+        val c = client ?: return
+        scope?.launch { runCatching { c.setSpeed(0) } }
+    }
+
+    /** Obnovenie prehravania z miesta pauzy (timeshift). */
+    fun resume() {
+        val c = client ?: return
+        scope?.launch { runCatching { c.setSpeed(100) } }
+    }
+
+    /** Skok spat na zive. */
+    fun goLive() {
+        val c = client ?: return
+        scope?.launch { runCatching { c.goLive() } }
     }
 
     fun stop() {
@@ -61,5 +90,7 @@ class HtspTsFeeder(private val server: TvhServer) {
         out = null
         readPfd = null
         writePfd = null
+        client = null
+        scope = null
     }
 }

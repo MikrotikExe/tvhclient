@@ -10,6 +10,8 @@ import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.readByteArray
 import io.ktor.utils.io.writeByteArray
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -31,6 +33,8 @@ class HtspClient(
     private var read: ByteReadChannel? = null
     private var write: ByteWriteChannel? = null
     private var seq = 0
+    private val writeMutex = Mutex()
+    private var streamSubId: Int = -1
 
     var serverName: String? = null
         private set
@@ -82,15 +86,17 @@ class HtspClient(
     private suspend fun send(method: String, args: Map<String, Any?> = emptyMap(), withSeq: Boolean = true): Int {
         val msg = HashMap<String, Any?>(args)
         msg["method"] = method
-        var s = -1
-        if (withSeq) {
-            seq += 1
-            s = seq
-            msg["seq"] = s.toLong()
+        return writeMutex.withLock {
+            var s = -1
+            if (withSeq) {
+                seq += 1
+                s = seq
+                msg["seq"] = s.toLong()
+            }
+            write!!.writeByteArray(Htsmsg.serialize(msg))
+            write!!.flush()
+            s
         }
-        write!!.writeByteArray(Htsmsg.serialize(msg))
-        write!!.flush()
-        return s
     }
 
     private suspend fun recv(): Map<String, Any?> {
@@ -319,10 +325,12 @@ class HtspClient(
         timeshiftPeriodSec: Int = 0,
         profile: String? = null,
         onTs: suspend (ByteArray) -> Unit,
+        onStatus: (shiftUs: Long, full: Boolean) -> Unit = { _, _ -> },
         onStop: (String?) -> Unit = {}
     ) {
         seq += 1
         val subId = seq
+        streamSubId = subId
         val args = HashMap<String, Any?>()
         args["channelId"] = channelId
         args["subscriptionId"] = subId.toLong()
@@ -362,6 +370,11 @@ class HtspClient(
                         val ts = mx.mux(streamIdx, es, pts, dts, rap)
                         if (ts.isNotEmpty()) onTs(ts)
                     }
+                    "timeshiftStatus" -> {
+                        val shift = (m["shift"] as? Long) ?: 0L
+                        val full = ((m["full"] as? Long) ?: 0L) != 0L
+                        onStatus(shift, full)
+                    }
                     "subscriptionStop" -> {
                         onStop(m["subscriptionError"] as? String)
                         return
@@ -369,7 +382,22 @@ class HtspClient(
                 }
             }
         } finally {
+            streamSubId = -1
             try { send("unsubscribe", mapOf("subscriptionId" to subId.toLong()), withSeq = false) } catch (_: Throwable) {}
         }
+    }
+
+    /** subscriptionSpeed: 0 = pauza, 100 = normal (kladne FF, zaporne RW). */
+    suspend fun setSpeed(speed: Int) {
+        val id = streamSubId
+        if (id <= 0) return
+        send("subscriptionSpeed", mapOf("subscriptionId" to id.toLong(), "speed" to speed.toLong()), withSeq = false)
+    }
+
+    /** Skok na zive (subscriptionLive). */
+    suspend fun goLive() {
+        val id = streamSubId
+        if (id <= 0) return
+        send("subscriptionLive", mapOf("subscriptionId" to id.toLong()), withSeq = false)
     }
 }

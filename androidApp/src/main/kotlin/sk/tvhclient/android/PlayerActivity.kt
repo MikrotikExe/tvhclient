@@ -223,7 +223,13 @@ class PlayerActivity : ComponentActivity() {
 
     private fun togglePlayPause() {
         if (!::mediaPlayer.isInitialized) return
-        if (isPlayingState.value) mediaPlayer.pause() else mediaPlayer.play()
+        if (isPlayingState.value) {
+            if (htspLive) htspFeeder?.pause()   // zastav server buffer pri pauze
+            mediaPlayer.pause()
+        } else {
+            if (htspLive) htspFeeder?.resume()  // obnov z miesta pauzy (timeshift)
+            mediaPlayer.play()
+        }
     }
 
     /** Pretacanie pre DVR (live TS sa pretacat neda). TS subor nenese dlzku,
