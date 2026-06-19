@@ -700,16 +700,18 @@ private fun EpgGridRow(
                         title = ev.title.ifBlank { "—" },
                         timeLabel = formatTimeHm(ev.start) + " - " + formatTimeHm(ev.stop),
                         bg = when {
-                            isNow -> if (isLightTheme())
-                                lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.50f)
-                            else
-                                lerp(MaterialTheme.colorScheme.primaryContainer, Color.Black, 0.38f)
+                            isNow -> MaterialTheme.colorScheme.primaryContainer
                             isPast -> if (isLightTheme()) Color(0x0F000000) else Color(0x14FFFFFF)
                             else -> if (isLightTheme()) Color(0x1F000000) else Color(0x22FFFFFF)
                         },
                         recorded = false,
                         progressMin = if (isNow) ((now - ev.start) / 60).toInt() else 0,
-                        progressColor = if (isNow) MaterialTheme.colorScheme.primaryContainer else null,
+                        progressColor = if (isNow) {
+                            if (isLightTheme())
+                                lerp(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary, 0.50f)
+                            else
+                                lerp(MaterialTheme.colorScheme.primaryContainer, Color.Black, 0.38f)
+                        } else null,
                         fg = if (isNow) MaterialTheme.colorScheme.onPrimaryContainer else null,
                         fgDim = if (isNow) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f) else null,
                         onClick = { onClick(ev) },
