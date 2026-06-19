@@ -24,6 +24,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -186,11 +190,22 @@ internal fun CircleButton(
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
+        val fs = (if (big) 34f else 22f).sp * scale * labelScale
         Text(
             label,
             color = Color.White,
-            textAlign = TextAlign.Center,
-            fontSize = (if (big) 34f else 20f).sp * scale * labelScale
+            maxLines = 1,
+            style = TextStyle(
+                fontSize = fs,
+                lineHeight = fs,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both
+                )
+            )
         )
     }
 }

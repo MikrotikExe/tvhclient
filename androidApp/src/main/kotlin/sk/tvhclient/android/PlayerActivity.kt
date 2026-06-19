@@ -1850,7 +1850,7 @@ private fun PlayerUi(
                     @Composable
                     fun barCtrl(c: String) {
                         when (c) {
-                            "close" -> CircleButton("\u2190", selected = selCtrl == "close", scale = bk, onClick = onClose)
+                            "close" -> CircleButton("\u2190", selected = selCtrl == "close", scale = bk, labelScale = 1.5f, onClick = onClose)
                             "list" -> CircleButton(
                                 label = "\u2630", selected = selCtrl == "list", scale = bk,
                                 onClick = { showChannelList = true; controlsVisible = false }
