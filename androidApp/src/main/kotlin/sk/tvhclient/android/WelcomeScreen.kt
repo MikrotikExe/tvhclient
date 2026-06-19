@@ -90,6 +90,11 @@ fun WelcomeScreen(vm: ServersViewModel) {
     // Kompaktnejsi layout na sirku (Android TV / setobox / tablet na sirku), nech sa zmesti vsetko vratane loga
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val compact = configuration.screenWidthDp > configuration.screenHeightDp
+    // Skutocna TV (Android TV / setobox), NIE telefon nalezato. Pripnuty prepinac + skryte logo len tu.
+    val isTv = remember {
+        val um = ctx.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        um?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+    }
     val logoSize = if (compact) 64.dp else 96.dp
     val logoIcon = if (compact) 36.dp else 54.dp
     val gapLogo = if (compact) 10.dp else 18.dp
@@ -108,17 +113,17 @@ fun WelcomeScreen(vm: ServersViewModel) {
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .statusBarsPadding()
-            .padding(top = if (compact) 56.dp else 0.dp)
+            .padding(top = if (isTv) 56.dp else 0.dp)
             .padding(horizontal = 24.dp, vertical = vPad),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Na vysku (telefon) je prepinac temy v toku hore; na sirku (TV) je pripnuty mimo skrolu (nizsie)
-        if (!compact) {
+        // Na telefone (aj nalezato) je prepinac temy v toku hore; na TV je pripnuty mimo skrolu (nizsie)
+        if (!isTv) {
             ThemeSwitch(ctx)
             Spacer(Modifier.height(8.dp))
         }
-        // Logo (na sirku/TV ho skryvame - prekryval by ho pripnuty prepinac a niet na neho miesto)
-        if (!compact) {
+        // Logo (na TV ho skryvame - prekryval by ho pripnuty prepinac a niet na neho miesto)
+        if (!isTv) {
             Box(
                 modifier = Modifier
                     .size(logoSize)
@@ -342,8 +347,8 @@ fun WelcomeScreen(vm: ServersViewModel) {
             )
         }
 
-        // Na sirku (TV): prepinac temy pripnuty hore, mimo skrolovania - nech sa neodreze (overscan) ani neodscrolluje
-        if (compact) {
+        // Na TV: prepinac temy pripnuty hore, mimo skrolovania - nech sa neodreze (overscan) ani neodscrolluje
+        if (isTv) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
