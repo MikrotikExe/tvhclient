@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -40,6 +42,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -52,7 +56,7 @@ import sk.tvhclient.shared.Tvh
 import sk.tvhclient.shared.api.ChannelRow
 
 @Composable
-fun RadioScreen(vm: RadioViewModel = viewModel()) {
+fun RadioScreen(vm: RadioViewModel = viewModel(), resetSignal: Int = 0) {
     val state by vm.state.collectAsState()
     val query by vm.query.collectAsState()
     val context = LocalContext.current
@@ -70,6 +74,26 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
     var viewMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { vm.load() }
+
+    // D-pad fokus: pociatocny fokus na prve radio + presmerovanie pri reselect (znovu kliknutie na Radia)
+    val firstFocus = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    // Po nacitani daj fokus na prvu polozku (nech sa da hned ist sipkou dole)
+    LaunchedEffect(state) {
+        if (state is RadioState.Loaded) {
+            kotlinx.coroutines.delay(150)
+            runCatching { firstFocus.requestFocus() }
+        }
+    }
+    // Znovu kliknutie na Radia v navigacii: skroluj na vrch a daj fokus na prve radio
+    LaunchedEffect(resetSignal) {
+        if (resetSignal > 0) {
+            runCatching { listState.scrollToItem(0) }
+            runCatching { gridState.scrollToItem(0) }
+            runCatching { firstFocus.requestFocus() }
+        }
+    }
 
     // EPG jedneho radia
     val epgRow = epgFor
@@ -140,19 +164,28 @@ fun RadioScreen(vm: RadioViewModel = viewModel()) {
                         EmptyStatus(stringResource(R.string.radio_empty))
                     } else {
                         when (viewMode) {
-                            ChannelViewMode.LIST -> LazyColumn(Modifier.fillMaxSize()) {
-                                items(rows, key = { it.channel.uuid }) { row ->
-                                    RadioRow(row, rows, loader, context, onContext = { contextRow = it })
+                            ChannelViewMode.LIST -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                                itemsIndexed(rows, key = { _, it -> it.channel.uuid }) { idx, row ->
+                                    RadioRow(
+                                        row, rows, loader, context,
+                                        modifier = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                                        onContext = { contextRow = it }
+                                    )
                                 }
                             }
                             ChannelViewMode.GRID, ChannelViewMode.TILES -> {
                                 val cols = if (viewMode == ChannelViewMode.GRID) 2 else 4
                                 LazyVerticalGrid(
                                     columns = GridCells.Fixed(cols),
+                                    state = gridState,
                                     modifier = Modifier.fillMaxSize()
                                 ) {
-                                    gridItems(rows, key = { it.channel.uuid }) { row ->
-                                        RadioTile(row, rows, loader, context, onContext = { contextRow = it })
+                                    gridItemsIndexed(rows, key = { _, it -> it.channel.uuid }) { idx, row ->
+                                        RadioTile(
+                                            row, rows, loader, context,
+                                            modifier = if (idx == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                                            onContext = { contextRow = it }
+                                        )
                                     }
                                 }
                             }
@@ -217,10 +250,11 @@ private fun RadioRow(
     allRows: List<ChannelRow>,
     loader: coil.ImageLoader,
     context: android.content.Context,
+    modifier: Modifier = Modifier,
     onContext: (ChannelRow) -> Unit
 ) {
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .combinedClickable(
                 onClick = { playRadio(context, allRows, row) },
@@ -273,10 +307,11 @@ private fun RadioTile(
     allRows: List<ChannelRow>,
     loader: coil.ImageLoader,
     context: android.content.Context,
+    modifier: Modifier = Modifier,
     onContext: (ChannelRow) -> Unit
 ) {
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .combinedClickable(
                 onClick = { playRadio(context, allRows, row) },

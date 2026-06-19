@@ -232,6 +232,7 @@ fun AppMain() {
     // Reset signaly: klik na tab (aj uz vybrany) vrati danu obrazovku na zaciatok
     var resetCh by remember { mutableStateOf(0) }
     var resetDvr by remember { mutableStateOf(0) }
+    var resetRadio by remember { mutableStateOf(0) }
     var resetSet by remember { mutableStateOf(0) }
     val navFocus = remember { FocusRequester() }
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
@@ -248,6 +249,7 @@ fun AppMain() {
         if (reqTab in 0..3) {
             when (reqTab) {
                 0 -> { resetCh++; tab = 0 }
+                1 -> { resetRadio++; tab = 1 }
                 2 -> { resetDvr++; tab = 2 }
                 else -> tab = reqTab
             }
@@ -283,7 +285,7 @@ fun AppMain() {
                 )
                 NavigationBarItem(
                     selected = tab == 1,
-                    onClick = { guardLeave { tab = 1 } },
+                    onClick = { guardLeave { resetRadio++; tab = 1 } },
                     icon = { androidx.compose.material3.Icon(
                         Icons.Default.Radio, contentDescription = null) },
                     label = { TabLabel(green, stringResource(R.string.tab_radio)) }
@@ -314,7 +316,7 @@ fun AppMain() {
                     resetSignal = resetCh,
                     onGoToNav = { runCatching { navFocus.requestFocus() } }
                 )
-                1 -> RadioScreen()
+                1 -> RadioScreen(resetSignal = resetRadio)
                 2 -> DvrScreen(resetSignal = resetDvr)
                 else -> {
                     val ctx = androidx.compose.ui.platform.LocalContext.current
