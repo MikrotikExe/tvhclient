@@ -1831,12 +1831,14 @@ private fun PlayerUi(
                                 if (seekable || timeshiftEngaged) 1 else 0   // seek len ked je co pretacat
                             } else if (isTvGest) {
                                 0                                            // na TV ziadne gesta
+                            } else if (down.position.y <= guardTop) {
+                                0                                            // horny okraj (systemova lista/wifi) -> ziadne vertikalne gesto
                             } else if (down.position.x < size.width * 0.25f) {
                                 val cur = act?.window?.attributes?.screenBrightness ?: -1f
                                 startBright = if (cur in 0f..1f) cur else 0.5f; 3                              // lavych 25% = jas
                             } else if (down.position.x >= size.width * 0.75f) {
                                 startVol = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC); 2   // pravych 25% = hlasitost
-                            } else if (dy > 0 && down.position.y > guardTop) {
+                            } else if (dy > 0) {
                                 4                                            // stred 50% (0.25-0.75), tah dole -> otvor zoznam
                             } else {
                                 0                                            // ine -> nic
