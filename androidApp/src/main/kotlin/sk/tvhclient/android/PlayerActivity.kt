@@ -776,7 +776,7 @@ class PlayerActivity : ComponentActivity() {
                 // ak je toto dotahovanie podrzania OK, ktore zoznam otvorilo -> ignoruj kym nepustis
                 if (okLongFired) { if (!down) okLongFired = false; return true }
                 if (down && n > 0) {
-                    if (navChannelIndexState.value == liveIndexState.value) closeChannelList()  // uz hra vybrany -> cela obrazovka
+                    if (navChannelIndexState.value == liveIndexState.value) { closeChannelList(); pokeControls() }  // uz hra vybrany -> cela obrazovka + spodna lista
                     else switchToIndex(navChannelIndexState.value, poke = false)              // prepni prehravany kanal, ostan v zozname (bez listy)
                 }
                 return true
