@@ -1877,15 +1877,35 @@ private fun PlayerUi(
                         // popis relacie: nazov, cas, priebeh, popis, dalej
                         Column(Modifier.weight(1f)) {
                             val headline = if (seekable) title else progTitle
-                            if (headline.isNotBlank()) {
+                            Row(verticalAlignment = Alignment.Top) {
                                 Text(
                                     headline,
                                     color = playerFg(),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = (16 * k).sp,
                                     maxLines = if (seekable) 2 else 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
+                                Spacer(Modifier.width(8.dp))
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        dateTime,
+                                        color = playerFgDim(),
+                                        fontSize = (12 * k).sp,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                    if (sleepLeftMin > 0) {
+                                        Text(
+                                            "\u23F2 ${sleepLeftMin} min",
+                                            color = Color(0xCC8AB4F8),
+                                            fontSize = (12 * k).sp,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
                             }
                             if (hasNow) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1899,7 +1919,7 @@ private fun PlayerUi(
                                     androidx.compose.material3.LinearProgressIndicator(
                                         progress = { fracNow },
                                         modifier = Modifier
-                                            .width(((if (portrait) 120 else 90) * k).dp)
+                                            .width((88 * k).dp)
                                             .padding(horizontal = 8.dp),
                                         trackColor = playerTrack()
                                     )
@@ -1939,24 +1959,6 @@ private fun PlayerUi(
                             }
                         }
                         Spacer(Modifier.width(12.dp))
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                dateTime,
-                                color = playerFgDim(),
-                                fontSize = (12 * k).sp,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            if (sleepLeftMin > 0) {
-                                Text(
-                                    "\u23F2 ${sleepLeftMin} min",
-                                    color = Color(0xCC8AB4F8),
-                                    fontSize = (12 * k).sp,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                        }
                     }
                     Spacer(Modifier.height((4 * k).dp))
                     // DVR: pretacacia lista (zvyraznena pri vybere "seek")
