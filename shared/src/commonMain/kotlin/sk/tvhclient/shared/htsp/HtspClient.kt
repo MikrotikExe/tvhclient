@@ -121,7 +121,7 @@ class HtspClient(
     private suspend fun hello() {
         val s = send("hello", mapOf(
             "htspversion" to 35L,
-            "clientname" to "HeadentClient",
+            "clientname" to "HeadentClient/1.0.0",
             "clientversion" to "1.0.0"
         ))
         val r = recvReply(s)
