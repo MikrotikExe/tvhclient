@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Dvr
+import androidx.compose.material.icons.filled.Voicemail
 import androidx.compose.material3.Icon
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.GridView
@@ -350,13 +350,13 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                     Text(rcRec.title, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Dvr, contentDescription = null,
-                            tint = Color(0xFFE53935), modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.channel_archived),
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.Default.Voicemail, contentDescription = null,
+                            tint = Color(0xFFE53935), modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             },
