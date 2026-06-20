@@ -342,17 +342,16 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
             title = { Text(rcRow.channel.name) },
             text = { Text(rcRec.title) },
             confirmButton = {
-                Row {
+                Column(horizontalAlignment = Alignment.End) {
                     val liveFocus = remember { FocusRequester() }
                     LaunchedEffect(Unit) { runCatching { liveFocus.requestFocus() } }
                     androidx.compose.material3.TextButton(
                         onClick = { playChannel(ctx, rcRow, null, 0, 0); recChoice = null },
                         modifier = Modifier.focusRequester(liveFocus)
-                    ) { Text(stringResource(R.string.play_live)) }
-                    Spacer(Modifier.width(8.dp))
+                    ) { AutoSizeText(stringResource(R.string.play_live), maxLines = 1) }
                     androidx.compose.material3.TextButton(onClick = {
                         playDvrFile(ctx, rcRec); recChoice = null
-                    }) { Text(stringResource(R.string.play_from_start)) }
+                    }) { AutoSizeText(stringResource(R.string.play_from_start), maxLines = 2) }
                 }
             }
         )
