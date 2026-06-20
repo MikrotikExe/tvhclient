@@ -104,6 +104,8 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var libVlc: LibVLC
     private var htspFeeder: HtspTsFeeder? = null
     private var htspLive = false
+    private var htspServer: sk.tvhclient.shared.model.TvhServer? = null
+    private var htspChannelId = 0L
     private val htspLiveState = androidx.compose.runtime.mutableStateOf(false)
     private val timeshiftOffsetState = androidx.compose.runtime.mutableStateOf(0L)
     private var tsAccumMs = 0L
@@ -195,6 +197,8 @@ class PlayerActivity : ComponentActivity() {
     private fun playHtspLive(server: sk.tvhclient.shared.model.TvhServer, channelId: Long): Boolean {
         return try {
             htspFeeder?.stop()
+            htspServer = server
+            htspChannelId = channelId
             val feeder = HtspTsFeeder(server)
             htspFeeder = feeder
             resetTimeshift()
@@ -325,13 +329,13 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    /** Posle nazbierany skok jedným prikazom (alebo presny skok na zive). */
+    /** Posle nazbierany skok jedným relativnym subscriptionSkip. Na zive sa vracia
+     *  skokom dopredu (NIE subscriptionLive, ktory padal, ani restartom, ktory by
+     *  vynuloval buffer) — tak ostava ta ista subscription aj buffer a da sa pretacat aj potom. */
     private fun flushSkip() {
         val net = pendingSkipMs
         pendingSkipMs = 0L
-        if (net == 0L) return
-        if (tsAccumMs <= 0L) htspFeeder?.goLive()              // presne na zive
-        else htspFeeder?.skip((-net / 1000L).toInt())          // dozadu => zaporne
+        if (net != 0L) htspFeeder?.skip((-net / 1000L).toInt())   // dozadu => zaporne, dopredu => kladne
     }
 
 
