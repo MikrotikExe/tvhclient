@@ -8,8 +8,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -391,6 +392,16 @@ class PlayerActivity : ComponentActivity() {
         seekHintJob = lifecycleScope.launch {
             kotlinx.coroutines.delay(800)
             seekHintState.value = 0
+        }
+    }
+
+    /** Horizontalne tahanie (MX Player) -> skok o dany pocet sekund (zaporne = vzad). */
+    private fun scrubSeek(seconds: Int) {
+        if (seconds == 0) return
+        when {
+            seekablePlayback -> seekRelative(seconds.toLong() * 1000L)
+            htspLive -> { if (maxRewindMs() > 0L) timeshiftSkip(seconds) }  // konvencia ako seekRelative: zaporne = vzad
+            else -> {}
         }
     }
 
@@ -1225,6 +1236,7 @@ class PlayerActivity : ComponentActivity() {
                 onSkipBack = { timeshiftSkip(-30) },
                 onSkipFwd = { timeshiftSkip(+30) },
                 onDoubleTapSeek = { fwd -> doubleTapSeek(fwd) },
+                onScrubSeek = { secs -> scrubSeek(secs) },
                 seekHint = seekHintState.value,
                 liveChannels = if (canZap) liveChannelsState.value else emptyList(),
                 liveCurrentIndex = liveIndexState.value,
@@ -1499,6 +1511,7 @@ private fun PlayerUi(
     onSkipBack: () -> Unit = {},
     onSkipFwd: () -> Unit = {},
     onDoubleTapSeek: (Boolean) -> Unit = {},
+    onScrubSeek: (Int) -> Unit = {},
     seekHint: Int = 0,
     liveChannels: List<LivePlaylist.LiveChannel> = emptyList(),
     liveCurrentIndex: Int = -1,
@@ -1559,6 +1572,17 @@ private fun PlayerUi(
     val sleepLeftMin = if (sleepDeadline > 0)
         (((sleepDeadline - sleepNow) + 59_999) / 60_000).coerceAtLeast(0) else 0L
     var showChannelList by remember { mutableStateOf(false) }
+    // MX Player gesta (len telefon): overlaye pre hlasitost / jas / seek; -1 = skryte
+    var volPctState by remember { mutableStateOf(-1) }
+    var brightPctState by remember { mutableStateOf(-1) }
+    var scrubSecState by remember { mutableStateOf(Int.MIN_VALUE) }   // MIN_VALUE = skryte
+    val isTvGest = remember {
+        val um = ctx.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        um?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+    }
+    LaunchedEffect(volPctState) { if (volPctState >= 0) { kotlinx.coroutines.delay(700); volPctState = -1 } }
+    LaunchedEffect(brightPctState) { if (brightPctState >= 0) { kotlinx.coroutines.delay(700); brightPctState = -1 } }
+    LaunchedEffect(scrubSecState) { if (scrubSecState != Int.MIN_VALUE) { kotlinx.coroutines.delay(700); scrubSecState = Int.MIN_VALUE } }
     var isPlaying by remember { mutableStateOf(true) }
     var orientationLocked by remember { mutableStateOf(false) }
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
@@ -1773,16 +1797,54 @@ private fun PlayerUi(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(liveChannels.isNotEmpty()) {
-                if (liveChannels.isEmpty()) return@pointerInput
-                var dx = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { dx = 0f },
-                    onDragEnd = {
-                        if (dx > 100f) showChannelList = true        // potiahnutie doprava -> otvor
-                        else if (dx < -100f) showChannelList = false  // dolava -> zavri
+            .pointerInput(isTvGest, seekable, timeshiftEngaged) {
+                val audio = ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                val act = ctx as? android.app.Activity
+                val maxVol = audio.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                val slop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var mode = 0          // 0=nerozhodnute, 1=seek(H), 2=hlasitost(V vpravo), 3=jas(V vlavo)
+                    var startVol = 0
+                    var startBright = 0.5f
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!ch.pressed) break
+                        val dx = ch.position.x - down.position.x
+                        val dy = ch.position.y - down.position.y
+                        if (mode == 0 && (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop)) {
+                            mode = if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) {
+                                if (seekable || timeshiftEngaged) 1 else 0   // seek len ked je co pretacat
+                            } else if (isTvGest) {
+                                0                                            // na TV ziadne vol/jas gesta
+                            } else if (down.position.x > size.width / 2f) {
+                                startVol = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC); 2
+                            } else {
+                                val cur = act?.window?.attributes?.screenBrightness ?: -1f
+                                startBright = if (cur in 0f..1f) cur else 0.5f; 3
+                            }
+                        }
+                        if (mode != 0) ch.consume()
+                        when (mode) {
+                            1 -> scrubSecState = (dx / size.width * 90f).toInt()
+                            2 -> {
+                                val nv = (startVol - dy / size.height * maxVol).toInt().coerceIn(0, maxVol)
+                                audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, nv, 0)
+                                volPctState = nv * 100 / maxVol
+                            }
+                            3 -> {
+                                val nb = (startBright - dy / size.height).coerceIn(0.01f, 1f)
+                                act?.window?.let { w -> val lp = w.attributes; lp.screenBrightness = nb; w.attributes = lp }
+                                brightPctState = (nb * 100).toInt()
+                            }
+                        }
                     }
-                ) { _, amount -> dx += amount }
+                    if (mode == 1) {
+                        val secs = scrubSecState
+                        if (secs != Int.MIN_VALUE && secs != 0) onScrubSeek(secs)
+                    }
+                }
             }
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -1886,6 +1948,57 @@ private fun PlayerUi(
                     label,
                     color = Color.White,
                     style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color(0xB3000000),
+                            blurRadius = 14f
+                        )
+                    )
+                )
+            }
+        }
+
+        // MX Player overlaye: hlasitost / jas (vystredene), seek-scrub (hore v strede)
+        if (volPctState >= 0 || brightPctState >= 0) {
+            val isVol = volPctState >= 0
+            val pct = if (isVol) volPctState else brightPctState
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                        .background(Color(0xAA000000))
+                        .padding(horizontal = 22.dp, vertical = 16.dp)
+                ) {
+                    Text(
+                        (if (isVol) "Hlasitosť" else "Jas") + "  $pct%",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { pct / 100f },
+                        modifier = Modifier.width(170.dp).padding(top = 10.dp),
+                        color = Color(0xFF1E88E5),
+                        trackColor = Color(0x55FFFFFF)
+                    )
+                }
+            }
+        }
+        if (scrubSecState != Int.MIN_VALUE) {
+            val s = scrubSecState
+            val a = kotlin.math.abs(s)
+            val mm = a / 60
+            val ss = a % 60
+            val core = if (mm > 0) "$mm:" + ss.toString().padStart(2, '0') else "${ss}s"
+            val label = (if (s >= 0) "+" else "\u2212") + core
+            Box(
+                Modifier.fillMaxSize().padding(top = 56.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Text(
+                    label,
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.SemiBold,
                         shadow = androidx.compose.ui.graphics.Shadow(
                             color = Color(0xB3000000),
