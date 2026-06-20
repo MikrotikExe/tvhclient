@@ -175,6 +175,8 @@
     <string name="dvr_search_results">Výsledky</string>
     <string name="dvr_search_empty">Nic nenalezeno</string>
     <string name="player_channel_list">Všechny kanály</string>
+    <string name="player_volume">Hlasitost</string>
+    <string name="player_brightness">Jas</string>
     <string name="plock_wrong">Nesprávný PIN</string>
     <string name="plock_title">Rodičovský zámek</string>
     <string name="plock_enable">Rodičovský zámek (PIN)</string>

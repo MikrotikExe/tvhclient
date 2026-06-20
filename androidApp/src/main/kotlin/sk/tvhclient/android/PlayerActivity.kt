@@ -1997,8 +1997,11 @@ private fun PlayerUi(
                         .background(Color(0xAA000000))
                         .padding(horizontal = 22.dp, vertical = 16.dp)
                 ) {
+                    val gLabel = androidx.compose.ui.res.stringResource(
+                        if (isVol) R.string.player_volume else R.string.player_brightness
+                    )
                     Text(
-                        (if (isVol) "Hlasitosť" else "Jas") + "  $pct%",
+                        "$gLabel  $pct%",
                         color = Color.White,
                         style = MaterialTheme.typography.titleMedium
                     )

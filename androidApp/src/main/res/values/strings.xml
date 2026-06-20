@@ -175,6 +175,8 @@
     <string name="dvr_search_results">Results</string>
     <string name="dvr_search_empty">Nothing found</string>
     <string name="player_channel_list">All channels</string>
+    <string name="player_volume">Volume</string>
+    <string name="player_brightness">Brightness</string>
     <string name="plock_wrong">Wrong PIN</string>
     <string name="plock_title">Parental lock</string>
     <string name="plock_enable">Parental lock (PIN)</string>
