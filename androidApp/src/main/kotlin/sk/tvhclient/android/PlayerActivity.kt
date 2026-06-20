@@ -1846,7 +1846,7 @@ private fun PlayerUi(
                         if (mode != 0) ch.consume()
                         when (mode) {
                             1 -> scrubSecState = (dx / size.width * 90f).toInt()
-                            4 -> listFrac = (dy / (size.height * 0.5f)).coerceIn(0f, 1f)   // vysuvanie zhora za prstom
+                            4 -> listFrac = (dy / (size.height * 0.5f) * 0.7f).coerceIn(0f, 1f)   // vysuvanie zhora za prstom (o 30% pomalsie)
                             2 -> {
                                 val nv = (startVol - dy / size.height * maxVol).toInt().coerceIn(0, maxVol)
                                 audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, nv, 0)
