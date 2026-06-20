@@ -46,21 +46,20 @@ object Tvh {
     }
 
     /**
-     * Test s automatickou detekciou: ak je rezim HTTP a pripojenie zlyha (web rozhranie 9981
-     * je vypnute -> sietova/HTTP chyba, nie zle heslo), skusi sa HTSP na htspPort (9982).
-     * Vrati vysledok a server s rezimom, ktory funguje (volajuci ten server ulozi).
+     * Test s automatickou detekciou. Skusi zvoleny rezim; ak zlyha, skusi opacny
+     * (HTSP 9982 <-> HTTP 9981). Vrati vysledok a server s rezimom, ktory funguje
+     * (volajuci ten server ulozi). Default je HTSP, HTTP sluzi ako poistka.
      */
     @Throws(CancellationException::class)
     suspend fun testConnectionAuto(server: TvhServer): Pair<ConnectionResult, TvhServer> {
         val first = testConnection(server)
         if (first is ConnectionResult.Success) return first to server
-        // Ak HTTP rezim zlyhal z akehokolvek dovodu (web rozhranie 9981 vypnute moze vratit aj
-        // 401/403, nielen sietovu chybu), skus HTSP 9982. Ak HTSP prejde, pouzi ho.
-        if (server.connectionMode != "htsp") {
-            val htspServer = server.copy(connectionMode = "htsp")
-            val second = testConnection(htspServer)
-            if (second is ConnectionResult.Success) return second to htspServer
-        }
+        // Fallback na opacny rezim (web rozhranie 9981 vypnute moze vratit aj 401/403,
+        // nielen sietovu chybu; rovnako 9982 nemusi byt dostupny).
+        val altMode = if (server.connectionMode == "htsp") "http" else "htsp"
+        val altServer = server.copy(connectionMode = altMode)
+        val second = testConnection(altServer)
+        if (second is ConnectionResult.Success) return second to altServer
         return first to server
     }
 

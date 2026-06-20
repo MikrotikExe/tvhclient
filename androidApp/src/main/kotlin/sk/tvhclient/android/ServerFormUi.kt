@@ -103,7 +103,7 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
     var password by remember { mutableStateOf(existing?.password ?: "") }
     var profile by remember { mutableStateOf(existing?.profile ?: "pass") }
     var authMode by remember { mutableStateOf(existing?.authMode ?: "auto") }
-    var connMode by remember { mutableStateOf(existing?.connectionMode ?: "http") }
+    var connMode by remember { mutableStateOf(existing?.connectionMode ?: "htsp") }
     var htspPort by remember { mutableStateOf((existing?.htspPort ?: 9982).toString()) }
 
     val testState by vm.testState.collectAsState()

@@ -59,7 +59,7 @@ fun WelcomeScreen(vm: ServersViewModel) {
     var port by remember { mutableStateOf("9981") }
     var useHttps by remember { mutableStateOf(false) }
     var authMode by remember { mutableStateOf("auto") }
-    var connMode by remember { mutableStateOf("http") }
+    var connMode by remember { mutableStateOf("htsp") }
     var htspPort by remember { mutableStateOf("9982") }
     var profile by remember { mutableStateOf("pass") }
     var localError by remember { mutableStateOf(false) }
@@ -262,10 +262,19 @@ fun WelcomeScreen(vm: ServersViewModel) {
                 )
             }
             Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { useHttps = !useHttps },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Switch(checked = useHttps, onCheckedChange = { useHttps = it })
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.field_https))
+                Text(
+                    stringResource(R.string.field_https),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
             Spacer(Modifier.height(10.dp))
             DropdownField(

@@ -60,11 +60,11 @@ class ServersViewModel : ViewModel() {
         }
     }
 
-    // Server s funkcnym rezimom po poslednom testAuto (HTTP -> fallback HTSP). Ulozi sa tento.
+    // Server s funkcnym rezimom po poslednom testAuto (HTSP <-> HTTP fallback). Ulozi sa tento.
     var resolvedServer: TvhServer? = null
         private set
 
-    /** Test s auto-detekciou pripojenia (HTTP 9981 -> ak vypnute, skusi HTSP 9982). */
+    /** Test s auto-detekciou pripojenia (HTSP 9982 default -> ak nedostupne, poistka HTTP 9981). */
     fun testAuto(server: TvhServer) {
         _testState.value = TestState.Running
         resolvedServer = null
