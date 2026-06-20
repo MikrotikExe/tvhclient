@@ -1820,27 +1820,26 @@ private fun PlayerUi(
                     var startVol = 0
                     var startBright = 0.5f
                     val guardTop = 48.dp.toPx()              // odsadenie od hornej hrany (systemova lista/shade)
-                    val openBottom = size.height * 0.28f     // horny pruh pre otvaranie zoznamu
                     while (true) {
                         val ev = awaitPointerEvent()
                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                         if (!ch.pressed) break
                         val dx = ch.position.x - down.position.x
                         val dy = ch.position.y - down.position.y
-                        if (mode == 0 && (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop)) {
+                        if (mode == 0 && !showChannelList && (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop)) {
                             mode = if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) {
                                 if (seekable || timeshiftEngaged) 1 else 0   // seek len ked je co pretacat
                             } else if (isTvGest) {
                                 0                                            // na TV ziadne gesta
-                            } else if (dy > 0 && down.position.y > guardTop && down.position.y < openBottom) {
-                                4                                            // potiahnutie zhora -> vysuvanie zoznamu
-                            } else if (down.position.x > size.width * 0.75f) {
-                                startVol = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC); 2   // pravy okraj = hlasitost
-                            } else if (down.position.x < size.width * 0.25f) {
+                            } else if (down.position.x < size.width * 0.5f) {
                                 val cur = act?.window?.attributes?.screenBrightness ?: -1f
-                                startBright = if (cur in 0f..1f) cur else 0.5f; 3                              // lavy okraj = jas
+                                startBright = if (cur in 0f..1f) cur else 0.5f; 3                              // lavych 50% = jas
+                            } else if (down.position.x >= size.width * 0.75f) {
+                                startVol = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC); 2   // pravych 25% = hlasitost
+                            } else if (dy > 0 && down.position.y > guardTop) {
+                                4                                            // stred 25% (0.5-0.75), tah dole -> otvor zoznam
                             } else {
-                                0                                            // stred: nic
+                                0                                            // ine -> nic
                             }
                         }
                         if (mode != 0) ch.consume()
@@ -2588,7 +2587,11 @@ private fun PlayerUi(
                         )
                     }
                 }
-                    LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+                    LazyColumn(
+                        state = listState,
+                        userScrollEnabled = listFrac >= 0.999f,   // rolovat az ked je zoznam uplne otvoreny
+                        modifier = Modifier.weight(1f)
+                    ) {
                         itemsIndexed(liveChannels) { idx, ch ->
                             val selected = idx == sel
                             Row(
