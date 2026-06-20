@@ -1819,11 +1819,13 @@ private fun PlayerUi(
                                 if (seekable || timeshiftEngaged) 1 else 0   // seek len ked je co pretacat
                             } else if (isTvGest) {
                                 0                                            // na TV ziadne vol/jas gesta
-                            } else if (down.position.x > size.width / 2f) {
-                                startVol = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC); 2
-                            } else {
+                            } else if (down.position.x > size.width * 0.75f) {
+                                startVol = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC); 2   // pravy okraj = hlasitost
+                            } else if (down.position.x < size.width * 0.25f) {
                                 val cur = act?.window?.attributes?.screenBrightness ?: -1f
-                                startBright = if (cur in 0f..1f) cur else 0.5f; 3
+                                startBright = if (cur in 0f..1f) cur else 0.5f; 3                              // lavy okraj = jas
+                            } else {
+                                0                                            // stred: ziadne vol/jas
                             }
                         }
                         if (mode != 0) ch.consume()
