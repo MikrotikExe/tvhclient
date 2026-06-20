@@ -75,12 +75,6 @@ class HtspTsFeeder(
         scope?.launch { runCatching { c.setSpeed(100) } }
     }
 
-    /** Skok spat na zive. */
-    fun goLive() {
-        val c = client ?: return
-        scope?.launch { runCatching { c.goLive() } }
-    }
-
     /** Relativny skok v bufferi (sekundy; zaporne = vzad). */
     fun skip(seconds: Int) {
         val c = client ?: return

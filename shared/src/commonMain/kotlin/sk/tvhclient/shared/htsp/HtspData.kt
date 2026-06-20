@@ -130,37 +130,6 @@ object HtspData {
     fun timeshiftCapableCached(serverId: String): Boolean =
         capCache[serverId]?.let { it.reachable && it.caps.contains("timeshift") } ?: false
 
-    /** M159 — diagnostika timeshiftu na prvom kanali servera. */
-    data class TimeshiftProbeResult(
-        val channelName: String,
-        val htspPort: Int,
-        val capabilities: List<String>,
-        val timeshiftCapable: Boolean,
-        val probe: HtspClient.TimeshiftProbe
-    )
-
-    suspend fun probeTimeshift(
-        server: TvhServer,
-        nowSec: Long,
-        timeshiftPeriodSec: Int = 3600,
-        durationMs: Long = 8_000
-    ): TimeshiftProbeResult {
-        val meta = metadata(server, withEpg = false, nowSec = nowSec)
-        val first = meta.channels.firstOrNull { longOf(it, "channelId") != null }
-            ?: throw IllegalStateException("žiadny kanál na serveri")
-        val cid = longOf(first, "channelId")!!
-        val name = strOf(first, "channelName").ifBlank { cid.toString() }
-        val client = HtspClient(server.host, server.htspPort, server.username, server.password)
-        client.connect()
-        val caps = client.serverCapabilities
-        val probe = try {
-            client.probeTimeshift(cid, timeshiftPeriodSec, durationMs)
-        } finally {
-            client.close()
-        }
-        return TimeshiftProbeResult(name, server.htspPort, caps, caps.contains("timeshift"), probe)
-    }
-
     // ---- mapovanie ----
 
     fun channels(meta: HtspClient.Metadata): List<Channel> =

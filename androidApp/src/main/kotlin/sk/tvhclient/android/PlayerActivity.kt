@@ -105,8 +105,6 @@ class PlayerActivity : ComponentActivity() {
     private var htspFeeder: HtspTsFeeder? = null
     private var htspLive = false
     private var htspStream = false
-    private var htspServer: sk.tvhclient.shared.model.TvhServer? = null
-    private var htspChannelId = 0L
     private val htspLiveState = androidx.compose.runtime.mutableStateOf(false)
     private val timeshiftOffsetState = androidx.compose.runtime.mutableStateOf(0L)
     private var tsAccumMs = 0L
@@ -199,8 +197,6 @@ class PlayerActivity : ComponentActivity() {
     private fun playHtspLive(server: sk.tvhclient.shared.model.TvhServer, channelId: Long, timeshift: Boolean): Boolean {
         return try {
             htspFeeder?.stop()
-            htspServer = server
-            htspChannelId = channelId
             val feeder = HtspTsFeeder(server, if (timeshift) 3600 else 0)
             htspFeeder = feeder
             resetTimeshift()
