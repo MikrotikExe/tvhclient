@@ -1860,7 +1860,12 @@ private fun PlayerUi(
         ) {
             Box(Modifier.fillMaxSize().systemBarsPadding()) {
                 val order = playerControlOrder(onPrevChannel != null, seekable, pipSupported, timeshiftActive)
-                val selCtrl = order.getOrNull(controlNavIndex)
+                // fokusove zvyraznenie len na TV (D-pad); na telefone (dotyk) ziadne "vybrate" tlacidlo
+                val isTvDevice = remember {
+                    val um = ctx.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+                    um?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+                }
+                val selCtrl = if (isTvDevice) order.getOrNull(controlNavIndex) else null
                 val curCh = liveChannels.getOrNull(liveCurrentIndex)
                 val infoLoader = remember(server?.id) { PiconImageLoader.get(ctx, server) }
                 fun clock(sec: Long): String =

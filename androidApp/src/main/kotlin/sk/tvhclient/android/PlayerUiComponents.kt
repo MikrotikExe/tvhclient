@@ -124,7 +124,7 @@ internal fun PlayPauseButton(isPlaying: Boolean, selected: Boolean, scale: Float
         Modifier
             .size(76.dp * scale)
             .clip(CircleShape)
-            .background(if (selected) Color(0xCC1E88E5) else Color(0x88000000))
+            .background(if (selected) Color(0xCC1E88E5) else if (isLightTheme()) Color(0x88000000) else Color(0xCC4D4D4D))
             .then(if (selected) Modifier.border(3.dp, Color.White, CircleShape) else Modifier)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
