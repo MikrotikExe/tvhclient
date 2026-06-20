@@ -124,7 +124,8 @@ internal fun PlayPauseButton(isPlaying: Boolean, selected: Boolean, scale: Float
         Modifier
             .size(76.dp * scale)
             .clip(CircleShape)
-            .background(if (selected) Color(0xCC1E88E5) else if (isLightTheme()) Color(0x88000000) else Color(0xCC4D4D4D))
+            // play/pauza = primarna akcia -> vzdy modra (odlisena); biely ramik len pri D-pad fokuse (TV)
+            .background(Color(0xCC1E88E5))
             .then(if (selected) Modifier.border(3.dp, Color.White, CircleShape) else Modifier)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
