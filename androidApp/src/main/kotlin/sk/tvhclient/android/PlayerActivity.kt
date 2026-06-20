@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -133,6 +134,9 @@ class PlayerActivity : ComponentActivity() {
     // tocenie pri pretacani timeshiftu (kratky resync pipe -> libVLC)
     private val seekingState = androidx.compose.runtime.mutableStateOf(false)
     private var seekSpinnerJob: kotlinx.coroutines.Job? = null
+    // YouTube-style dvojklik pretacanie: nazbierane sekundy (+/-), 0 = skryte
+    private val seekHintState = androidx.compose.runtime.mutableStateOf(0)
+    private var seekHintJob: kotlinx.coroutines.Job? = null
     private var reconnectAttempts = 0
     private val maxReconnectAttempts = 8
     private var pipReceiver: android.content.BroadcastReceiver? = null
@@ -288,6 +292,7 @@ class PlayerActivity : ComponentActivity() {
         stopTimeshiftTicker()
         skipFlushJob?.cancel(); skipFlushJob = null
         seekSpinnerJob?.cancel(); seekingState.value = false
+        seekHintJob?.cancel(); seekHintState.value = 0
         pendingSkipMs = 0L
         tsAccumMs = 0L
         tsPauseStartedAt = 0L
@@ -360,6 +365,24 @@ class PlayerActivity : ComponentActivity() {
         val curMs = (mediaPlayer.position.coerceIn(0f, 1f) * dur).toLong()
         val targetMs = (curMs + deltaMs).coerceIn(0, dur)
         mediaPlayer.position = (targetMs.toFloat() / dur).coerceIn(0f, 1f)
+    }
+
+    /** Dvojklik na lavu/pravu stranu (YouTube-style): skok o 10 s.
+     *  DVR -> seek v medii; aktivny timeshift -> subscriptionSkip. Hint sa akumuluje. */
+    private fun doubleTapSeek(forward: Boolean) {
+        val step = if (forward) 10 else -10
+        when {
+            seekablePlayback -> seekRelative(step * 1000L)
+            htspLive -> timeshiftSkip(step)
+            else -> return   // ziadne pretacanie (zive bez timeshiftu) -> ignoruj
+        }
+        val cur = seekHintState.value
+        seekHintState.value = if (cur != 0 && (cur > 0) == forward) cur + step else step
+        seekHintJob?.cancel()
+        seekHintJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(800)
+            seekHintState.value = 0
+        }
     }
 
     /** Obnovi now/next pre vsetky kanaly v zozname (kym je otvoreny). */
@@ -1192,6 +1215,8 @@ class PlayerActivity : ComponentActivity() {
                 timeshiftActive = htspLiveState.value,
                 onSkipBack = { timeshiftSkip(-30) },
                 onSkipFwd = { timeshiftSkip(+30) },
+                onDoubleTapSeek = { fwd -> doubleTapSeek(fwd) },
+                seekHint = seekHintState.value,
                 liveChannels = if (canZap) liveChannelsState.value else emptyList(),
                 liveCurrentIndex = liveIndexState.value,
                 onSelectChannel = { idx -> if (idx != liveIndex) switchToIndex(idx) else pokeControls() },
@@ -1464,6 +1489,8 @@ private fun PlayerUi(
     timeshiftActive: Boolean = false,
     onSkipBack: () -> Unit = {},
     onSkipFwd: () -> Unit = {},
+    onDoubleTapSeek: (Boolean) -> Unit = {},
+    seekHint: Int = 0,
     liveChannels: List<LivePlaylist.LiveChannel> = emptyList(),
     liveCurrentIndex: Int = -1,
     onSelectChannel: (Int) -> Unit = {},
@@ -1748,11 +1775,11 @@ private fun PlayerUi(
                     }
                 ) { _, amount -> dx += amount }
             }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                if (menu != null) menu = null else controlsVisible = !controlsVisible
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { if (menu != null) menu = null else controlsVisible = !controlsVisible },
+                    onDoubleTap = { off -> onDoubleTapSeek(off.x > size.width / 2f) }
+                )
             }
     ) {
         AndroidView(
@@ -1835,6 +1862,25 @@ private fun PlayerUi(
         if (seeking && !reconnecting) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 androidx.compose.material3.CircularProgressIndicator(color = playerFg())
+            }
+        }
+
+        // YouTube-style hint pri dvojkliku (skok o 10 s), na strane kliknutia, akumuluje sa
+        if (seekHint != 0) {
+            val fwd = seekHint > 0
+            Box(
+                Modifier.fillMaxSize().padding(horizontal = 48.dp),
+                contentAlignment = if (fwd) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                Text(
+                    (if (fwd) "+" else "−") + kotlin.math.abs(seekHint) + " s",
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+                        .background(Color(0x99000000))
+                        .padding(horizontal = 22.dp, vertical = 12.dp)
+                )
             }
         }
 
