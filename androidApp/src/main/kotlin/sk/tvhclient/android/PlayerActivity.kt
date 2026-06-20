@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -1238,6 +1239,14 @@ class PlayerActivity : ComponentActivity() {
                 onSkipFwd = { timeshiftSkip(+30) },
                 onDoubleTapSeek = { fwd -> doubleTapSeek(fwd) },
                 onScrubSeek = { secs -> scrubSeek(secs) },
+                onLoadChannelEpg = { uuid, cb ->
+                    lifecycleScope.launch {
+                        val list = runCatching {
+                            Tvh.fetchEpgForChannel(server, Tvh.apiFor(server), uuid)
+                        }.getOrDefault(emptyList())
+                        cb(list)
+                    }
+                },
                 seekHint = seekHintState.value,
                 liveChannels = if (canZap) liveChannelsState.value else emptyList(),
                 liveCurrentIndex = liveIndexState.value,
@@ -1513,6 +1522,7 @@ private fun PlayerUi(
     onSkipFwd: () -> Unit = {},
     onDoubleTapSeek: (Boolean) -> Unit = {},
     onScrubSeek: (Int) -> Unit = {},
+    onLoadChannelEpg: (String, (List<sk.tvhclient.shared.model.EpgEvent>) -> Unit) -> Unit = { _, _ -> },
     seekHint: Int = 0,
     liveChannels: List<LivePlaylist.LiveChannel> = emptyList(),
     liveCurrentIndex: Int = -1,
@@ -2527,8 +2537,8 @@ private fun PlayerUi(
             }
         }
 
-        // Overlay: zoznam kanalov priamo v prehravaci (vysuva sa zhora podla listFrac)
-        if ((showChannelList || listFrac > 0.001f) && liveChannels.isNotEmpty()) {
+        // Overlay: zoznam kanalov priamo v prehravaci (vysuva sa zhora podla listFrac) — TELEFON
+        if ((showChannelList || listFrac > 0.001f) && !isTvGest && liveChannels.isNotEmpty()) {
             val loader = remember(server?.id) { PiconImageLoader.get(ctx, server) }
             val listState = rememberLazyListState(
                 initialFirstVisibleItemIndex = liveCurrentIndex.coerceAtLeast(0)
@@ -2674,6 +2684,111 @@ private fun PlayerUi(
                     }
                 }
               }
+            }
+        }
+
+        // Overlay: TV/STB EPG browser (cely displej, OK otvori) — vlavo zoznam, vpravo detail + nahlad + dalsie
+        if (showChannelList && isTvGest && liveChannels.isNotEmpty()) {
+            val loaderT = remember(server?.id) { PiconImageLoader.get(ctx, server) }
+            val selT = channelNavIndex.coerceIn(0, liveChannels.size - 1)
+            val listStateT = rememberLazyListState(initialFirstVisibleItemIndex = selT)
+            LaunchedEffect(channelNavIndex) {
+                val i = channelNavIndex
+                if (i in liveChannels.indices) {
+                    val vis = listStateT.layoutInfo.visibleItemsInfo
+                    val first = vis.firstOrNull()?.index ?: 0
+                    val last = vis.lastOrNull()?.index ?: 0
+                    if (vis.isEmpty() || i < first || i > last) listStateT.scrollToItem(i)
+                }
+            }
+            var epgT by remember { mutableStateOf<List<sk.tvhclient.shared.model.EpgEvent>>(emptyList()) }
+            LaunchedEffect(selT) {
+                kotlinx.coroutines.delay(220)
+                val uuid = liveChannels.getOrNull(selT)?.uuid ?: return@LaunchedEffect
+                epgT = emptyList()
+                onLoadChannelEpg(uuid) { list -> epgT = list }
+            }
+            val nowT = liveNowSec
+            val curT = epgT.firstOrNull { it.start <= nowT && nowT < it.stop }
+            val nextT = epgT.filter { it.start >= nowT }.sortedBy { it.start }.take(6)
+            val playCh = liveChannels.getOrNull(liveCurrentIndex)
+            fun hhmm(s: Long): String =
+                java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s * 1000))
+
+            Row(Modifier.fillMaxSize().background(playerScrim())) {
+                // LAVA: zoznam kanalov
+                LazyColumn(state = listStateT, modifier = Modifier.fillMaxHeight().fillMaxWidth(0.46f)) {
+                    itemsIndexed(liveChannels) { idx, ch ->
+                        val selRow = idx == selT
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .background(if (selRow) Color(0x553B82F6) else Color.Transparent)
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier.size(52.dp, 40.dp).clip(RoundedCornerShape(4.dp)).background(piconBackground()),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (ch.piconUrl != null) {
+                                    AsyncImage(
+                                        model = remember(ch.piconUrl) { ImageRequest.Builder(ctx).data(ch.piconUrl).size(120).build() },
+                                        contentDescription = null, imageLoader = loaderT,
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                        modifier = Modifier.fillMaxSize().padding(2.dp)
+                                    )
+                                } else Text(ch.name.take(3).uppercase(), color = playerFg(), style = MaterialTheme.typography.labelMedium)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(ch.name, color = playerFg(), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                                if (ch.nowTitle.isNotBlank())
+                                    Text(ch.nowTitle, color = playerFgDim(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (ch.number > 0) ch.number.toString() else "", color = Color(0xFF6699FF), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                // PRAVA: detail vybraneho + nahlad hraneho + dalsie programy
+                Column(Modifier.fillMaxHeight().weight(1f).padding(16.dp)) {
+                    Text(
+                        (curT?.title?.takeIf { it.isNotBlank() }) ?: liveChannels.getOrNull(selT)?.nowTitle ?: "",
+                        color = playerFg(), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis
+                    )
+                    if (curT != null)
+                        Text(hhmm(curT.start) + " – " + hhmm(curT.stop), color = playerFgDim(),
+                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+                    // nahlad aktualne hraneho kanala (Krok 2: tu pride zive video)
+                    Box(
+                        Modifier.padding(top = 12.dp).fillMaxWidth(0.66f).height(170.dp)
+                            .clip(RoundedCornerShape(6.dp)).background(Color.Black),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (playCh?.piconUrl != null)
+                            AsyncImage(
+                                model = remember(playCh.piconUrl) { ImageRequest.Builder(ctx).data(playCh.piconUrl).size(240).build() },
+                                contentDescription = null, imageLoader = loaderT,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize().padding(18.dp)
+                            )
+                        else Text(playCh?.name ?: "", color = playerFg())
+                    }
+                    val desc = curT?.bestDescription ?: ""
+                    if (desc.isNotBlank())
+                        Text(desc, color = playerFg(), style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
+                    if (nextT.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        nextT.forEach { ev ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                                Text(hhmm(ev.start), color = playerFgDim(), modifier = Modifier.width(56.dp))
+                                Text(ev.title, color = playerFg(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
             }
         }
 
