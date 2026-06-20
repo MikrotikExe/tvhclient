@@ -2714,77 +2714,113 @@ private fun PlayerUi(
             val playCh = liveChannels.getOrNull(liveCurrentIndex)
             fun hhmm(s: Long): String =
                 java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s * 1000))
+            val dateStr = java.text.SimpleDateFormat("EEEE d. MMMM", java.util.Locale.getDefault())
+                .format(java.util.Date(nowT * 1000)).replaceFirstChar { it.uppercase() }
+            val accentC = playerAccent()
+            val borderC = playerBorder()
+            val cardC = playerCard()
+            val selTintC = playerSelTint()
 
-            Row(Modifier.fillMaxSize().background(playerScrim())) {
-                // LAVA: zoznam kanalov
-                LazyColumn(state = listStateT, modifier = Modifier.fillMaxHeight().fillMaxWidth(0.46f)) {
-                    itemsIndexed(liveChannels) { idx, ch ->
-                        val selRow = idx == selT
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .background(if (selRow) Color(0x553B82F6) else Color.Transparent)
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                Modifier.size(52.dp, 40.dp).clip(RoundedCornerShape(4.dp)).background(piconBackground()),
-                                contentAlignment = Alignment.Center
+            Column(Modifier.fillMaxSize().background(playerScrim())) {
+                // horna lista: datum vlavo, hodiny vpravo
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(dateStr, color = playerFgDim(), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.weight(1f))
+                    Text(hhmm(nowT), color = playerFg(),
+                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                }
+                Row(Modifier.fillMaxWidth().weight(1f)) {
+                    // LAVA: zoznam kanalov (karty s ramikom)
+                    LazyColumn(
+                        state = listStateT,
+                        modifier = Modifier.fillMaxHeight().fillMaxWidth(0.46f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        itemsIndexed(liveChannels) { idx, ch ->
+                            val selRow = idx == selT
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (selRow) selTintC else cardC)
+                                    .border(1.dp, if (selRow) accentC else borderC, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (ch.piconUrl != null) {
-                                    AsyncImage(
-                                        model = remember(ch.piconUrl) { ImageRequest.Builder(ctx).data(ch.piconUrl).size(120).build() },
-                                        contentDescription = null, imageLoader = loaderT,
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                        modifier = Modifier.fillMaxSize().padding(2.dp)
-                                    )
-                                } else Text(ch.name.take(3).uppercase(), color = playerFg(), style = MaterialTheme.typography.labelMedium)
+                                Box(
+                                    Modifier.size(54.dp, 40.dp).clip(RoundedCornerShape(6.dp)).background(piconBackground()),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (ch.piconUrl != null) {
+                                        AsyncImage(
+                                            model = remember(ch.piconUrl) { ImageRequest.Builder(ctx).data(ch.piconUrl).size(120).build() },
+                                            contentDescription = null, imageLoader = loaderT,
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                            modifier = Modifier.fillMaxSize().padding(3.dp)
+                                        )
+                                    } else Text(ch.name.take(3).uppercase(), color = playerFg(), style = MaterialTheme.typography.labelMedium)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(ch.name, color = playerFg(), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    if (ch.nowTitle.isNotBlank())
+                                        Text(ch.nowTitle, color = playerFgDim(), style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (ch.number > 0) ch.number.toString() else "", color = accentC,
+                                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(ch.name, color = playerFg(), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
-                                if (ch.nowTitle.isNotBlank())
-                                    Text(ch.nowTitle, color = playerFgDim(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (ch.number > 0) ch.number.toString() else "", color = Color(0xFF6699FF), fontWeight = FontWeight.Bold)
                         }
                     }
-                }
-                // PRAVA: detail vybraneho + nahlad hraneho + dalsie programy
-                Column(Modifier.fillMaxHeight().weight(1f).padding(16.dp)) {
-                    Text(
-                        (curT?.title?.takeIf { it.isNotBlank() }) ?: liveChannels.getOrNull(selT)?.nowTitle ?: "",
-                        color = playerFg(), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis
-                    )
-                    if (curT != null)
-                        Text(hhmm(curT.start) + " – " + hhmm(curT.stop), color = playerFgDim(),
-                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
-                    // nahlad aktualne hraneho kanala (Krok 2: tu pride zive video)
-                    Box(
-                        Modifier.padding(top = 12.dp).fillMaxWidth(0.66f).height(170.dp)
-                            .clip(RoundedCornerShape(6.dp)).background(Color.Black),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (playCh?.piconUrl != null)
-                            AsyncImage(
-                                model = remember(playCh.piconUrl) { ImageRequest.Builder(ctx).data(playCh.piconUrl).size(240).build() },
-                                contentDescription = null, imageLoader = loaderT,
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize().padding(18.dp)
-                            )
-                        else Text(playCh?.name ?: "", color = playerFg())
-                    }
-                    val desc = curT?.bestDescription ?: ""
-                    if (desc.isNotBlank())
-                        Text(desc, color = playerFg(), style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
-                    if (nextT.isNotEmpty()) {
-                        Spacer(Modifier.height(12.dp))
-                        nextT.forEach { ev ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                                Text(hhmm(ev.start), color = playerFgDim(), modifier = Modifier.width(56.dp))
-                                Text(ev.title, color = playerFg(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // PRAVA: detail vybraneho + nahlad hraneho + dalsie programy
+                    Column(Modifier.fillMaxHeight().weight(1f).padding(horizontal = 22.dp, vertical = 6.dp)) {
+                        Text(
+                            (curT?.title?.takeIf { it.isNotBlank() }) ?: liveChannels.getOrNull(selT)?.nowTitle ?: "",
+                            color = playerFg(), style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis
+                        )
+                        if (curT != null)
+                            Text(hhmm(curT.start) + " – " + hhmm(curT.stop), color = accentC,
+                                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 4.dp))
+                        // nahlad aktualne hraneho kanala (Krok 2: tu pride zive video)
+                        Box(
+                            Modifier.padding(top = 14.dp).fillMaxWidth(0.7f).height(180.dp)
+                                .clip(RoundedCornerShape(10.dp)).background(Color.Black)
+                                .border(1.dp, borderC, RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (playCh?.piconUrl != null)
+                                AsyncImage(
+                                    model = remember(playCh.piconUrl) { ImageRequest.Builder(ctx).data(playCh.piconUrl).size(240).build() },
+                                    contentDescription = null, imageLoader = loaderT,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize().padding(22.dp)
+                                )
+                            else Text(playCh?.name ?: "", color = Color.White)
+                        }
+                        val desc = curT?.bestDescription ?: ""
+                        if (desc.isNotBlank())
+                            Text(desc, color = playerFgDim(), style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 14.dp))
+                        if (nextT.isNotEmpty()) {
+                            Spacer(Modifier.height(16.dp))
+                            Text("Ďalej", color = playerFgFaint(), style = MaterialTheme.typography.labelMedium)
+                            Spacer(Modifier.height(4.dp))
+                            nextT.forEach { ev ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                    Text(hhmm(ev.start), color = accentC,
+                                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.width(58.dp))
+                                    Text(ev.title, color = playerFg(), style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
                     }

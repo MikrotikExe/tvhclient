@@ -33,3 +33,13 @@ fun piconBackground(): Color =
     if (isLightTheme()) Color(0xF2F2F2F6) else Color(0xE6000000)
 @Composable fun playerScrimSoft(): Color =
     if (isLightTheme()) Color(0xC0F2F2F6) else Color(0x99000000)
+
+// --- Karty a ramiky (EPG browser) ---
+@Composable fun playerBorder(): Color =
+    if (isLightTheme()) Color(0x1F000000) else Color(0x33FFFFFF)
+@Composable fun playerCard(): Color =
+    if (isLightTheme()) Color(0x0D000000) else Color(0x14FFFFFF)
+/** Akcentova modra (rovnaka v oboch rezimoch). */
+fun playerAccent(): Color = Color(0xFF1E88E5)
+@Composable fun playerSelTint(): Color =
+    if (isLightTheme()) Color(0x1F1E88E5) else Color(0x331E88E5)
