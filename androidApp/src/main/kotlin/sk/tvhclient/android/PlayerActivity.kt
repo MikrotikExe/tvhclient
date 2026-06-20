@@ -109,6 +109,8 @@ class PlayerActivity : ComponentActivity() {
     private var tsAccumMs = 0L
     private var tsPauseStartedAt = 0L
     private var htspStartedAt = 0L
+    private var pendingSkipMs = 0L
+    private var skipFlushJob: kotlinx.coroutines.Job? = null
     private var timeshiftTickerJob: kotlinx.coroutines.Job? = null
     private lateinit var mediaPlayer: MediaPlayer
 
@@ -235,6 +237,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun togglePlayPause() {
         if (!::mediaPlayer.isInitialized) return
+        skipFlushJob?.cancel(); flushSkip()   // doruc nazbierany skok, nech je server konzistentny
         if (isPlayingState.value) {
             if (htspLive) {
                 htspFeeder?.pause()             // zastav server buffer pri pauze
@@ -278,6 +281,8 @@ class PlayerActivity : ComponentActivity() {
     /** Novy zivy zaciatok (cerstva subscription = na zivo) -> vynuluj timeshift. */
     private fun resetTimeshift() {
         stopTimeshiftTicker()
+        skipFlushJob?.cancel(); skipFlushJob = null
+        pendingSkipMs = 0L
         tsAccumMs = 0L
         tsPauseStartedAt = 0L
         htspStartedAt = System.currentTimeMillis()
@@ -306,13 +311,29 @@ class PlayerActivity : ComponentActivity() {
         }
         // cielova pozicia za zivym, orezana na <0 .. hlbka bufferu>
         val target = (tsAccumMs - seconds.toLong() * 1000L).coerceIn(0L, maxRewindMs())
-        val deltaMs = target - tsAccumMs            // kladne = dozadu, zaporne = dopredu
+        val deltaMs = target - tsAccumMs
         if (deltaMs == 0L) return                   // niet kam (zaciatok bufferu alebo zive)
-        val skipSec = (-deltaMs / 1000L).toInt()    // dozadu => zaporne sekundy
-        if (skipSec != 0) htspFeeder?.skip(skipSec)
         tsAccumMs = target
         timeshiftOffsetState.value = tsAccumMs
+        // ukazovatel reaguje hned, ale realny skok posli az ked prestane tukanie —
+        // viac skokov za sebou inak nuti libVLC stale resynchronizovat (trha to)
+        pendingSkipMs += deltaMs
+        skipFlushJob?.cancel()
+        skipFlushJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(350)
+            flushSkip()
+        }
     }
+
+    /** Posle nazbierany skok jedným prikazom (alebo presny skok na zive). */
+    private fun flushSkip() {
+        val net = pendingSkipMs
+        pendingSkipMs = 0L
+        if (net == 0L) return
+        if (tsAccumMs <= 0L) htspFeeder?.goLive()              // presne na zive
+        else htspFeeder?.skip((-net / 1000L).toInt())          // dozadu => zaporne
+    }
+
 
     /** Pretacanie pre DVR (live TS sa pretacat neda). TS subor nenese dlzku,
      *  preto pouzivame dlzku z DVR entry a poziciu ako zlomok (na TS spolahlive). */
@@ -1360,6 +1381,7 @@ class PlayerActivity : ComponentActivity() {
         htspFeeder?.stop()
         htspFeeder = null
         stopTimeshiftTicker()
+        skipFlushJob?.cancel()
         if (::libVlc.isInitialized) {
             libVlc.release()
         }

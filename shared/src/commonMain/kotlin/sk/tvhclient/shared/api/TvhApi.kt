@@ -47,6 +47,7 @@ class TvhApi(private val server: TvhServer) {
 
     private val client = HttpClient {
         expectSuccess = false
+        install(io.ktor.client.plugins.UserAgent) { agent = "HeadentClient/1.0.0" }
         install(ContentNegotiation) { json(json) }
         install(HttpTimeout) {
             connectTimeoutMillis = 5_000
