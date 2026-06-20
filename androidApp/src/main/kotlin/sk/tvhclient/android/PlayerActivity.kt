@@ -2858,15 +2858,15 @@ private fun PlayerUi(
                                 }
                                 .border(1.dp, borderC, RoundedCornerShape(10.dp))
                         )
-                        // popis berie len zvysny priestor a orezava sa, aby relacie ostali vzdy vidno
+                        // popis: max 3 riadky, orezany
                         val desc = curT?.bestDescription ?: ""
-                        Box(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp).clipToBounds()) {
-                            if (desc.isNotBlank())
-                                Text(desc, color = playerFgDim(), style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 4, overflow = TextOverflow.Ellipsis)
-                        }
-                        // relacie ukotvene dole — vzdy viditelne
+                        if (desc.isNotBlank())
+                            Text(desc, color = playerFgDim(), style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 12.dp))
+                        // relacie hned pod popisom (prirodzeny tok zhora)
                         if (nextT.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
                             nextT.forEach { ev ->
                                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                                     Text(hhmm(ev.start), color = accentC,
