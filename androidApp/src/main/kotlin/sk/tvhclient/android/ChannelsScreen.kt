@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.automirrored.filled.Dvr
 import androidx.compose.material3.Icon
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.GridView
@@ -351,8 +351,8 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.FiberManualRecord, contentDescription = null,
-                            tint = Color(0xFFE53935), modifier = Modifier.size(12.dp)
+                            Icons.AutoMirrored.Filled.Dvr, contentDescription = null,
+                            tint = Color(0xFFE53935), modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.channel_archived),
@@ -360,19 +360,20 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                     }
                 }
             },
-            // vlavo = nazivo (fokus), vpravo = od zaciatku
-            dismissButton = {
-                val liveFocus = remember { FocusRequester() }
-                LaunchedEffect(Unit) { runCatching { liveFocus.requestFocus() } }
-                androidx.compose.material3.TextButton(
-                    onClick = { playChannel(ctx, rcRow, null, 0, 0); recChoice = null },
-                    modifier = Modifier.focusRequester(liveFocus)
-                ) { AutoSizeText(stringResource(R.string.play_live), maxLines = 1) }
-            },
+            // nazivo vlavo (fokus), od zaciatku vpravo — roztiahnute na celu sirku
             confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    playDvrFile(ctx, rcRec); recChoice = null
-                }) { AutoSizeText(stringResource(R.string.play_from_start), maxLines = 1) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    val liveFocus = remember { FocusRequester() }
+                    LaunchedEffect(Unit) { runCatching { liveFocus.requestFocus() } }
+                    androidx.compose.material3.TextButton(
+                        onClick = { playChannel(ctx, rcRow, null, 0, 0); recChoice = null },
+                        modifier = Modifier.focusRequester(liveFocus)
+                    ) { AutoSizeText(stringResource(R.string.play_live), maxLines = 1) }
+                    androidx.compose.material3.TextButton(onClick = {
+                        playDvrFile(ctx, rcRec); recChoice = null
+                    }) { AutoSizeText(stringResource(R.string.play_from_start), maxLines = 1) }
+                }
             }
         )
     }

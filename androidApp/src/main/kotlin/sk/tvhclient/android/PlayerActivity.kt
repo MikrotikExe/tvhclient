@@ -95,6 +95,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -749,6 +750,12 @@ class PlayerActivity : ComponentActivity() {
             return true
         }
 
+        // OK-up po otvoreni zoznamu vzdy resetuj guard (nech sa nasledne OK neprehltne kvoli casovaniu)
+        val okKey = kc == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+            kc == android.view.KeyEvent.KEYCODE_ENTER ||
+            kc == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+        if (okKey && !down && okLongFired) { okLongFired = false; return true }
+
         // 0b) EPG kláves -> TV program; INFO kláves -> okno s relaciou (vzdy)
         if (down) {
             when (kc) {
@@ -773,9 +780,9 @@ class PlayerActivity : ComponentActivity() {
                 kc == android.view.KeyEvent.KEYCODE_ENTER ||
                 kc == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
             if (isOk) {
-                // ak je toto dotahovanie podrzania OK, ktore zoznam otvorilo -> ignoruj kym nepustis
-                if (okLongFired) { if (!down) okLongFired = false; return true }
-                if (down && n > 0) {
+                // pocas drzania otvaracieho OK (a jeho opakovani) nereaguj
+                if (okLongFired) return true
+                if (down && event.repeatCount == 0 && n > 0) {
                     if (navChannelIndexState.value == liveIndexState.value) { closeChannelList(); pokeControls() }  // uz hra vybrany -> cela obrazovka + spodna lista
                     else switchToIndex(navChannelIndexState.value, poke = false)              // prepni prehravany kanal, ostan v zozname (bez listy)
                 }
@@ -2831,7 +2838,8 @@ private fun PlayerUi(
                         Text(
                             (curT?.title?.takeIf { it.isNotBlank() }) ?: liveChannels.getOrNull(detT)?.nowTitle ?: "",
                             color = playerFg(), style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis
+                            fontWeight = FontWeight.Bold, maxLines = 1,
+                            modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE)
                         )
                         if (curT != null)
                             Text(hhmm(curT.start) + " – " + hhmm(curT.stop), color = accentC,
@@ -2839,7 +2847,7 @@ private fun PlayerUi(
                                 modifier = Modifier.padding(top = 4.dp))
                         // nahlad: zive video hraneho kanala — VLC povrch presvita cez dieru v scrime
                         Box(
-                            Modifier.padding(top = 14.dp).fillMaxWidth(0.7f).height(180.dp)
+                            Modifier.padding(top = 12.dp).fillMaxWidth(0.66f).height(156.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .onGloballyPositioned { c ->
                                     val p = c.positionInRoot()
@@ -2850,19 +2858,22 @@ private fun PlayerUi(
                                 }
                                 .border(1.dp, borderC, RoundedCornerShape(10.dp))
                         )
+                        // popis berie len zvysny priestor a orezava sa, aby relacie ostali vzdy vidno
                         val desc = curT?.bestDescription ?: ""
-                        if (desc.isNotBlank())
-                            Text(desc, color = playerFgDim(), style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 14.dp))
+                        Box(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp).clipToBounds()) {
+                            if (desc.isNotBlank())
+                                Text(desc, color = playerFgDim(), style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 4, overflow = TextOverflow.Ellipsis)
+                        }
+                        // relacie ukotvene dole — vzdy viditelne
                         if (nextT.isNotEmpty()) {
-                            Spacer(Modifier.height(12.dp))
                             nextT.forEach { ev ->
                                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                                     Text(hhmm(ev.start), color = accentC,
                                         style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.width(58.dp))
                                     Text(ev.title, color = playerFg(), style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        maxLines = 1, modifier = Modifier.weight(1f).basicMarquee(iterations = Int.MAX_VALUE))
                                 }
                             }
                         }
