@@ -76,7 +76,7 @@ fun RadioScreen(vm: RadioViewModel = viewModel(), resetSignal: Int = 0, onGoToNa
     var viewMode by remember { mutableStateOf(RadioViewPref.get(context)) }
     var viewMenu by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { vm.load() }
+    LaunchedEffect(Unit) { vm.loadIfNeeded() }
 
     // D-pad fokus: pociatocny fokus na prve radio + presmerovanie pri reselect (znovu kliknutie na Radia)
     val firstFocus = remember { FocusRequester() }

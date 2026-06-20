@@ -26,6 +26,18 @@ class RadioViewModel : ViewModel() {
     val query: StateFlow<String> = _query
     fun setQuery(q: String) { _query.value = q }
 
+    private var loadedOnce = false
+    private var reloadToken = -1
+
+    /** Nacita len ak este nebolo nacitane, alebo ak sa zmenil server (reload token). */
+    fun loadIfNeeded() {
+        val tok = TabController.dataReload.value
+        val changed = tok != reloadToken
+        if (loadedOnce && _state.value is RadioState.Loaded && !changed) return
+        reloadToken = tok
+        load()
+    }
+
     fun load() {
         val server = Tvh.store.active()
         if (server == null) {
@@ -44,6 +56,7 @@ class RadioViewModel : ViewModel() {
                     }
                 }
                 _state.value = RadioState.Loaded(rows)
+                loadedOnce = true
             } catch (e: Exception) {
                 _state.value = RadioState.Error(e.message ?: "Chyba načítania")
             }
