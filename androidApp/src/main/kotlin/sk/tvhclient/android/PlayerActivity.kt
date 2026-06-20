@@ -272,6 +272,10 @@ class PlayerActivity : ComponentActivity() {
                 // prva pauza "zapne" timeshift: odtialto sa rata buffer aj cervene pocitadlo
                 if (htspStartedAt <= 0L) htspStartedAt = System.currentTimeMillis()
                 timeshiftEngagedState.value = true
+                // zapnutim timeshiftu pribudnu ovladace pretacania (tsrew pred play) a posunu sa
+                // indexy — re-ukotvi fokus na play/pause, nech "neskoci" na pretacanie
+                val ord = playerControlOrder(!seekablePlayback && liveUuids.size > 1, seekablePlayback, pipSupported, true)
+                controlNavState.value = ord.indexOf("play").coerceAtLeast(0)
                 tsPauseStartedAt = System.currentTimeMillis()
                 startTimeshiftTicker()
             }
@@ -771,7 +775,10 @@ class PlayerActivity : ComponentActivity() {
             if (isOk) {
                 // ak je toto dotahovanie podrzania OK, ktore zoznam otvorilo -> ignoruj kym nepustis
                 if (okLongFired) { if (!down) okLongFired = false; return true }
-                if (down && n > 0) { switchToIndex(navChannelIndexState.value); closeChannelList() }
+                if (down && n > 0) {
+                    if (navChannelIndexState.value == liveIndexState.value) closeChannelList()  // uz hra vybrany -> cela obrazovka
+                    else switchToIndex(navChannelIndexState.value)                              // prepni prehravany kanal, ostan v zozname
+                }
                 return true
             }
             if (down && n > 0) {
@@ -2732,16 +2739,17 @@ private fun PlayerUi(
                     if (vis.isEmpty() || i < first || i > last) listStateT.scrollToItem(i)
                 }
             }
+            // pravy panel (EPG, nahlad, relacie) sleduje HRANY kanal — meni sa az po prepnuti (OK)
+            val detT = liveCurrentIndex.coerceIn(0, liveChannels.size - 1)
             var epgT by remember { mutableStateOf<List<sk.tvhclient.shared.model.EpgEvent>>(emptyList()) }
-            LaunchedEffect(selT) {
-                kotlinx.coroutines.delay(220)
-                val uuid = liveChannels.getOrNull(selT)?.uuid ?: return@LaunchedEffect
+            LaunchedEffect(detT) {
+                val uuid = liveChannels.getOrNull(detT)?.uuid ?: return@LaunchedEffect
                 epgT = emptyList()
                 onLoadChannelEpg(uuid) { list -> epgT = list }
             }
             val nowT = liveNowSec
             val curT = epgT.firstOrNull { it.start <= nowT && nowT < it.stop }
-            val nextT = epgT.filter { it.start >= nowT }.sortedBy { it.start }.take(6)
+            val nextT = epgT.filter { it.start >= nowT }.sortedBy { it.start }.take(4)
             fun hhmm(s: Long): String =
                 java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s * 1000))
             val dateStr = java.text.SimpleDateFormat("EEEE d. MMMM", java.util.Locale.getDefault())
@@ -2827,7 +2835,7 @@ private fun PlayerUi(
                     // PRAVA: detail vybraneho + nahlad hraneho + dalsie programy
                     Column(Modifier.fillMaxHeight().weight(1f).padding(horizontal = 22.dp, vertical = 6.dp)) {
                         Text(
-                            (curT?.title?.takeIf { it.isNotBlank() }) ?: liveChannels.getOrNull(selT)?.nowTitle ?: "",
+                            (curT?.title?.takeIf { it.isNotBlank() }) ?: liveChannels.getOrNull(detT)?.nowTitle ?: "",
                             color = playerFg(), style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis
                         )
@@ -2851,11 +2859,9 @@ private fun PlayerUi(
                         val desc = curT?.bestDescription ?: ""
                         if (desc.isNotBlank())
                             Text(desc, color = playerFgDim(), style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 14.dp))
+                                maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 14.dp))
                         if (nextT.isNotEmpty()) {
-                            Spacer(Modifier.height(16.dp))
-                            Text("Ďalej", color = playerFgFaint(), style = MaterialTheme.typography.labelMedium)
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(12.dp))
                             nextT.forEach { ev ->
                                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                                     Text(hhmm(ev.start), color = accentC,
