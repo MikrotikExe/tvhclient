@@ -474,14 +474,14 @@ class PlayerActivity : ComponentActivity() {
     }
 
     /** Prepne na konkretny kanal podla indexu, prebuduje URL a nacita. */
-    private fun switchToIndex(i: Int) {
+    private fun switchToIndex(i: Int, poke: Boolean = true) {
         if (i < 0 || i >= liveUuids.size) return
-        if (i == liveIndex) { pokeControls(); return }  // ten isty kanal -> nenacitavaj znova
+        if (i == liveIndex) { if (poke) pokeControls(); return }  // ten isty kanal -> nenacitavaj znova
         val srv = liveServer ?: return
         val uuid = liveUuids[i]
         // rodicovsky zamok: zamknuty kanal mimo 5-min okna -> vypytaj PIN
         if (ParentalLock.channelNeedsPin(this, srv.id, uuid)) {
-            requestPin(onOk = { switchToIndex(i) }, onCancel = { })
+            requestPin(onOk = { switchToIndex(i, poke) }, onCancel = { })
             return
         }
         liveIndex = i
@@ -506,11 +506,11 @@ class PlayerActivity : ComponentActivity() {
         hasVideoState.value = true  // predpokladaj video; kontrola po Playing to opravi
         val cid = uuid.toLongOrNull()
         if (htspStream && cid != null && playHtspLive(srv, cid, htspLive)) {
-            pokeControls()
+            if (poke) pokeControls()
             return
         }
         playHttp(url)
-        pokeControls()
+        if (poke) pokeControls()
     }
 
     /** Prepne na susedny live kanal (delta +1 / -1). */
@@ -777,7 +777,7 @@ class PlayerActivity : ComponentActivity() {
                 if (okLongFired) { if (!down) okLongFired = false; return true }
                 if (down && n > 0) {
                     if (navChannelIndexState.value == liveIndexState.value) closeChannelList()  // uz hra vybrany -> cela obrazovka
-                    else switchToIndex(navChannelIndexState.value)                              // prepni prehravany kanal, ostan v zozname
+                    else switchToIndex(navChannelIndexState.value, poke = false)              // prepni prehravany kanal, ostan v zozname (bez listy)
                 }
                 return true
             }
