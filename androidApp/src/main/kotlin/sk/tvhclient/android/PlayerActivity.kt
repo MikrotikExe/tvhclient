@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.lifecycle.lifecycleScope
@@ -32,7 +33,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -1805,9 +1805,11 @@ private fun PlayerUi(
                 val slop = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    var mode = 0          // 0=nerozhodnute, 1=seek(H), 2=hlasitost(V vpravo), 3=jas(V vlavo)
+                    var mode = 0          // 0=nerozhodnute, 1=seek(H), 2=hlasitost(V vpravo), 3=jas(V vlavo), 4=otvor zoznam (V zhora)
                     var startVol = 0
                     var startBright = 0.5f
+                    val guardTop = 48.dp.toPx()              // odsadenie od hornej hrany (systemova lista/shade)
+                    val openBottom = size.height * 0.28f     // horny pruh pre otvaranie zoznamu
                     while (true) {
                         val ev = awaitPointerEvent()
                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
@@ -1818,14 +1820,16 @@ private fun PlayerUi(
                             mode = if (kotlin.math.abs(dx) >= kotlin.math.abs(dy)) {
                                 if (seekable || timeshiftEngaged) 1 else 0   // seek len ked je co pretacat
                             } else if (isTvGest) {
-                                0                                            // na TV ziadne vol/jas gesta
+                                0                                            // na TV ziadne gesta
+                            } else if (dy > 0 && down.position.y > guardTop && down.position.y < openBottom) {
+                                showChannelList = true; 4                    // potiahnutie zhora -> otvor zoznam
                             } else if (down.position.x > size.width * 0.75f) {
                                 startVol = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC); 2   // pravy okraj = hlasitost
                             } else if (down.position.x < size.width * 0.25f) {
                                 val cur = act?.window?.attributes?.screenBrightness ?: -1f
                                 startBright = if (cur in 0f..1f) cur else 0.5f; 3                              // lavy okraj = jas
                             } else {
-                                0                                            // stred: ziadne vol/jas
+                                0                                            // stred: nic
                             }
                         }
                         if (mode != 0) ch.consume()
@@ -2518,18 +2522,36 @@ private fun PlayerUi(
                     if (vis.isEmpty() || i < first || i > last) listState.scrollToItem(i)
                 }
             }
-            Row(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .background(playerScrim())
+            ) {
+                // hlavicka = uchyt: tah hore zatvori (nebrani rolovaniu zoznamu), klik tiez zatvori
                 Column(
                     Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.52f)
-                        .background(playerScrim())
+                        .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            var dyh = 0f
+                            detectVerticalDragGestures(
+                                onDragStart = { dyh = 0f },
+                                onDragEnd = { if (dyh < -60f) showChannelList = false }
+                            ) { _, amount -> dyh += amount }
+                        }
+                        .clickable { showChannelList = false }
                 ) {
+                    Box(
+                        Modifier
+                            .padding(top = 8.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .size(width = 40.dp, height = 4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(playerFgDim())
+                    )
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { showChannelList = false }
-                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("\u2039", color = playerFg(), fontSize = 24.sp)
@@ -2540,6 +2562,7 @@ private fun PlayerUi(
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
+                }
                     LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
                         itemsIndexed(liveChannels) { idx, ch ->
                             val selected = idx == sel
@@ -2617,17 +2640,6 @@ private fun PlayerUi(
                         }
                     }
                 }
-                // prava cast: klik mimo zoznam zavrie
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { showChannelList = false }
-                )
-            }
         }
 
         // Vyber dlzky casovaca uspatia — vertikalne, navigacia z Activity
