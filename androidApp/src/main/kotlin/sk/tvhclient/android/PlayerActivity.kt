@@ -130,6 +130,9 @@ class PlayerActivity : ComponentActivity() {
     // automaticke znovupripojenie zivého streamu po vypadku siete
     private val reconnectHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val reconnectingState = androidx.compose.runtime.mutableStateOf(false)
+    // tocenie pri pretacani timeshiftu (kratky resync pipe -> libVLC)
+    private val seekingState = androidx.compose.runtime.mutableStateOf(false)
+    private var seekSpinnerJob: kotlinx.coroutines.Job? = null
     private var reconnectAttempts = 0
     private val maxReconnectAttempts = 8
     private var pipReceiver: android.content.BroadcastReceiver? = null
@@ -232,7 +235,7 @@ class PlayerActivity : ComponentActivity() {
         runCatching { startActivity(i) }
     }
     private fun showControlsFocused() {
-        val order = playerControlOrder(!seekablePlayback && liveUuids.size > 1, seekablePlayback, pipSupported)
+        val order = playerControlOrder(!seekablePlayback && liveUuids.size > 1, seekablePlayback, pipSupported, htspLive)
         controlNavState.value = order.indexOf("play").coerceAtLeast(0)
         pokeControls()
     }
@@ -284,6 +287,7 @@ class PlayerActivity : ComponentActivity() {
     private fun resetTimeshift() {
         stopTimeshiftTicker()
         skipFlushJob?.cancel(); skipFlushJob = null
+        seekSpinnerJob?.cancel(); seekingState.value = false
         pendingSkipMs = 0L
         tsAccumMs = 0L
         tsPauseStartedAt = 0L
@@ -333,7 +337,17 @@ class PlayerActivity : ComponentActivity() {
     private fun flushSkip() {
         val net = pendingSkipMs
         pendingSkipMs = 0L
-        if (net != 0L) htspFeeder?.skip((-net / 1000L).toInt())   // dozadu => zaporne, dopredu => kladne
+        if (net != 0L) {
+            htspFeeder?.skip((-net / 1000L).toInt())   // dozadu => zaporne, dopredu => kladne
+            // koliesko v strede pocas resyncu; zhasne ho Playing/Buffering event,
+            // poistka ho zhasne aj keby event neprisiel
+            seekingState.value = true
+            seekSpinnerJob?.cancel()
+            seekSpinnerJob = lifecycleScope.launch {
+                kotlinx.coroutines.delay(4000)
+                seekingState.value = false
+            }
+        }
     }
 
 
@@ -608,6 +622,8 @@ class PlayerActivity : ComponentActivity() {
             "prev" -> { switchLive(-1); pokeControls() }
             "play" -> { togglePlayPause(); pokeControls() }
             "next" -> { switchLive(+1); pokeControls() }
+            "tsrew" -> { timeshiftSkip(-30); pokeControls() }
+            "tsff" -> { timeshiftSkip(+30); pokeControls() }
             "audio" -> openAudioMenu()
             "subs" -> openSpuMenu()
             "epg" -> openEpgInApp()
@@ -815,7 +831,7 @@ class PlayerActivity : ComponentActivity() {
             // ovladanie zobrazene -> vlavo/vpravo naviguju panel, OK aktivuje
             // zvyrazneny prvok (hore/dole prepinaju kanal vyssie)
             if (controlsShown) {
-                val order = playerControlOrder(canZap, seekablePlayback, pipSupported)
+                val order = playerControlOrder(canZap, seekablePlayback, pipSupported, htspLive)
                 val n = order.size
                 if (seekablePlayback) {
                     val onSeek = order.getOrNull(controlNavState.value) == "seek"
@@ -888,12 +904,10 @@ class PlayerActivity : ComponentActivity() {
                 } else if (down) return true
                 android.view.KeyEvent.KEYCODE_DPAD_LEFT -> if (down) {
                     if (seekablePlayback) { seekRelative(-15_000); pokeControls(); return true }
-                    if (htspLive) { timeshiftSkip(-30); pokeControls(); return true }
                     showControlsFocused(); return true
                 }
                 android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
                     if (seekablePlayback) { seekRelative(+30_000); pokeControls(); return true }
-                    if (htspLive) { timeshiftSkip(+30); pokeControls(); return true }
                     showControlsFocused(); return true
                 }
                 // hore/dole sem prides len ak sa neda zapovat (napr. DVR) -> otvor panel
@@ -1015,12 +1029,16 @@ class PlayerActivity : ComponentActivity() {
                     isPlayingState.value = true; refreshPipIfActive()
                     keepScreenOn(true)  // pocas prehravania nedovol setric/ambient na boxoch
                     cancelReconnect()  // uspesne pripojenie -> vynuluj pokusy
+                    seekSpinnerJob?.cancel(); seekingState.value = false  // resync po skoku dobehol
                     // po nabehnuti zisti ci stream ma video; ak nie -> rozhlas (logo)
                     videoCheckHandler.removeCallbacksAndMessages(null)
                     videoCheckHandler.postDelayed({
                         val n = runCatching { mediaPlayer.videoTracksCount }.getOrNull()
                         if (n != null && n >= 0) hasVideoState.value = n > 0
                     }, 1500)
+                }
+                MediaPlayer.Event.Buffering -> {
+                    if (event.buffering >= 100f) { seekSpinnerJob?.cancel(); seekingState.value = false }
                 }
                 MediaPlayer.Event.Paused -> { isPlayingState.value = false; keepScreenOn(false); refreshPipIfActive() }
                 MediaPlayer.Event.Stopped -> { isPlayingState.value = false; keepScreenOn(false); refreshPipIfActive() }
@@ -1066,7 +1084,7 @@ class PlayerActivity : ComponentActivity() {
         val canZap = directUrl == null && liveUuids.size > 1
         seekablePlayback = directUrl != null
         // predvolene zvyraznenie ovladacieho panela = play (nie krizik)
-        controlNavState.value = playerControlOrder(canZap, seekablePlayback, pipSupported).indexOf("play").coerceAtLeast(0)
+        controlNavState.value = playerControlOrder(canZap, seekablePlayback, pipSupported, htspLive).indexOf("play").coerceAtLeast(0)
         currentStreamUrl = streamUrl
 
         setContent {
@@ -1135,6 +1153,7 @@ class PlayerActivity : ComponentActivity() {
                 pipSupported = pipSupported,
                 hasVideo = hasVideoState.value,
                 reconnecting = reconnectingState.value,
+                seeking = seekingState.value,
                 centerLogoUrl = liveChannelsState.value.getOrNull(liveIndexState.value)?.piconUrl,
                 onOpenEpg = { openEpgInApp() },
                 onEnterPip = { enterPipAndMinimize() },
@@ -1457,6 +1476,7 @@ private fun PlayerUi(
     pipSupported: Boolean = false,
     hasVideo: Boolean = true,
     reconnecting: Boolean = false,
+    seeking: Boolean = false,
     centerLogoUrl: String? = null,
     onOpenEpg: () -> Unit = {},
     onEnterPip: () -> Unit = {},
@@ -1811,6 +1831,13 @@ private fun PlayerUi(
             }
         }
 
+        // koliesko v strede pocas pretacania timeshiftu (resync)
+        if (seeking && !reconnecting) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.CircularProgressIndicator(color = playerFg())
+            }
+        }
+
         // prekrytie s prave zadavanym cislom kanala
         if (numberEntry.isNotEmpty()) {
             Box(
@@ -1832,7 +1859,7 @@ private fun PlayerUi(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                val order = playerControlOrder(onPrevChannel != null, seekable, pipSupported)
+                val order = playerControlOrder(onPrevChannel != null, seekable, pipSupported, timeshiftActive)
                 val selCtrl = order.getOrNull(controlNavIndex)
                 val curCh = liveChannels.getOrNull(liveCurrentIndex)
                 val infoLoader = remember(server?.id) { PiconImageLoader.get(ctx, server) }
@@ -2080,10 +2107,10 @@ private fun PlayerUi(
                                 onClick = onTogglePlay
                             )
                             "tsrew" -> CircleButton(
-                                icon = Icons.Default.Replay30, selected = false, scale = bk, onClick = onSkipBack
+                                icon = Icons.Default.Replay30, selected = selCtrl == "tsrew", scale = bk, onClick = onSkipBack
                             )
                             "tsff" -> CircleButton(
-                                icon = Icons.Default.Forward30, selected = false, scale = bk, onClick = onSkipFwd
+                                icon = Icons.Default.Forward30, selected = selCtrl == "tsff", scale = bk, onClick = onSkipFwd
                             )
                             "next" -> if (onNextChannel != null) CircleButton(
                                 icon = Icons.Default.SkipNext, selected = selCtrl == "next", scale = bk, onClick = onNextChannel

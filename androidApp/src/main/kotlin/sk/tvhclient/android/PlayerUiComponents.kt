@@ -199,15 +199,17 @@ internal fun CircleButton(
 
 // Poradie ovladacich prvkov v paneli prehravaca pre D-pad navigaciu (Activity ich navriguje).
 // Musi sediet s vykreslenim v PlayerUi (rovnaka podmienka canZap).
-internal fun playerControlOrder(canZap: Boolean, seekable: Boolean = false, pip: Boolean = true): List<String> = buildList {
+internal fun playerControlOrder(canZap: Boolean, seekable: Boolean = false, pip: Boolean = true, timeshift: Boolean = false): List<String> = buildList {
     // vlavo
     add("close")
     if (pip) add("pip")
     if (canZap) { add("list"); add("epg") }
     // stred (transport)
+    if (timeshift) add("tsrew")
     if (canZap) add("prev")
     add("play")
     if (canZap) add("next")
+    if (timeshift) add("tsff")
     if (seekable) add("seek")
     // vpravo
     add("audio"); add("subs"); add("sleep"); add("info")
