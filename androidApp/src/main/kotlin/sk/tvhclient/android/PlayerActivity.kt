@@ -108,6 +108,8 @@ class PlayerActivity : ComponentActivity() {
     private var htspStream = false
     private val htspLiveState = androidx.compose.runtime.mutableStateOf(false)
     private val timeshiftOffsetState = androidx.compose.runtime.mutableStateOf(0L)
+    // timeshift "zapnuty" (po prvej pauze) -> az vtedy davaju zmysel RW/FF a dvojklik
+    private val timeshiftEngagedState = androidx.compose.runtime.mutableStateOf(false)
     private var tsAccumMs = 0L
     private var tsPauseStartedAt = 0L
     private var htspStartedAt = 0L
@@ -239,7 +241,7 @@ class PlayerActivity : ComponentActivity() {
         runCatching { startActivity(i) }
     }
     private fun showControlsFocused() {
-        val order = playerControlOrder(!seekablePlayback && liveUuids.size > 1, seekablePlayback, pipSupported, htspLive)
+        val order = playerControlOrder(!seekablePlayback && liveUuids.size > 1, seekablePlayback, pipSupported, timeshiftEngagedState.value)
         controlNavState.value = order.indexOf("play").coerceAtLeast(0)
         pokeControls()
     }
@@ -252,6 +254,7 @@ class PlayerActivity : ComponentActivity() {
             if (htspLive) {
                 // prva pauza "zapne" timeshift: odtialto sa rata buffer aj cervene pocitadlo
                 if (htspStartedAt <= 0L) htspStartedAt = System.currentTimeMillis()
+                timeshiftEngagedState.value = true
                 tsPauseStartedAt = System.currentTimeMillis()
                 startTimeshiftTicker()
             }
@@ -299,6 +302,7 @@ class PlayerActivity : ComponentActivity() {
         tsAccumMs = 0L
         tsPauseStartedAt = 0L
         htspStartedAt = 0L   // timeshift sa "zapne" az prvou pauzou (Tvheadend pred tym nema buffer)
+        timeshiftEngagedState.value = false
         timeshiftOffsetState.value = 0L
     }
 
@@ -859,7 +863,7 @@ class PlayerActivity : ComponentActivity() {
             // ovladanie zobrazene -> vlavo/vpravo naviguju panel, OK aktivuje
             // zvyrazneny prvok (hore/dole prepinaju kanal vyssie)
             if (controlsShown) {
-                val order = playerControlOrder(canZap, seekablePlayback, pipSupported, htspLive)
+                val order = playerControlOrder(canZap, seekablePlayback, pipSupported, timeshiftEngagedState.value)
                 val n = order.size
                 if (seekablePlayback) {
                     val onSeek = order.getOrNull(controlNavState.value) == "seek"
@@ -1112,7 +1116,7 @@ class PlayerActivity : ComponentActivity() {
         val canZap = directUrl == null && liveUuids.size > 1
         seekablePlayback = directUrl != null
         // predvolene zvyraznenie ovladacieho panela = play (nie krizik)
-        controlNavState.value = playerControlOrder(canZap, seekablePlayback, pipSupported, htspLive).indexOf("play").coerceAtLeast(0)
+        controlNavState.value = playerControlOrder(canZap, seekablePlayback, pipSupported, timeshiftEngagedState.value).indexOf("play").coerceAtLeast(0)
         currentStreamUrl = streamUrl
 
         setContent {
@@ -1217,7 +1221,7 @@ class PlayerActivity : ComponentActivity() {
                 onPrevChannel = if (canZap) ({ switchLive(-1) }) else null,
                 onNextChannel = if (canZap) ({ switchLive(+1) }) else null,
                 onTogglePlay = { togglePlayPause() },
-                timeshiftActive = htspLiveState.value,
+                timeshiftEngaged = timeshiftEngagedState.value,
                 onSkipBack = { timeshiftSkip(-30) },
                 onSkipFwd = { timeshiftSkip(+30) },
                 onDoubleTapSeek = { fwd -> doubleTapSeek(fwd) },
@@ -1491,7 +1495,7 @@ private fun PlayerUi(
     onPrevChannel: (() -> Unit)? = null,
     onNextChannel: (() -> Unit)? = null,
     onTogglePlay: () -> Unit = {},
-    timeshiftActive: Boolean = false,
+    timeshiftEngaged: Boolean = false,
     onSkipBack: () -> Unit = {},
     onSkipFwd: () -> Unit = {},
     onDoubleTapSeek: (Boolean) -> Unit = {},
@@ -1913,7 +1917,7 @@ private fun PlayerUi(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                val order = playerControlOrder(onPrevChannel != null, seekable, pipSupported, timeshiftActive)
+                val order = playerControlOrder(onPrevChannel != null, seekable, pipSupported, timeshiftEngaged)
                 // fokusove zvyraznenie len na TV (D-pad); na telefone (dotyk) ziadne "vybrate" tlacidlo
                 val isTvDevice = remember {
                     val um = ctx.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
@@ -2223,11 +2227,11 @@ private fun PlayerUi(
                                 barCtrl("info")
                             }
                             Row(horizontalArrangement = rowGap, verticalAlignment = Alignment.CenterVertically) {
-                                if (timeshiftActive) barCtrl("tsrew")
+                                if (timeshiftEngaged) barCtrl("tsrew")
                                 if (has("prev")) barCtrl("prev")
                                 barCtrl("play")
                                 if (has("next")) barCtrl("next")
-                                if (timeshiftActive) barCtrl("tsff")
+                                if (timeshiftEngaged) barCtrl("tsff")
                             }
                             Row(horizontalArrangement = rowGap, verticalAlignment = Alignment.CenterVertically) {
                                 barCtrl("audio")
@@ -2257,11 +2261,11 @@ private fun PlayerUi(
                             horizontalArrangement = gap,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (timeshiftActive) barCtrl("tsrew")
+                            if (timeshiftEngaged) barCtrl("tsrew")
                             if (has("prev")) barCtrl("prev")
                             barCtrl("play")
                             if (has("next")) barCtrl("next")
-                            if (timeshiftActive) barCtrl("tsff")
+                            if (timeshiftEngaged) barCtrl("tsff")
                         }
                         // vpravo: audio, titulky, info, SW
                         Row(
