@@ -20,6 +20,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1572,6 +1573,15 @@ private fun PlayerUi(
     val sleepLeftMin = if (sleepDeadline > 0)
         (((sleepDeadline - sleepNow) + 59_999) / 60_000).coerceAtLeast(0) else 0L
     var showChannelList by remember { mutableStateOf(false) }
+    // vizualne vysunutie zoznamu zhora: 0 = zatvoreny, 1 = otvoreny (pocas tahania sleduje prst)
+    var listFrac by remember { mutableStateOf(0f) }
+    LaunchedEffect(showChannelList) {
+        androidx.compose.animation.core.animate(
+            initialValue = listFrac,
+            targetValue = if (showChannelList) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.tween(220)
+        ) { v, _ -> listFrac = v }
+    }
     // MX Player gesta (len telefon): overlaye pre hlasitost / jas / seek; -1 = skryte
     var volPctState by remember { mutableStateOf(-1) }
     var brightPctState by remember { mutableStateOf(-1) }
@@ -1822,7 +1832,7 @@ private fun PlayerUi(
                             } else if (isTvGest) {
                                 0                                            // na TV ziadne gesta
                             } else if (dy > 0 && down.position.y > guardTop && down.position.y < openBottom) {
-                                showChannelList = true; 4                    // potiahnutie zhora -> otvor zoznam
+                                4                                            // potiahnutie zhora -> vysuvanie zoznamu
                             } else if (down.position.x > size.width * 0.75f) {
                                 startVol = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC); 2   // pravy okraj = hlasitost
                             } else if (down.position.x < size.width * 0.25f) {
@@ -1835,6 +1845,7 @@ private fun PlayerUi(
                         if (mode != 0) ch.consume()
                         when (mode) {
                             1 -> scrubSecState = (dx / size.width * 90f).toInt()
+                            4 -> listFrac = (dy / (size.height * 0.5f)).coerceIn(0f, 1f)   // vysuvanie zhora za prstom
                             2 -> {
                                 val nv = (startVol - dy / size.height * maxVol).toInt().coerceIn(0, maxVol)
                                 audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, nv, 0)
@@ -1850,6 +1861,13 @@ private fun PlayerUi(
                     if (mode == 1) {
                         val secs = scrubSecState
                         if (secs != Int.MIN_VALUE && secs != 0) onScrubSeek(secs)
+                    }
+                    if (mode == 4) {
+                        if (listFrac > 0.33f) {
+                            showChannelList = true        // LaunchedEffect dotiahne na 1
+                        } else {
+                            androidx.compose.animation.core.animate(listFrac, 0f) { v, _ -> listFrac = v }
+                        }
                     }
                 }
             }
@@ -2504,8 +2522,8 @@ private fun PlayerUi(
             }
         }
 
-        // Overlay: zoznam kanalov priamo v prehravaci (klik prepne)
-        if (showChannelList && liveChannels.isNotEmpty()) {
+        // Overlay: zoznam kanalov priamo v prehravaci (vysuva sa zhora podla listFrac)
+        if ((showChannelList || listFrac > 0.001f) && liveChannels.isNotEmpty()) {
             val loader = remember(server?.id) { PiconImageLoader.get(ctx, server) }
             val listState = rememberLazyListState(
                 initialFirstVisibleItemIndex = liveCurrentIndex.coerceAtLeast(0)
@@ -2522,11 +2540,17 @@ private fun PlayerUi(
                     if (vis.isEmpty() || i < first || i > last) listState.scrollToItem(i)
                 }
             }
-            Column(
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+              val fullH = maxHeight
+              Column(
                 Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .height(fullH * listFrac.coerceIn(0f, 1f))   // rastie zhora nadol
+                    .align(Alignment.TopStart)
+                    .clipToBounds()
                     .background(playerScrim())
-            ) {
+              ) {
+                Column(Modifier.fillMaxWidth().height(fullH)) {   // obsah v plnej vyske, klipovany zhora
                 // hlavicka = uchyt: tah hore zatvori (nebrani rolovaniu zoznamu), klik tiez zatvori
                 Column(
                     Modifier
@@ -2640,6 +2664,8 @@ private fun PlayerUi(
                         }
                     }
                 }
+              }
+            }
         }
 
         // Vyber dlzky casovaca uspatia — vertikalne, navigacia z Activity
