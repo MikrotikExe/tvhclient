@@ -35,10 +35,14 @@ class DvrViewModel : ViewModel() {
     val state: StateFlow<DvrState> = _state
 
     private var loadedOnce = false
+    private var reloadToken = -1
 
-    /** Nacita len ak este nemame data (prezije prepnutie kariet). */
+    /** Nacita len ak este nemame data, alebo ak sa zmenil server (reload token). */
     fun loadIfNeeded() {
-        if (loadedOnce && _state.value is DvrState.Loaded) return
+        val tok = TabController.dataReload.value
+        val changed = tok != reloadToken
+        if (loadedOnce && _state.value is DvrState.Loaded && !changed) return
+        reloadToken = tok
         load(showLoading = true)
     }
 

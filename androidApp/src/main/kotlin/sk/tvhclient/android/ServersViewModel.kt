@@ -37,17 +37,24 @@ class ServersViewModel : ViewModel() {
 
     fun save(server: TvhServer) {
         store.upsert(server)
+        // zmena konfiguracie servera (napr. sposob pripojenia) -> stara cache je neplatna
+        sk.tvhclient.shared.htsp.HtspData.clear(server.id)
         refresh()
+        TabController.dataReload.value++
     }
 
     fun delete(id: String) {
+        sk.tvhclient.shared.htsp.HtspData.clear(id)
         store.delete(id)
         refresh()
+        TabController.dataReload.value++
     }
 
     fun setActive(id: String) {
         store.activeId = id
         refresh()
+        // iny aktivny server -> znovu nacitaj data
+        TabController.dataReload.value++
     }
 
     fun newId(): String = Tvh.newServerId()

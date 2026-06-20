@@ -78,6 +78,8 @@ object TabController {
     fun pressInfo() { infoKey.value = infoKey.value + 1 }
     // ci boli v aktualnej podsekcii nastaveni vykonane zmeny (kvoli potvrdeniu pri odchode)
     val settingsDirty = mutableStateOf(false)
+    // zvysenim sa vynuti znovunacitanie kanalov/radii/archivu/EPG (po ulozeni/zmene servera)
+    val dataReload = mutableStateOf(0)
 }
 
 class MainActivity : ComponentActivity() {

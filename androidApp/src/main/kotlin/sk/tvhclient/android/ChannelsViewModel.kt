@@ -42,13 +42,17 @@ class ChannelsViewModel : ViewModel() {
 
     private var api: TvhApi? = null
     private var loadedOnce = false
+    private var reloadToken = -1
 
     fun setQuery(q: String) { _query.value = q }
 
-    /** Nacita len ak este nebolo nacitane (pri navrate na kartu neresetuje). */
+    /** Nacita len ak este nebolo nacitane, alebo ak sa zmenil server (reload token). */
     fun loadIfNeeded() {
-        if (loadedOnce && _state.value is ChannelsState.Loaded) return
-        load()
+        val tok = TabController.dataReload.value
+        val changed = tok != reloadToken
+        if (loadedOnce && _state.value is ChannelsState.Loaded && !changed) return
+        reloadToken = tok
+        load(force = loadedOnce && changed)
     }
 
     fun load(force: Boolean = false) {
