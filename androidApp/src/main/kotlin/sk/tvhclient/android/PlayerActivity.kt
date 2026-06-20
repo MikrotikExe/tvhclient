@@ -87,6 +87,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
@@ -1617,6 +1627,9 @@ private fun PlayerUi(
     LaunchedEffect(brightPctState) { if (brightPctState >= 0) { kotlinx.coroutines.delay(700); brightPctState = -1 } }
     LaunchedEffect(scrubSecState) { if (scrubSecState != Int.MIN_VALUE) { kotlinx.coroutines.delay(700); scrubSecState = Int.MIN_VALUE } }
     var isPlaying by remember { mutableStateOf(true) }
+    // Live okno: meraná pozícia náhľadového boxu v EPG browseri (na presun videopovrchu)
+    var previewRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    val density = LocalDensity.current
     var orientationLocked by remember { mutableStateOf(false) }
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -1901,8 +1914,14 @@ private fun PlayerUi(
                 )
             }
     ) {
+        val inPreview = showChannelList && isTvGest && liveChannels.isNotEmpty() && previewRect != null
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = if (inPreview) {
+                val r = previewRect!!
+                Modifier
+                    .absoluteOffset { IntOffset(r.left.roundToInt(), r.top.roundToInt()) }
+                    .size(with(density) { r.width.toDp() }, with(density) { r.height.toDp() })
+            } else Modifier.fillMaxSize(),
             factory = { ctx ->
                 val layout = VLCVideoLayout(ctx)
                 layout.layoutParams = FrameLayout.LayoutParams(
@@ -2722,7 +2741,6 @@ private fun PlayerUi(
             val nowT = liveNowSec
             val curT = epgT.firstOrNull { it.start <= nowT && nowT < it.stop }
             val nextT = epgT.filter { it.start >= nowT }.sortedBy { it.start }.take(6)
-            val playCh = liveChannels.getOrNull(liveCurrentIndex)
             fun hhmm(s: Long): String =
                 java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s * 1000))
             val dateStr = java.text.SimpleDateFormat("EEEE d. MMMM", java.util.Locale.getDefault())
@@ -2732,7 +2750,23 @@ private fun PlayerUi(
             val cardC = playerCard()
             val selTintC = playerSelTint()
 
-            Column(Modifier.fillMaxSize().background(playerScrim())) {
+            val scrimC = playerScrim()
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawBehind {
+                        drawRect(scrimC)
+                        val r = previewRect
+                        if (inPreview && r != null)
+                            drawRect(
+                                androidx.compose.ui.graphics.Color.Transparent,
+                                topLeft = androidx.compose.ui.geometry.Offset(r.left, r.top),
+                                size = Size(r.width, r.height),
+                                blendMode = BlendMode.Clear
+                            )
+                    }
+            ) {
                 // horna lista: datum vlavo, hodiny vpravo
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 12.dp),
@@ -2800,22 +2834,19 @@ private fun PlayerUi(
                             Text(hhmm(curT.start) + " – " + hhmm(curT.stop), color = accentC,
                                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(top = 4.dp))
-                        // nahlad aktualne hraneho kanala (Krok 2: tu pride zive video)
+                        // nahlad: zive video hraneho kanala — VLC povrch presvita cez dieru v scrime
                         Box(
                             Modifier.padding(top = 14.dp).fillMaxWidth(0.7f).height(180.dp)
-                                .clip(RoundedCornerShape(10.dp)).background(Color.Black)
-                                .border(1.dp, borderC, RoundedCornerShape(10.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (playCh?.piconUrl != null)
-                                AsyncImage(
-                                    model = remember(playCh.piconUrl) { ImageRequest.Builder(ctx).data(playCh.piconUrl).size(240).build() },
-                                    contentDescription = null, imageLoader = loaderT,
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                    modifier = Modifier.fillMaxSize().padding(22.dp)
-                                )
-                            else Text(playCh?.name ?: "", color = Color.White)
-                        }
+                                .clip(RoundedCornerShape(10.dp))
+                                .onGloballyPositioned { c ->
+                                    val p = c.positionInRoot()
+                                    previewRect = androidx.compose.ui.geometry.Rect(
+                                        p.x, p.y,
+                                        p.x + c.size.width.toFloat(), p.y + c.size.height.toFloat()
+                                    )
+                                }
+                                .border(1.dp, borderC, RoundedCornerShape(10.dp))
+                        )
                         val desc = curT?.bestDescription ?: ""
                         if (desc.isNotBlank())
                             Text(desc, color = playerFgDim(), style = MaterialTheme.typography.bodyMedium,
