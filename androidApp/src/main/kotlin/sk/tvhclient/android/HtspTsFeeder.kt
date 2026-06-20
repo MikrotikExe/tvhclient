@@ -16,7 +16,10 @@ import java.io.OutputStream
  * pre Media(libVlc, fd). Subscribuje s timeshift bufferom, takze sa da pauzovat cez
  * subscriptionSpeed. Pri `stop`/zatvoreni read-endu sa write zlomi a slucka skonci.
  */
-class HtspTsFeeder(private val server: TvhServer) {
+class HtspTsFeeder(
+    private val server: TvhServer,
+    private val timeshiftPeriodSec: Int = 0
+) {
 
     private var job: Job? = null
     private var readPfd: ParcelFileDescriptor? = null
@@ -24,9 +27,6 @@ class HtspTsFeeder(private val server: TvhServer) {
     private var out: OutputStream? = null
     private var client: HtspClient? = null
     private var scope: CoroutineScope? = null
-
-    /** Dlzka serveroveho timeshift bufferu pre subscription (server si to moze orezat). */
-    private val timeshiftPeriodSec = 3600
 
     /** Posledny posun za zivym v 90kHz tikoch (z timeshiftStatus). 0 = zive. */
     @Volatile var shiftTicks: Long = 0L

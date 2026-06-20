@@ -21,17 +21,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import sk.tvhclient.shared.htsp.HtspData
 import sk.tvhclient.shared.model.TvhServer
 
 // Obrazovky nastaveni (vyclenene z MainActivity.kt kvoli prehladnosti).
@@ -273,27 +268,30 @@ internal fun PlaybackSettings(ctx: android.content.Context) {
         }
     }
 
-    // Timeshift (pauza/pretacanie zivej TV) — realne sa zapne iba ak ho podporuje server
-    Spacer(Modifier.height(16.dp))
-    var timeshift by remember { mutableStateOf(TimeshiftPref.get(ctx)) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(
-            checked = timeshift,
-            onCheckedChange = { on ->
-                timeshift = on
-                TimeshiftPref.set(ctx, on)
-                TabController.settingsDirty.value = true
-            }
+    // Timeshift (pauza/pretacanie zivej TV) — len pri HTSP pripojeni (9982); pri HTTP nema zmysel
+    val htspMode = remember { sk.tvhclient.shared.Tvh.store.active()?.connectionMode == "htsp" }
+    if (htspMode) {
+        Spacer(Modifier.height(16.dp))
+        var timeshift by remember { mutableStateOf(TimeshiftPref.get(ctx)) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = timeshift,
+                onCheckedChange = { on ->
+                    timeshift = on
+                    TimeshiftPref.set(ctx, on)
+                    TabController.settingsDirty.value = true
+                }
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.ts_enable_title))
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.ts_enable_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.ts_enable_title))
     }
-    Spacer(Modifier.height(8.dp))
-    Text(
-        stringResource(R.string.ts_enable_note),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
 }
 
 // --- Playlist: rodicovsky zamok (PIN) ---
@@ -472,67 +470,6 @@ internal fun RemoteSettings(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-
-    Spacer(Modifier.height(24.dp))
-    Text(stringResource(R.string.ts_probe_title), style = MaterialTheme.typography.titleSmall)
-    Spacer(Modifier.height(4.dp))
-    val active = servers.firstOrNull { it.id == activeId }
-    val scope = rememberCoroutineScope()
-    var running by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf("") }
-    Button(
-        onClick = {
-            val srv = active ?: return@Button
-            running = true
-            result = ctx.getString(R.string.ts_probe_running)
-            scope.launch {
-                val r = runCatching {
-                    withContext(Dispatchers.IO) {
-                        HtspData.probeTimeshift(srv, System.currentTimeMillis() / 1000)
-                    }
-                }
-                running = false
-                result = r.fold(
-                    onSuccess = { res ->
-                        val tp = res.probe
-                        buildString {
-                            append(srv.name); append(" / "); append(res.channelName); append('\n')
-                            append("HTSP port="); append(res.htspPort)
-                            append("  timeshift_capable="); append(res.timeshiftCapable); append('\n')
-                            append("caps: "); append(if (res.capabilities.isEmpty()) "—" else res.capabilities.joinToString(", ")); append('\n')
-                            append("start="); append(tp.started)
-                            append("  pakety="); append(tp.muxPackets)
-                            append("  bajty="); append(tp.totalBytes); append('\n')
-                            append("stopy: "); append(if (tp.streams.isEmpty()) "—" else tp.streams.joinToString(", ")); append('\n')
-                            append("timeshift="); append(tp.timeshiftSeen)
-                            append(" full="); append(tp.tsFull)
-                            append(" start="); append(tp.tsStart)
-                            append(" end="); append(tp.tsEnd)
-                            if (tp.statuses.isNotEmpty()) { append('\n'); append("status: "); append(tp.statuses.joinToString("; ")) }
-                            if (tp.stopped != null) { append('\n'); append("stop: "); append(tp.stopped) }
-                        }
-                    },
-                    onFailure = { it.message ?: "chyba" }
-                )
-            }
-        },
-        enabled = !running && active != null,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(stringResource(R.string.ts_probe_run))
-    }
-    if (active == null) {
-        Spacer(Modifier.height(8.dp))
-        Text(
-            stringResource(R.string.no_servers),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-    if (result.isNotEmpty()) {
-        Spacer(Modifier.height(8.dp))
-        Text(result, style = MaterialTheme.typography.bodySmall)
-    }
 }
 
 @Composable

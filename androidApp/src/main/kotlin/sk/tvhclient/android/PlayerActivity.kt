@@ -104,6 +104,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var libVlc: LibVLC
     private var htspFeeder: HtspTsFeeder? = null
     private var htspLive = false
+    private var htspStream = false
     private var htspServer: sk.tvhclient.shared.model.TvhServer? = null
     private var htspChannelId = 0L
     private val htspLiveState = androidx.compose.runtime.mutableStateOf(false)
@@ -179,6 +180,7 @@ class PlayerActivity : ComponentActivity() {
     /** Bezne HTTP prehravanie (zastavi pripadny HTSP feed). */
     private fun playHttp(url: String) {
         htspFeeder?.stop(); htspFeeder = null
+        htspStream = false
         htspLive = false
         htspLiveState.value = false
         resetTimeshift()
@@ -194,12 +196,12 @@ class PlayerActivity : ComponentActivity() {
      * Vracia true ak sa podarilo spustit. Pouzite len ak je timeshift zapnuty a server
      * ho podporuje; inak ostava HTTP cesta.
      */
-    private fun playHtspLive(server: sk.tvhclient.shared.model.TvhServer, channelId: Long): Boolean {
+    private fun playHtspLive(server: sk.tvhclient.shared.model.TvhServer, channelId: Long, timeshift: Boolean): Boolean {
         return try {
             htspFeeder?.stop()
             htspServer = server
             htspChannelId = channelId
-            val feeder = HtspTsFeeder(server)
+            val feeder = HtspTsFeeder(server, if (timeshift) 3600 else 0)
             htspFeeder = feeder
             resetTimeshift()
             val fd = feeder.start(channelId, lifecycleScope)
@@ -243,16 +245,16 @@ class PlayerActivity : ComponentActivity() {
         if (!::mediaPlayer.isInitialized) return
         skipFlushJob?.cancel(); flushSkip()   // doruc nazbierany skok, nech je server konzistentny
         if (isPlayingState.value) {
+            if (htspStream) htspFeeder?.pause()         // zastav HTSP delivery (aj bez timeshiftu)
             if (htspLive) {
-                htspFeeder?.pause()             // zastav server buffer pri pauze
                 tsPauseStartedAt = System.currentTimeMillis()
                 startTimeshiftTicker()
             }
             isPlayingState.value = false
             mediaPlayer.pause()
         } else {
+            if (htspStream) htspFeeder?.resume()
             if (htspLive) {
-                htspFeeder?.resume()            // obnov z miesta pauzy (timeshift)
                 if (tsPauseStartedAt > 0L) {
                     tsAccumMs += System.currentTimeMillis() - tsPauseStartedAt
                     tsPauseStartedAt = 0L
@@ -429,7 +431,7 @@ class PlayerActivity : ComponentActivity() {
         cancelReconnect()  // nove pripojenie -> zrus stare pokusy
         hasVideoState.value = true  // predpokladaj video; kontrola po Playing to opravi
         val cid = uuid.toLongOrNull()
-        if (htspLive && cid != null && playHtspLive(srv, cid)) {
+        if (htspStream && cid != null && playHtspLive(srv, cid, htspLive)) {
             pokeControls()
             return
         }
@@ -1101,18 +1103,21 @@ class PlayerActivity : ComponentActivity() {
                 onStart = {
                     val doPlay: () -> Unit = {
                         val cid = channelUuid?.toLongOrNull()
-                        if (cid != null && directUrl == null && TimeshiftPref.get(this)) {
-                            // Over dostupnost timeshiftu (cachovane 600 s) a podla toho vyber zdroj.
+                        val htspMode = server.connectionMode == "htsp"
+                        if (cid != null && directUrl == null && htspMode) {
+                            // stream cez HTSP (9982). Timeshift funkcie len ak je pref zapnuty a server podporuje.
                             lifecycleScope.launch {
-                                val ok = withContext(Dispatchers.IO) {
+                                val ts = TimeshiftPref.get(this@PlayerActivity) && withContext(Dispatchers.IO) {
                                     runCatching {
                                         HtspData.timeshiftAvailable(server, System.currentTimeMillis() / 1000)
                                     }.getOrDefault(false)
                                 }
-                                if (ok && playHtspLive(server, cid)) {
-                                    htspLive = true
-                                    htspLiveState.value = true
+                                if (playHtspLive(server, cid, ts)) {
+                                    htspStream = true
+                                    htspLive = ts
+                                    htspLiveState.value = ts
                                 } else {
+                                    htspStream = false
                                     htspLive = false
                                     htspLiveState.value = false
                                     playHttp(streamUrl)
