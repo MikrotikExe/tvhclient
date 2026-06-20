@@ -1576,8 +1576,9 @@ private fun PlayerUi(
     var volPctState by remember { mutableStateOf(-1) }
     var brightPctState by remember { mutableStateOf(-1) }
     var scrubSecState by remember { mutableStateOf(Int.MIN_VALUE) }   // MIN_VALUE = skryte
+    val ctxTvGest = androidx.compose.ui.platform.LocalContext.current
     val isTvGest = remember {
-        val um = ctx.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        val um = ctxTvGest.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
         um?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
     }
     LaunchedEffect(volPctState) { if (volPctState >= 0) { kotlinx.coroutines.delay(700); volPctState = -1 } }
