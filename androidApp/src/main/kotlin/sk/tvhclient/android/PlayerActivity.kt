@@ -1746,22 +1746,14 @@ private fun PlayerUi(
     var posFraction by remember { mutableStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(0f) }
+    // Aktualny cas prehravania v ms (player.time) - plynuly zdroj pozicie pre lavu stranu.
+    var posTimeMs by remember { mutableStateOf(0L) }
 
-    // Dlzka baru: pri prebiehajucej nahravke ber REALNE dostupny obsah = mensie z dvoch:
-    //  - uplynuty cas relacie (knownDurationMs, z EPG) a
-    //  - dlzka suboru, ktoru hlasi VLC (player.length).
-    // Subor casto zaostava za EPG casom (nahravka sa rozbieha neskor), takze EPG cas
-    // poziciu nadhodnocuje a lava strana baru "predbieha" pravu. Min oboch ich zladi.
-    // Pri suvislom archive je naopak player.length cely archiv (hodiny) -> min vrati EPG cas.
-    val lengthMs = run {
-        val k = knownDurationMs
-        val p = player.length
-        when {
-            recordingLive && k > 0 && p > 0 -> minOf(k, p)
-            k > 0 -> k
-            else -> p.coerceAtLeast(0L)
-        }
-    }
+    // Dlzka baru = uplynuty cas relacie (knownDurationMs, plynulo rastie 1s/s).
+    // Nepouzivame player.length do skaly - VLC ju pre rastuci TS hlasi v hrubych
+    // skokoch, co rozhadzovalo lavu stranu casomiery. Fallback na VLC dlzku len ked
+    // EPG cas nemame.
+    val lengthMs = if (knownDurationMs > 0) knownDurationMs else player.length.coerceAtLeast(0L)
     // Pri prebiehajucej nahravke nedovol pretocit uplne na zivu hranu (koniec dostupnych dat),
     // lebo TS stream tam zamrzne a nezotavi sa. Nechaj rezervu ~10 s.
     val liveMarginMs = 10_000L
@@ -1788,6 +1780,7 @@ private fun PlayerUi(
                 if (!dragging) {
                     val p = player.position
                     if (p in 0f..1f) posFraction = p
+                    posTimeMs = player.time.coerceAtLeast(0L)
                 }
                 // Prebiehajuca relacia: ak playhead dobehne zivu hranu (koniec dostupnych dat),
                 // radsej pozastav nez nechat VLC narazit na EOF (zamrzne a nezotavi sa).
@@ -2363,9 +2356,10 @@ private fun PlayerUi(
                         val frac = when {
                             seekFocused -> scrubFrac
                             dragging -> dragValue
-                            else -> posFraction
+                            else -> if (lengthMs > 0) (posTimeMs.toFloat() / lengthMs).coerceIn(0f, 1f) else posFraction
                         }
-                        val cur = (frac * lengthMs).toLong()
+                        // Lava strana: pocas tahania/vyberu cielovy cas, inak skutocny cas prehravania
+                        val cur = if (dragging || seekFocused) (frac * lengthMs).toLong() else posTimeMs
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
