@@ -186,8 +186,15 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
                     modifier = Modifier.fillMaxWidth(), numeric = true
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = useHttps, onCheckedChange = { useHttps = it })
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .dpadFocusable()
+                    .clickable { useHttps = !useHttps }
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(checked = useHttps, onCheckedChange = null)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.field_https))
             }
