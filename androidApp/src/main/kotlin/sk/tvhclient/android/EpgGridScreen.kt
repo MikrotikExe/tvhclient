@@ -642,6 +642,7 @@ private fun GridDetailContent(
     playLabelRes: Int = R.string.play
 ) {
     val context = LocalContext.current
+    val playFocus = remember { FocusRequester() }
     // Spolocne polia z oboch typov
     val title: String
     val subtitle: String
@@ -750,9 +751,14 @@ private fun GridDetailContent(
             val nowSec = currentTimeSeconds()
             val playable = recorded || (start <= nowSec && nowSec < stop)
             if (playable) {
+                // Na TV/diaľkovom daj počiatočný fokus na Prehrať, nech OK funguje hneď
+                LaunchedEffect(detail) {
+                    kotlinx.coroutines.delay(150)
+                    runCatching { playFocus.requestFocus() }
+                }
                 androidx.compose.material3.Button(
                     onClick = onPlay,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().focusRequester(playFocus)
                 ) {
                     androidx.compose.material3.Icon(
                         androidx.compose.material.icons.Icons.Default.PlayArrow,
