@@ -876,11 +876,11 @@ class PlayerActivity : ComponentActivity() {
                 android.view.KeyEvent.KEYCODE_CHANNEL_UP,
                 android.view.KeyEvent.KEYCODE_PAGE_UP,
                 android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                    if (down && canZap && event.repeatCount == 0) { switchLive(+1); pokeControls(); return true }
+                    if (down && canZap && event.repeatCount == 0) { switchLive(+1); showControlsFocused(); return true }
                 android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
                 android.view.KeyEvent.KEYCODE_PAGE_DOWN,
                 android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                    if (down && canZap && event.repeatCount == 0) { switchLive(-1); pokeControls(); return true }
+                    if (down && canZap && event.repeatCount == 0) { switchLive(-1); showControlsFocused(); return true }
             }
             // cislice 0-9 (aj numericka klavesnica) = volba kanala cislom
             run {
