@@ -332,7 +332,10 @@ fun EpgGridScreen(
             null -> {
                 val nowMin = if (dayOffset == 0)
                     (((currentTimeSeconds() - dayStart) / 60).toInt()) else 0
-                val startMin = (nowMin - 30).coerceIn(0, DAY_MIN)
+                // vycentruj "teraz" do stredu viditelnej casti casovej osi (sirka obrazovky
+                // bez stlpca s logom kanala), nech vidno aj kus minulosti vlavo
+                val halfVisMin = ((configuration.screenWidthDp - PICON_COL) / 2) / PX_PER_MIN
+                val startMin = (nowMin - halfVisMin).coerceIn(0, DAY_MIN)
                 with(density) { (startMin * PX_PER_MIN).dp.toPx() }.toInt()
                     .coerceAtMost(hScroll.maxValue)
             }
