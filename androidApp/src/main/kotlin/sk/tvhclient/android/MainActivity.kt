@@ -403,6 +403,10 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0) {
     var lastSection by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<TvhServer?>(null) }
     var showForm by remember { mutableStateOf(false) }
+    var lastEditedId by remember { mutableStateOf<String?>(null) }
+    var restoreFocusSignal by remember { mutableStateOf(0) }
+    val editRestoreFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val addRestoreFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val catFocus = remember {
         mapOf(
             "general" to androidx.compose.ui.focus.FocusRequester(),
@@ -433,9 +437,18 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0) {
     // Spat: formular -> zoznam serverov (sekcia ostava); legal -> sekcia; sekcia -> koren.
     BackHandler(enabled = showForm || legalDoc != null || section != null) {
         when {
-            showForm -> { showForm = false; editing = null; vm.resetTest() }
+            showForm -> { showForm = false; editing = null; vm.resetTest(); restoreFocusSignal++ }
             legalDoc != null -> legalDoc = null
             else -> { section = null; TabController.settingsDirty.value = false }
+        }
+    }
+
+    // Po zatvoreni formulara vrat fokus tam, odkial sa vchadzalo (upravovany server / Pridat)
+    LaunchedEffect(restoreFocusSignal) {
+        if (restoreFocusSignal > 0) {
+            kotlinx.coroutines.delay(120)
+            val target = if (lastEditedId != null) editRestoreFocus else addRestoreFocus
+            runCatching { target.requestFocus() }
         }
     }
 
@@ -443,7 +456,7 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0) {
         ServerForm(
             vm = vm,
             existing = editing,
-            onClose = { showForm = false; editing = null; vm.resetTest() }
+            onClose = { showForm = false; editing = null; vm.resetTest(); restoreFocusSignal++ }
         )
         return
     }
@@ -501,8 +514,11 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0) {
                     "playback" -> PlaybackSettings(ctx)
                     "plock" -> ParentalSettings(ctx)
                     "servers" -> ServersSettings(vm, servers, activeId,
-                        onAdd = { editing = null; showForm = true },
-                        onEdit = { editing = it; showForm = true })
+                        onAdd = { editing = null; lastEditedId = null; showForm = true },
+                        onEdit = { editing = it; lastEditedId = it.id; showForm = true },
+                        restoreEditId = lastEditedId,
+                        restoreEditFocus = editRestoreFocus,
+                        addFocus = addRestoreFocus)
                     "remote" -> RemoteSettings(ctx, servers, activeId)
                     "info" -> InfoSettings(ctx, servers, activeId) { legalDoc = it }
                 }

@@ -59,7 +59,8 @@ fun ServerRow(
     isActive: Boolean,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    editFocusRequester: FocusRequester? = null
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
@@ -85,7 +86,11 @@ fun ServerRow(
                 if (!isActive) {
                     TextButton(onClick = onSelect) { Text(stringResource(R.string.use_server)) }
                 }
-                TextButton(onClick = onEdit) { Text(stringResource(R.string.edit)) }
+                TextButton(
+                    onClick = onEdit,
+                    modifier = if (editFocusRequester != null)
+                        Modifier.focusRequester(editFocusRequester) else Modifier
+                ) { Text(stringResource(R.string.edit)) }
                 TextButton(onClick = onDelete) { Text(stringResource(R.string.delete)) }
             }
         }

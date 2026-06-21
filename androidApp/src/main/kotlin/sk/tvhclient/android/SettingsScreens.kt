@@ -430,7 +430,10 @@ internal fun ServersSettings(
     servers: List<TvhServer>,
     activeId: String?,
     onAdd: () -> Unit,
-    onEdit: (TvhServer) -> Unit
+    onEdit: (TvhServer) -> Unit,
+    restoreEditId: String? = null,
+    restoreEditFocus: androidx.compose.ui.focus.FocusRequester? = null,
+    addFocus: androidx.compose.ui.focus.FocusRequester? = null
 ) {
     if (servers.isEmpty()) {
         Text(stringResource(R.string.no_servers))
@@ -442,13 +445,18 @@ internal fun ServersSettings(
                 isActive = server.id == activeId,
                 onSelect = { vm.setActive(server.id) },
                 onEdit = { onEdit(server) },
-                onDelete = { vm.delete(server.id) }
+                onDelete = { vm.delete(server.id) },
+                editFocusRequester = if (server.id == restoreEditId) restoreEditFocus else null
             )
             Spacer(Modifier.height(8.dp))
         }
     }
     Spacer(Modifier.height(12.dp))
-    Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+    Button(
+        onClick = onAdd,
+        modifier = (if (addFocus != null) Modifier.focusRequester(addFocus) else Modifier)
+            .fillMaxWidth()
+    ) {
         Text(stringResource(R.string.add_server))
     }
     Spacer(Modifier.height(24.dp))
