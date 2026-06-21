@@ -1342,6 +1342,7 @@ class PlayerActivity : ComponentActivity() {
                 progNextStop = liveNextStopState.value,
                 zapPoke = zapPokeState.value,
                 recordingLive = dvrRecording,
+                recordingStopSec = dvrProgStopSec,
                 onClose = { if (!enterPipIfPossible()) finish() }
             )
             }
@@ -1649,6 +1650,7 @@ private fun PlayerUi(
     progNextStop: Long = 0,
     zapPoke: Int = 0,
     recordingLive: Boolean = false,
+    recordingStopSec: Long = 0,
     onOrientationLockChange: (Boolean) -> Unit = {},
     onClose: () -> Unit
 ) {
@@ -1745,9 +1747,21 @@ private fun PlayerUi(
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(0f) }
 
-    // Dlzka: primarne z DVR entry, doplnena dlzkou z VLC (max), nech je bar viditelny aj
-    // ked DVR entry dlzku nenesie (napr. prebiehajuca nahravka s neuplnymi polami)
-    val lengthMs = maxOf(knownDurationMs, player.length).coerceAtLeast(0L)
+    // Dlzka baru: pri prebiehajucej nahravke ber REALNE dostupny obsah = mensie z dvoch:
+    //  - uplynuty cas relacie (knownDurationMs, z EPG) a
+    //  - dlzka suboru, ktoru hlasi VLC (player.length).
+    // Subor casto zaostava za EPG casom (nahravka sa rozbieha neskor), takze EPG cas
+    // poziciu nadhodnocuje a lava strana baru "predbieha" pravu. Min oboch ich zladi.
+    // Pri suvislom archive je naopak player.length cely archiv (hodiny) -> min vrati EPG cas.
+    val lengthMs = run {
+        val k = knownDurationMs
+        val p = player.length
+        when {
+            recordingLive && k > 0 && p > 0 -> minOf(k, p)
+            k > 0 -> k
+            else -> p.coerceAtLeast(0L)
+        }
+    }
     // Pri prebiehajucej nahravke nedovol pretocit uplne na zivu hranu (koniec dostupnych dat),
     // lebo TS stream tam zamrzne a nezotavi sa. Nechaj rezervu ~10 s.
     val liveMarginMs = 10_000L
@@ -1774,6 +1788,18 @@ private fun PlayerUi(
                 if (!dragging) {
                     val p = player.position
                     if (p in 0f..1f) posFraction = p
+                }
+                // Prebiehajuca relacia: ak playhead dobehne zivu hranu (koniec dostupnych dat),
+                // radsej pozastav nez nechat VLC narazit na EOF (zamrzne a nezotavi sa).
+                // Po skonceni relacie (cas presiel jej koniec) nechaj dohrat az na koniec.
+                if (recordingLive && !dragging) {
+                    val nowSec = System.currentTimeMillis() / 1000
+                    val stillRecording = recordingStopSec > 0 && nowSec < recordingStopSec
+                    val len = player.length
+                    if (stillRecording && len > liveMarginMs && player.isPlaying) {
+                        val edge = 1f - liveMarginMs.toFloat() / len
+                        if (player.position >= edge) player.pause()
+                    }
                 }
                 // priebezne ukladaj poziciu (kazdych ~5s)
                 sinceSave++
