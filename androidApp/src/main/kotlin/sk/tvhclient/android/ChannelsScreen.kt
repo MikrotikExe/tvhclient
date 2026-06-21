@@ -568,11 +568,19 @@ private fun playChannel(
 private fun playDvrFile(context: android.content.Context, rec: sk.tvhclient.shared.model.DvrEntry) {
     val server = Tvh.store.active() ?: return
     val url = Tvh.dvrUrl(server, rec.uuid)
+    // Relacia "bezi", ak je teraz medzi jej zaciatkom a koncom. Dopocitavanie pocitame
+    // relativne k ZACIATKU RELACIE (nie k realnemu zaciatku suboru, ktory pri suvislom
+    // archive byva hodiny vzad -> inak by ukazovalo dlzku celeho archivu).
+    val nowSec = System.currentTimeMillis() / 1000
+    val inProgress = rec.start > 0 && nowSec < rec.stop
     val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
         putExtra(PlayerActivity.EXTRA_URL, url)
         putExtra(PlayerActivity.EXTRA_TITLE, rec.title)
         putExtra(PlayerActivity.EXTRA_DURATION_MS, rec.durationSec * 1000)
         putExtra(PlayerActivity.EXTRA_DVR_UUID, rec.uuid)
+        putExtra(PlayerActivity.EXTRA_DVR_RECORDING, inProgress)
+        putExtra(PlayerActivity.EXTRA_DVR_PROG_START_SEC, rec.start)
+        putExtra(PlayerActivity.EXTRA_DVR_PROG_STOP_SEC, rec.stop)
     }
     context.startActivity(intent)
 }

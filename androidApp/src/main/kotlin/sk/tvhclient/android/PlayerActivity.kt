@@ -998,6 +998,12 @@ class PlayerActivity : ComponentActivity() {
     private var dvrUuid: String? = null
     private var dvrServerId: String? = null
     private var dvrDurationMs: Long = 0
+    // Prebiehajuca relacia: dlzku dopocitavame relativne k zaciatku RELACIE (nie suboru),
+    // obmedzenu dlzkou relacie. Seekbar tak ukazuje uplynutu cast relacie, nie cely archiv.
+    private var dvrRecording = false
+    private var dvrProgStartSec: Long = 0
+    private var dvrProgStopSec: Long = 0
+    private val dvrDurationState = mutableStateOf(0L)
     private var reachedEnd = false
 
     private fun saveDvrProgress() {
@@ -1006,7 +1012,7 @@ class PlayerActivity : ComponentActivity() {
         if (!::mediaPlayer.isInitialized) return
         val dur = if (dvrDurationMs > 0) dvrDurationMs else mediaPlayer.length
         if (dur <= 0) return
-        if (reachedEnd) {
+        if (reachedEnd && !dvrRecording) {
             WatchProgress.markCompleted(this, sid, uuid, dur)
             return
         }
@@ -1061,6 +1067,28 @@ class PlayerActivity : ComponentActivity() {
         val progStartFrac = intent.getFloatExtra(EXTRA_PROG_START_FRAC, 0f)
         val progStopFrac = intent.getFloatExtra(EXTRA_PROG_STOP_FRAC, 1f)
         dvrDurationMs = durationMs
+        dvrDurationState.value = durationMs
+        dvrRecording = intent.getBooleanExtra(EXTRA_DVR_RECORDING, false)
+        dvrProgStartSec = intent.getLongExtra(EXTRA_DVR_PROG_START_SEC, 0L)
+        dvrProgStopSec = intent.getLongExtra(EXTRA_DVR_PROG_STOP_SEC, 0L)
+        // Prebiehajuca relacia: dlzka = uplynuta cast relacie (teraz - zaciatok relacie),
+        // rastie kazdu sekundu, najviac po dlzku relacie. Po skonceni relacie ticker skonci.
+        if (dvrRecording && dvrProgStartSec > 0 && dvrProgStopSec > dvrProgStartSec) {
+            val progDurMs = (dvrProgStopSec - dvrProgStartSec) * 1000
+            val elapsed0 = (System.currentTimeMillis() / 1000 - dvrProgStartSec) * 1000
+            dvrDurationMs = elapsed0.coerceIn(0L, progDurMs)
+            dvrDurationState.value = dvrDurationMs
+            lifecycleScope.launch {
+                while (true) {
+                    val nowSec = System.currentTimeMillis() / 1000
+                    val live = ((minOf(nowSec, dvrProgStopSec) - dvrProgStartSec) * 1000)
+                        .coerceIn(0L, progDurMs)
+                    if (live > dvrDurationMs) { dvrDurationMs = live; dvrDurationState.value = live }
+                    if (nowSec >= dvrProgStopSec) break  // relacia skoncila -> prestan dopocitavat
+                    kotlinx.coroutines.delay(1000)
+                }
+            }
+        }
         val requirePin = intent.getBooleanExtra(EXTRA_REQUIRE_PIN, false)
 
         val server = Tvh.store.active()
@@ -1176,7 +1204,7 @@ class PlayerActivity : ComponentActivity() {
                 title = liveTitleState.value,
                 player = mediaPlayer,
                 seekable = directUrl != null,  // DVR nahravka = da sa pretacat; live nie
-                knownDurationMs = durationMs,  // dlzka z DVR entry (TS subor ju nenese)
+                knownDurationMs = dvrDurationState.value,  // dlzka z DVR entry; pri prebiehajucej nahravke rastie k zivej hrane
                 progStartFrac = progStartFrac,
                 progStopFrac = progStopFrac,
                 progStartSec = liveProgStartState.value,
@@ -1516,6 +1544,9 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_PROG_START_FRAC = "prog_start_frac"
         const val EXTRA_PROG_STOP_FRAC = "prog_stop_frac"
         const val EXTRA_REQUIRE_PIN = "require_pin"
+        const val EXTRA_DVR_RECORDING = "dvr_recording"
+        const val EXTRA_DVR_PROG_START_SEC = "dvr_prog_start_sec"
+        const val EXTRA_DVR_PROG_STOP_SEC = "dvr_prog_stop_sec"
 
         // Odkaz na prave zijucu instanciu prehravaca. Pri otvoreni noveho kanala zavrieme predoslu
         // (aj tu visiacu v PiP), inak by stara PiP zostala visiet so starym kanalom.
