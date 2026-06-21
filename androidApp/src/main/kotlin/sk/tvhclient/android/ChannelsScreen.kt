@@ -372,7 +372,8 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                         modifier = Modifier.focusRequester(liveFocus)
                     ) { AutoSizeText(stringResource(R.string.play_live), maxLines = 1) }
                     androidx.compose.material3.TextButton(onClick = {
-                        playDvrFile(ctx, rcRec); recChoice = null
+                        val (_, ns, ne) = currentNow(rcRow, epgMap[rcRow.channel.uuid], System.currentTimeMillis() / 1000)
+                        playDvrFile(ctx, rcRec, ns, ne); recChoice = null
                     }) { AutoSizeText(stringResource(R.string.play_from_start), maxLines = 1) }
                 }
             }
@@ -565,22 +566,29 @@ private fun playChannel(
 }
 
 /** Prehratie prebiehajucej/dokoncenej nahravky od zaciatku cez /dvrfile/<uuid>. */
-private fun playDvrFile(context: android.content.Context, rec: sk.tvhclient.shared.model.DvrEntry) {
+private fun playDvrFile(
+    context: android.content.Context,
+    rec: sk.tvhclient.shared.model.DvrEntry,
+    progStart: Long = 0,
+    progStop: Long = 0
+) {
     val server = Tvh.store.active() ?: return
     val url = Tvh.dvrUrl(server, rec.uuid)
-    // Relacia "bezi", ak je teraz medzi jej zaciatkom a koncom. Dopocitavanie pocitame
-    // relativne k ZACIATKU RELACIE (nie k realnemu zaciatku suboru, ktory pri suvislom
-    // archive byva hodiny vzad -> inak by ukazovalo dlzku celeho archivu).
+    // Hranice relacie: primarne z EPG (spolahlive), fallback na hranice z nahravky
+    // (tie byvaju pri prebiehajucom archive prazdne/neuplne). Dopocitavanie pocitame
+    // relativne k ZACIATKU RELACIE, nie k realnemu zaciatku suboru.
+    val pStart = if (progStart > 0) progStart else rec.start
+    val pStop = if (progStop > progStart && progStop > 0) progStop else rec.stop
     val nowSec = System.currentTimeMillis() / 1000
-    val inProgress = rec.start > 0 && nowSec < rec.stop
+    val inProgress = pStart > 0 && nowSec < pStop
     val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
         putExtra(PlayerActivity.EXTRA_URL, url)
         putExtra(PlayerActivity.EXTRA_TITLE, rec.title)
         putExtra(PlayerActivity.EXTRA_DURATION_MS, rec.durationSec * 1000)
         putExtra(PlayerActivity.EXTRA_DVR_UUID, rec.uuid)
         putExtra(PlayerActivity.EXTRA_DVR_RECORDING, inProgress)
-        putExtra(PlayerActivity.EXTRA_DVR_PROG_START_SEC, rec.start)
-        putExtra(PlayerActivity.EXTRA_DVR_PROG_STOP_SEC, rec.stop)
+        putExtra(PlayerActivity.EXTRA_DVR_PROG_START_SEC, pStart)
+        putExtra(PlayerActivity.EXTRA_DVR_PROG_STOP_SEC, pStop)
     }
     context.startActivity(intent)
 }
