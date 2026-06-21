@@ -1071,20 +1071,26 @@ class PlayerActivity : ComponentActivity() {
         dvrRecording = intent.getBooleanExtra(EXTRA_DVR_RECORDING, false)
         dvrProgStartSec = intent.getLongExtra(EXTRA_DVR_PROG_START_SEC, 0L)
         dvrProgStopSec = intent.getLongExtra(EXTRA_DVR_PROG_STOP_SEC, 0L)
-        // Prebiehajuca relacia: dlzka = uplynuta cast relacie (teraz - zaciatok relacie),
-        // rastie kazdu sekundu, najviac po dlzku relacie. Po skonceni relacie ticker skonci.
-        if (dvrRecording && dvrProgStartSec > 0 && dvrProgStopSec > dvrProgStartSec) {
-            val progDurMs = (dvrProgStopSec - dvrProgStartSec) * 1000
-            val elapsed0 = (System.currentTimeMillis() / 1000 - dvrProgStartSec) * 1000
-            dvrDurationMs = elapsed0.coerceIn(0L, progDurMs)
+        // Prebiehajuca relacia: dlzka rastie k zivej hrane; bar musi byt VZDY viditelny.
+        // Ak mame hranice relacie, dopocitavame relativne k jej zaciatku (cap dlzkou relacie).
+        // Ak hranice chybaju (nahravka nema vyplnene start/stop), drzime krok s dlzkou z VLC.
+        if (dvrRecording) {
+            val haveBounds = dvrProgStartSec > 0 && dvrProgStopSec > dvrProgStartSec
+            val progDurMs = if (haveBounds) (dvrProgStopSec - dvrProgStartSec) * 1000 else 0L
+            dvrDurationMs = if (haveBounds)
+                ((System.currentTimeMillis() / 1000 - dvrProgStartSec) * 1000).coerceIn(1000L, progDurMs)
+            else
+                maxOf(durationMs, 1000L)   // aspon 1s, nech sa bar zobrazi
             dvrDurationState.value = dvrDurationMs
             lifecycleScope.launch {
                 while (true) {
                     val nowSec = System.currentTimeMillis() / 1000
-                    val live = ((minOf(nowSec, dvrProgStopSec) - dvrProgStartSec) * 1000)
-                        .coerceIn(0L, progDurMs)
+                    val live = if (haveBounds)
+                        ((minOf(nowSec, dvrProgStopSec) - dvrProgStartSec) * 1000).coerceIn(1000L, progDurMs)
+                    else
+                        maxOf(dvrDurationMs, if (::mediaPlayer.isInitialized) mediaPlayer.length else 0L)
                     if (live > dvrDurationMs) { dvrDurationMs = live; dvrDurationState.value = live }
-                    if (nowSec >= dvrProgStopSec) break  // relacia skoncila -> prestan dopocitavat
+                    if (haveBounds && nowSec >= dvrProgStopSec) break  // relacia skoncila
                     kotlinx.coroutines.delay(1000)
                 }
             }
@@ -1731,8 +1737,9 @@ private fun PlayerUi(
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(0f) }
 
-    // Dlzka: primarne z DVR entry, fallback co hlasi VLC
-    val lengthMs = if (knownDurationMs > 0) knownDurationMs else player.length
+    // Dlzka: primarne z DVR entry, doplnena dlzkou z VLC (max), nech je bar viditelny aj
+    // ked DVR entry dlzku nenesie (napr. prebiehajuca nahravka s neuplnymi polami)
+    val lengthMs = maxOf(knownDurationMs, player.length).coerceAtLeast(0L)
 
     // Obnovenie pozicie (len DVR): spytaj sa, a po potvrdeni pretoc ked je
     // media nacitana
