@@ -1072,7 +1072,7 @@ class PlayerActivity : ComponentActivity() {
         // Prebiehajuca nahravka: dlzku dopocitavaj k zivej hrane (rastie kazdu sekundu)
         if (dvrRecording && dvrRealStartSec > 0) {
             lifecycleScope.launch {
-                while (kotlinx.coroutines.isActive) {
+                while (true) {
                     val live = System.currentTimeMillis() - dvrRealStartSec * 1000
                     if (live > dvrDurationMs) { dvrDurationMs = live; dvrDurationState.value = live }
                     kotlinx.coroutines.delay(1000)
