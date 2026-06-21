@@ -998,6 +998,11 @@ class PlayerActivity : ComponentActivity() {
     private var dvrUuid: String? = null
     private var dvrServerId: String? = null
     private var dvrDurationMs: Long = 0
+    // Prebiehajuca nahravka (kanal sa este nahrava): dlzka nie je pevna, ale rastie
+    // smerom k zivej hrane (teraz - realny zaciatok). Seekbar sa tak dopocitava.
+    private var dvrRecording = false
+    private var dvrRealStartSec: Long = 0
+    private val dvrDurationState = mutableStateOf(0L)
     private var reachedEnd = false
 
     private fun saveDvrProgress() {
@@ -1006,7 +1011,7 @@ class PlayerActivity : ComponentActivity() {
         if (!::mediaPlayer.isInitialized) return
         val dur = if (dvrDurationMs > 0) dvrDurationMs else mediaPlayer.length
         if (dur <= 0) return
-        if (reachedEnd) {
+        if (reachedEnd && !dvrRecording) {
             WatchProgress.markCompleted(this, sid, uuid, dur)
             return
         }
@@ -1061,6 +1066,19 @@ class PlayerActivity : ComponentActivity() {
         val progStartFrac = intent.getFloatExtra(EXTRA_PROG_START_FRAC, 0f)
         val progStopFrac = intent.getFloatExtra(EXTRA_PROG_STOP_FRAC, 1f)
         dvrDurationMs = durationMs
+        dvrDurationState.value = durationMs
+        dvrRecording = intent.getBooleanExtra(EXTRA_DVR_RECORDING, false)
+        dvrRealStartSec = intent.getLongExtra(EXTRA_DVR_REAL_START_SEC, 0L)
+        // Prebiehajuca nahravka: dlzku dopocitavaj k zivej hrane (rastie kazdu sekundu)
+        if (dvrRecording && dvrRealStartSec > 0) {
+            lifecycleScope.launch {
+                while (kotlinx.coroutines.isActive) {
+                    val live = System.currentTimeMillis() - dvrRealStartSec * 1000
+                    if (live > dvrDurationMs) { dvrDurationMs = live; dvrDurationState.value = live }
+                    kotlinx.coroutines.delay(1000)
+                }
+            }
+        }
         val requirePin = intent.getBooleanExtra(EXTRA_REQUIRE_PIN, false)
 
         val server = Tvh.store.active()
@@ -1176,7 +1194,7 @@ class PlayerActivity : ComponentActivity() {
                 title = liveTitleState.value,
                 player = mediaPlayer,
                 seekable = directUrl != null,  // DVR nahravka = da sa pretacat; live nie
-                knownDurationMs = durationMs,  // dlzka z DVR entry (TS subor ju nenese)
+                knownDurationMs = dvrDurationState.value,  // dlzka z DVR entry; pri prebiehajucej nahravke rastie k zivej hrane
                 progStartFrac = progStartFrac,
                 progStopFrac = progStopFrac,
                 progStartSec = liveProgStartState.value,
@@ -1516,6 +1534,8 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_PROG_START_FRAC = "prog_start_frac"
         const val EXTRA_PROG_STOP_FRAC = "prog_stop_frac"
         const val EXTRA_REQUIRE_PIN = "require_pin"
+        const val EXTRA_DVR_RECORDING = "dvr_recording"
+        const val EXTRA_DVR_REAL_START_SEC = "dvr_real_start_sec"
 
         // Odkaz na prave zijucu instanciu prehravaca. Pri otvoreni noveho kanala zavrieme predoslu
         // (aj tu visiacu v PiP), inak by stara PiP zostala visiet so starym kanalom.

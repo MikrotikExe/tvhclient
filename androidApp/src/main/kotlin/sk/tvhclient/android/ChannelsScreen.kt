@@ -568,11 +568,14 @@ private fun playChannel(
 private fun playDvrFile(context: android.content.Context, rec: sk.tvhclient.shared.model.DvrEntry) {
     val server = Tvh.store.active() ?: return
     val url = Tvh.dvrUrl(server, rec.uuid)
+    val inProgress = rec.schedStatus == "recording" || rec.status == "recording"
     val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
         putExtra(PlayerActivity.EXTRA_URL, url)
         putExtra(PlayerActivity.EXTRA_TITLE, rec.title)
         putExtra(PlayerActivity.EXTRA_DURATION_MS, rec.durationSec * 1000)
         putExtra(PlayerActivity.EXTRA_DVR_UUID, rec.uuid)
+        putExtra(PlayerActivity.EXTRA_DVR_RECORDING, inProgress)
+        putExtra(PlayerActivity.EXTRA_DVR_REAL_START_SEC, rec.realStartSec)
     }
     context.startActivity(intent)
 }
