@@ -568,18 +568,11 @@ private fun playChannel(
 private fun playDvrFile(context: android.content.Context, rec: sk.tvhclient.shared.model.DvrEntry) {
     val server = Tvh.store.active() ?: return
     val url = Tvh.dvrUrl(server, rec.uuid)
-    // "Bezi" rozpoznaj podla casu (spolahlivejsie nez status string): teraz je medzi
-    // realnym zaciatkom a realnym koncom -> subor este rastie.
-    val nowSec = System.currentTimeMillis() / 1000
-    val inProgress = rec.realStartSec > 0 && nowSec < rec.realStopSec
     val intent = android.content.Intent(context, PlayerActivity::class.java).apply {
         putExtra(PlayerActivity.EXTRA_URL, url)
         putExtra(PlayerActivity.EXTRA_TITLE, rec.title)
         putExtra(PlayerActivity.EXTRA_DURATION_MS, rec.durationSec * 1000)
         putExtra(PlayerActivity.EXTRA_DVR_UUID, rec.uuid)
-        putExtra(PlayerActivity.EXTRA_DVR_RECORDING, inProgress)
-        putExtra(PlayerActivity.EXTRA_DVR_REAL_START_SEC, rec.realStartSec)
-        putExtra(PlayerActivity.EXTRA_DVR_REAL_STOP_SEC, rec.realStopSec)
     }
     context.startActivity(intent)
 }
