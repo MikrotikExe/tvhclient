@@ -356,7 +356,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                         Spacer(Modifier.width(6.dp))
                         Icon(
                             Icons.Default.Voicemail, contentDescription = null,
-                            tint = Color(0xFFE53935), modifier = Modifier.size(18.dp).scale(scaleX = -1f, scaleY = 1f)
+                            tint = Color(0xFFE53935), modifier = Modifier.size(18.dp).scale(scaleX = 1f, scaleY = -1f)
                         )
                     }
                 }
