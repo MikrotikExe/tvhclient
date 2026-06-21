@@ -1002,6 +1002,7 @@ class PlayerActivity : ComponentActivity() {
     // smerom k zivej hrane (teraz - realny zaciatok). Seekbar sa tak dopocitava.
     private var dvrRecording = false
     private var dvrRealStartSec: Long = 0
+    private var dvrRealStopSec: Long = 0
     private val dvrDurationState = mutableStateOf(0L)
     private var reachedEnd = false
 
@@ -1069,12 +1070,17 @@ class PlayerActivity : ComponentActivity() {
         dvrDurationState.value = durationMs
         dvrRecording = intent.getBooleanExtra(EXTRA_DVR_RECORDING, false)
         dvrRealStartSec = intent.getLongExtra(EXTRA_DVR_REAL_START_SEC, 0L)
-        // Prebiehajuca nahravka: dlzku dopocitavaj k zivej hrane (rastie kazdu sekundu)
+        dvrRealStopSec = intent.getLongExtra(EXTRA_DVR_REAL_STOP_SEC, 0L)
+        // Prebiehajuca nahravka: dlzku dopocitavaj k zivej hrane (rastie kazdu sekundu),
+        // najviac po realny koniec nahravky. Po dosiahnuti konca ticker skonci.
         if (dvrRecording && dvrRealStartSec > 0) {
             lifecycleScope.launch {
                 while (true) {
-                    val live = System.currentTimeMillis() - dvrRealStartSec * 1000
+                    val nowSec = System.currentTimeMillis() / 1000
+                    val edgeSec = if (dvrRealStopSec > 0) minOf(nowSec, dvrRealStopSec) else nowSec
+                    val live = (edgeSec - dvrRealStartSec) * 1000
                     if (live > dvrDurationMs) { dvrDurationMs = live; dvrDurationState.value = live }
+                    if (dvrRealStopSec in 1..nowSec) break  // nahravka skoncila -> prestan dopocitavat
                     kotlinx.coroutines.delay(1000)
                 }
             }
@@ -1536,6 +1542,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_REQUIRE_PIN = "require_pin"
         const val EXTRA_DVR_RECORDING = "dvr_recording"
         const val EXTRA_DVR_REAL_START_SEC = "dvr_real_start_sec"
+        const val EXTRA_DVR_REAL_STOP_SEC = "dvr_real_stop_sec"
 
         // Odkaz na prave zijucu instanciu prehravaca. Pri otvoreni noveho kanala zavrieme predoslu
         // (aj tu visiacu v PiP), inak by stara PiP zostala visiet so starym kanalom.
