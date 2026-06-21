@@ -215,6 +215,7 @@
     <string name="info_app_version">Verze aplikace</string>
     <string name="info_release_version">Verze vydání</string>
     <string name="info_tvh_version">Verze Tvheadendu</string>
+    <string name="info_api_version">Verze API</string>
     <string name="info_active_server">Aktivní server</string>
     <string name="set_leave_title">Opustit nastavení?</string>
     <string name="set_leave_msg">Provedli jste změny. Opravdu chcete odejít?</string>

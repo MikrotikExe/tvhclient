@@ -504,31 +504,34 @@ internal fun InfoSettings(
     Spacer(Modifier.height(12.dp))
     val active = servers.firstOrNull { it.id == activeId }
     if (active != null) {
-        var tvhVer by remember(active.id) { mutableStateOf<String?>(null) }
+        var tvhSw by remember(active.id) { mutableStateOf<String?>(null) }
+        var tvhApi by remember(active.id) { mutableStateOf<String?>(null) }
         LaunchedEffect(active.id) {
-            tvhVer = withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 when (val r = Tvh.testConnection(active)) {
                     is ConnectionResult.Success -> {
-                        val sw = r.info.swVersion ?: "?"
-                        val proto = if (active.connectionMode == "htsp") "HTSP v" else "API v"
-                        sw + " (" + proto + (r.info.apiVersion ?: 0) + ")"
+                        tvhSw = r.info.swVersion ?: "?"
+                        val proto = if (active.connectionMode == "htsp") "HTSP v" else "v"
+                        tvhApi = proto + (r.info.apiVersion ?: 0)
                     }
-                    else -> "?"
+                    else -> { tvhSw = "?"; tvhApi = "?" }
                 }
             }
         }
+        val labelStyle = MaterialTheme.typography.bodyMedium
+        val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
         Text(stringResource(R.string.info_active_server), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))
-        Text(active.name, style = MaterialTheme.typography.bodyLarge)
-        Text("${active.host}:${active.port}" + if (active.useHttps) " (HTTPS)" else "",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.field_name) + ": " + active.name, style = labelStyle, color = labelColor)
+        Text(stringResource(R.string.field_host) + ": " + active.host, style = labelStyle, color = labelColor)
+        Text(stringResource(R.string.field_port) + ": " + active.port +
+            if (active.useHttps) " (HTTPS)" else "", style = labelStyle, color = labelColor)
         Text(stringResource(R.string.field_conn_mode) + ": " + active.connectionMode.uppercase(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(stringResource(R.string.info_tvh_version) + ": " + (tvhVer ?: "\u2026"),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+            style = labelStyle, color = labelColor)
+        Text(stringResource(R.string.info_tvh_version) + ": " + (tvhSw ?: "\u2026"),
+            style = labelStyle, color = labelColor)
+        Text(stringResource(R.string.info_api_version) + ": " + (tvhApi ?: "\u2026"),
+            style = labelStyle, color = labelColor)
     } else {
         Text(stringResource(R.string.no_servers))
     }
