@@ -24,12 +24,12 @@ object Tvh {
             )
             return try {
                 client.connect()
-                val meta = client.fetchMetadata(
+                client.fetchMetadata(
                     withEpg = false, channelsOnly = true, nowSec = currentTimeSeconds()
                 )
                 ConnectionResult.Success(
                     sk.tvhclient.shared.model.ServerInfo(
-                        swVersion = "HTSP v${client.serverVersion ?: "?"} · ${meta.channels.size} kanálov",
+                        swVersion = client.serverSwVersion ?: "?",
                         apiVersion = (client.serverVersion ?: 0L).toInt(),
                         name = client.serverName ?: "Tvheadend"
                     )

@@ -18,6 +18,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,7 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import sk.tvhclient.shared.Tvh
+import sk.tvhclient.shared.api.ConnectionResult
 import sk.tvhclient.shared.model.TvhServer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // Obrazovky nastaveni (vyclenene z MainActivity.kt kvoli prehladnosti).
 
@@ -491,11 +496,27 @@ internal fun InfoSettings(
             ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
         }.getOrNull() ?: "?"
     }
-    Text(stringResource(R.string.info_app_version) + ": " + version,
-        style = MaterialTheme.typography.bodyLarge)
+    Text(
+        stringResource(R.string.info_app_version) + ": " + version +
+            " (" + BuildConfig.VERSION_CODE + ") \u2022 " + BuildConfig.BUILD_DATE,
+        style = MaterialTheme.typography.bodyLarge
+    )
     Spacer(Modifier.height(12.dp))
     val active = servers.firstOrNull { it.id == activeId }
     if (active != null) {
+        var tvhVer by remember(active.id) { mutableStateOf<String?>(null) }
+        LaunchedEffect(active.id) {
+            tvhVer = withContext(Dispatchers.IO) {
+                when (val r = Tvh.testConnection(active)) {
+                    is ConnectionResult.Success -> {
+                        val sw = r.info.swVersion ?: "?"
+                        val proto = if (active.connectionMode == "htsp") "HTSP v" else "API v"
+                        sw + " (" + proto + (r.info.apiVersion ?: 0) + ")"
+                    }
+                    else -> "?"
+                }
+            }
+        }
         Text(stringResource(R.string.info_active_server), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))
         Text(active.name, style = MaterialTheme.typography.bodyLarge)
@@ -503,6 +524,9 @@ internal fun InfoSettings(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(stringResource(R.string.field_conn_mode) + ": " + active.connectionMode.uppercase(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.info_tvh_version) + ": " + (tvhVer ?: "\u2026"),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     } else {

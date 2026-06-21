@@ -40,6 +40,8 @@ class HtspClient(
         private set
     var serverVersion: Long? = null
         private set
+    var serverSwVersion: String? = null
+        private set
     var serverCapabilities: List<String> = emptyList()
         private set
     private var challenge: ByteArray? = null
@@ -126,6 +128,7 @@ class HtspClient(
         ))
         val r = recvReply(s)
         serverVersion = r["htspversion"] as? Long
+        serverSwVersion = r["serverversion"] as? String
         serverName = r["servername"] as? String
         challenge = r["challenge"] as? ByteArray
         @Suppress("UNCHECKED_CAST")

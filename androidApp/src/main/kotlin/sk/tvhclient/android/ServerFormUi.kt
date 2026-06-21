@@ -106,6 +106,13 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
     var connMode by remember { mutableStateOf(existing?.connectionMode ?: "htsp") }
     var htspPort by remember { mutableStateOf((existing?.htspPort ?: 9982).toString()) }
 
+    // Pociatocny D-pad fokus (TV) na prve pole, nech sa da hned navigovat zhora dole
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(200)
+        runCatching { firstFocus.requestFocus() }
+    }
+
     val testState by vm.testState.collectAsState()
 
     fun buildServer(): TvhServer? {
@@ -148,6 +155,7 @@ fun ServerForm(vm: ServersViewModel, existing: TvhServer?, onClose: () -> Unit) 
             TvTextField(
                 label = stringResource(R.string.field_name),
                 value = name, onValueChange = { name = it },
+                focusRequester = firstFocus,
                 modifier = Modifier.fillMaxWidth()
             )
             TvTextField(

@@ -390,41 +390,19 @@ fun AppMain() {
 
 @Composable
 fun ServersTab(vm: ServersViewModel = viewModel(), resetSignal: Int = 0) {
-    var editing by remember { mutableStateOf<TvhServer?>(null) }
-    var showForm by remember { mutableStateOf(false) }
-
-    LaunchedEffect(resetSignal) {
-        if (resetSignal > 0) { showForm = false; editing = null }
-    }
-
-    if (showForm) {
-        ServerForm(
-            vm = vm,
-            existing = editing,
-            onClose = {
-                showForm = false
-                editing = null
-                vm.resetTest()
-            }
-        )
-    } else {
-        ServerList(
-            vm = vm,
-            resetSignal = resetSignal,
-            onAdd = { editing = null; showForm = true },
-            onEdit = { editing = it; showForm = true }
-        )
-    }
+    ServerList(vm = vm, resetSignal = resetSignal)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, onEdit: (TvhServer) -> Unit) {
+fun ServerList(vm: ServersViewModel, resetSignal: Int = 0) {
     val servers by vm.servers.collectAsState()
     val activeId by vm.activeId.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var section by remember { mutableStateOf<String?>(null) }
     var lastSection by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<TvhServer?>(null) }
+    var showForm by remember { mutableStateOf(false) }
     val catFocus = remember {
         mapOf(
             "general" to androidx.compose.ui.focus.FocusRequester(),
@@ -439,7 +417,7 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
     var legalDoc by remember { mutableStateOf<LegalDoc?>(null) }
 
     LaunchedEffect(resetSignal) {
-        if (resetSignal > 0) { legalDoc = null; section = null; lastSection = null; TabController.settingsDirty.value = false }
+        if (resetSignal > 0) { legalDoc = null; section = null; lastSection = null; showForm = false; editing = null; TabController.settingsDirty.value = false }
     }
     // pri kazdej zmene sekcie zacni s "ciste" (zmeny oznaci az uzivatelska akcia)
     LaunchedEffect(section) { TabController.settingsDirty.value = false }
@@ -452,8 +430,22 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
         } else runCatching { sectionFocus.requestFocus() }
     }
 
-    BackHandler(enabled = section != null) {
-        section = null; TabController.settingsDirty.value = false
+    // Spat: formular -> zoznam serverov (sekcia ostava); legal -> sekcia; sekcia -> koren.
+    BackHandler(enabled = showForm || legalDoc != null || section != null) {
+        when {
+            showForm -> { showForm = false; editing = null; vm.resetTest() }
+            legalDoc != null -> legalDoc = null
+            else -> { section = null; TabController.settingsDirty.value = false }
+        }
+    }
+
+    if (showForm) {
+        ServerForm(
+            vm = vm,
+            existing = editing,
+            onClose = { showForm = false; editing = null; vm.resetTest() }
+        )
+        return
     }
 
     val title = legalDoc?.title ?: when (section) {
@@ -508,7 +500,9 @@ fun ServerList(vm: ServersViewModel, resetSignal: Int = 0, onAdd: () -> Unit, on
                     "general" -> GeneralSettings(ctx)
                     "playback" -> PlaybackSettings(ctx)
                     "plock" -> ParentalSettings(ctx)
-                    "servers" -> ServersSettings(vm, servers, activeId, onAdd, onEdit)
+                    "servers" -> ServersSettings(vm, servers, activeId,
+                        onAdd = { editing = null; showForm = true },
+                        onEdit = { editing = it; showForm = true })
                     "remote" -> RemoteSettings(ctx, servers, activeId)
                     "info" -> InfoSettings(ctx, servers, activeId) { legalDoc = it }
                 }

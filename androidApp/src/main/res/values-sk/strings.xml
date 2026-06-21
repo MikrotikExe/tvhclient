@@ -213,6 +213,8 @@
     <string name="privacy_policy">Zásady ochrany osobných údajov</string>
     <string name="terms_of_use">Podmienky používania</string>
     <string name="info_app_version">Verzia aplikácie</string>
+    <string name="info_release_version">Verzia vydania</string>
+    <string name="info_tvh_version">Verzia Tvheadendu</string>
     <string name="info_active_server">Aktívny server</string>
     <string name="set_leave_title">Opustiť nastavenia?</string>
     <string name="set_leave_msg">Vykonali ste zmeny. Naozaj chcete odísť?</string>
