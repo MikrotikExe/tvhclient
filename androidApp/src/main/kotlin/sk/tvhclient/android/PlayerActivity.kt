@@ -95,6 +95,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -2847,7 +2848,7 @@ private fun PlayerUi(
                                 modifier = Modifier.padding(top = 4.dp))
                         // nahlad: zive video hraneho kanala — VLC povrch presvita cez dieru v scrime
                         Box(
-                            Modifier.padding(top = 12.dp).fillMaxWidth(0.66f).height(156.dp)
+                            Modifier.padding(top = 12.dp).height(156.dp).aspectRatio(16f / 9f)
                                 .clip(RoundedCornerShape(10.dp))
                                 .onGloballyPositioned { c ->
                                     val p = c.positionInRoot()

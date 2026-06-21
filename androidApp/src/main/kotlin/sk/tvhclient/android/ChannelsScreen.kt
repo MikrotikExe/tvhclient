@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Voicemail
 import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.CalendarViewDay
@@ -355,7 +356,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                         Spacer(Modifier.width(6.dp))
                         Icon(
                             Icons.Default.Voicemail, contentDescription = null,
-                            tint = Color(0xFFE53935), modifier = Modifier.size(18.dp)
+                            tint = Color(0xFFE53935), modifier = Modifier.size(18.dp).scale(scaleX = -1f, scaleY = 1f)
                         )
                     }
                 }
