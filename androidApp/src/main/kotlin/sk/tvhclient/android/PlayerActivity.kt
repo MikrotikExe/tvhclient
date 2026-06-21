@@ -1472,6 +1472,7 @@ class PlayerActivity : ComponentActivity() {
     /** Naplanuje znovupripojenie zivého streamu po vypadku (narastajuce oneskorenie). */
     private fun scheduleReconnect() {
         if (seekablePlayback) return  // DVR nahravka sa neobnovuje (in-progress riesi reopenDvrLive)
+        val url = currentStreamUrl ?: return
         if (!::mediaPlayer.isInitialized) return
         if (reconnectAttempts >= maxReconnectAttempts) {
             reconnectingState.value = false
