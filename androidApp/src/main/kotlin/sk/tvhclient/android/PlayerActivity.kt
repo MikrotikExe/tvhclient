@@ -784,7 +784,7 @@ class PlayerActivity : ComponentActivity() {
                 // pocas drzania otvaracieho OK (a jeho opakovani) nereaguj
                 if (okLongFired) return true
                 if (down && event.repeatCount == 0 && n > 0) {
-                    if (navChannelIndexState.value == liveIndexState.value) { closeChannelList(); pokeControls() }  // uz hra vybrany -> cela obrazovka + spodna lista
+                    if (navChannelIndexState.value == liveIndexState.value) { closeChannelList(); showControlsFocused() }  // uz hra vybrany -> cela obrazovka + lista s fokusom na play
                     else switchToIndex(navChannelIndexState.value, poke = false)              // prepni prehravany kanal, ostan v zozname (bez listy)
                 }
                 return true
