@@ -1754,6 +1754,10 @@ private fun PlayerUi(
     var dragValue by remember { mutableStateOf(0f) }
     // Aktualny cas prehravania v ms (player.time) - plynuly zdroj pozicie pre lavu stranu.
     var posTimeMs by remember { mutableStateOf(0L) }
+    // Pri prebiehajucej nahravke so znamym posunom (subor obsahuje obsah PRED relaciou)
+    // skocime raz na zaciatok relacie v subore, aby "od zaciatku" hralo od zaciatku relacie
+    // a player.time startoval na offsete (lava strana ide od 0 a sedi s pravou).
+    var initialSeekDone by remember { mutableStateOf(false) }
 
     // Dlzka baru = uplynuty cas relacie (knownDurationMs, plynulo rastie 1s/s).
     // Nepouzivame player.length do skaly - VLC ju pre rastuci TS hlasi v hrubych
@@ -1782,6 +1786,17 @@ private fun PlayerUi(
                     player.position = f
                     posFraction = f
                     pendingResumeMs = 0
+                    initialSeekDone = true  // obnova pozicie ma prednost pred skokom na zaciatok relacie
+                }
+                // Jednorazovy skok na zaciatok relacie v subore (len prebiehajuca nahravka so
+                // znamym posunom a bez obnovy pozicie). Offset je v uz nahranej minulosti, takze
+                // seek tam je spolahlivy. Vdaka tomu player.time startuje na offsete -> lava
+                // strana ide od 0 a "od zaciatku" hra od zaciatku relacie, nie predprogramovy obsah.
+                if (!initialSeekDone && recordingLive && recordingOffsetMs > 0 &&
+                    !askResume && pendingResumeMs == 0L && player.isSeekable) {
+                    player.time = recordingOffsetMs
+                    posTimeMs = 0L
+                    initialSeekDone = true
                 }
                 if (!dragging) {
                     val p = player.position
