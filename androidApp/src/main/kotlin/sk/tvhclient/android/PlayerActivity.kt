@@ -294,6 +294,7 @@ class PlayerActivity : ComponentActivity() {
                 timeshiftOffsetState.value = tsAccumMs
             }
             isPlayingState.value = true
+            dvrReopenAttempts = 0   // manualny play -> povol nove pokusy o nacitanie novsich dat
             mediaPlayer.play()
         }
     }
@@ -391,8 +392,9 @@ class PlayerActivity : ComponentActivity() {
         if (!::mediaPlayer.isInitialized || !seekablePlayback) return
         val dur = if (dvrDurationMs > 0) dvrDurationMs else mediaPlayer.length
         if (dur <= 0) return
-        // Pri prebiehajucej nahravke nechaj rezervu ~10 s od zivej hrany (inak TS zamrzne)
-        val maxMs = if (dvrRecording) (dur - 10_000L).coerceAtLeast(0L) else dur
+        // Pri prebiehajucej nahravke nechaj rezervu ~45 s od zivej hrany (zapisane data
+        // zaostavaju za EPG casom; mensia rezerva = EOF a zamrznutie TS).
+        val maxMs = if (dvrRecording) (dur - 45_000L).coerceAtLeast(0L) else dur
         val curMs = (mediaPlayer.position.coerceIn(0f, 1f) * dur).toLong()
         val targetMs = (curMs + deltaMs).coerceIn(0, maxMs)
         mediaPlayer.position = (targetMs.toFloat() / dur).coerceIn(0f, 1f)
@@ -941,8 +943,8 @@ class PlayerActivity : ComponentActivity() {
                             if (down && event.repeatCount == 0) {
                                 if (onSeek) {
                                     if (::mediaPlayer.isInitialized) {
-                                        val maxF = if (dvrRecording && dvrDurationMs > 10_000L)
-                                            (dvrDurationMs - 10_000L).toFloat() / dvrDurationMs else 1f
+                                        val maxF = if (dvrRecording && dvrDurationMs > 45_000L)
+                                            (dvrDurationMs - 45_000L).toFloat() / dvrDurationMs else 1f
                                         mediaPlayer.position = scrubFractionState.value.coerceAtMost(maxF)
                                     }
                                     pokeControls()
@@ -1012,6 +1014,10 @@ class PlayerActivity : ComponentActivity() {
     private var dvrRealStartSec: Long = 0
     private val dvrDurationState = mutableStateOf(0L)
     private var reachedEnd = false
+    // Playhead v case relacie (ms) zrkadleny z wall-clock prehravacich hodin v PlayerUi -
+    // spolahlivy zdroj pre znovu-otvorenie streamu (player.time je pre rastuci TS nestabilny).
+    private val dvrPlayheadMsState = mutableStateOf(0L)
+    private var dvrReopenAttempts = 0
 
     private fun saveDvrProgress() {
         val uuid = dvrUuid ?: return
@@ -1146,6 +1152,7 @@ class PlayerActivity : ComponentActivity() {
                     isPlayingState.value = true; refreshPipIfActive()
                     keepScreenOn(true)  // pocas prehravania nedovol setric/ambient na boxoch
                     cancelReconnect()  // uspesne pripojenie -> vynuluj pokusy
+                    dvrReopenAttempts = 0  // uspesne pokracovanie -> vynuluj pokusy o znovu-otvorenie
                     seekSpinnerJob?.cancel(); seekingState.value = false  // resync po skoku dobehol
                     // po nabehnuti zisti ci stream ma video; ak nie -> rozhlas (logo)
                     videoCheckHandler.removeCallbacksAndMessages(null)
@@ -1165,6 +1172,12 @@ class PlayerActivity : ComponentActivity() {
                     if (!seekablePlayback) {
                         // zivý stream "skoncil" = vypadok -> znovu pripojit
                         scheduleReconnect()
+                    } else if (dvrRecording &&
+                        (dvrProgStopSec <= 0 || System.currentTimeMillis() / 1000 < dvrProgStopSec)) {
+                        // prebiehajuca nahravka dobehla na koniec zapisanych dat -> znovu otvor
+                        // stream (novy GET prinesie novsie data), nie koniec prehravania
+                        saveDvrProgress()
+                        reopenDvrLive()
                     } else {
                         reachedEnd = true
                         keepScreenOn(false)
@@ -1347,6 +1360,7 @@ class PlayerActivity : ComponentActivity() {
                 recordingStopSec = dvrProgStopSec,
                 recordingOffsetMs = if (dvrProgStartSec > 0 && dvrRealStartSec in 1 until dvrProgStartSec)
                     (dvrProgStartSec - dvrRealStartSec) * 1000 else 0L,
+                onPlayheadMs = { dvrPlayheadMsState.value = it },
                 onClose = { if (!enterPipIfPossible()) finish() }
             )
             }
@@ -1424,10 +1438,40 @@ class PlayerActivity : ComponentActivity() {
         reconnectingState.value = false
     }
 
+    /** In-progress nahravka dobehla na koniec zapisanych dat (EOF na rastucom HTTP subore).
+     *  Po chvili (nech pribudne dalsi blok) znovu otvor stream a vrat sa na poziciu z
+     *  prehravacich hodin (offset + prehrany cas relacie) - tak sa pokracuje do novsich dat.
+     *  Backoff proti slucke ked nic nove nepribuda; resetuje sa pri Playing evente. */
+    private fun reopenDvrLive() {
+        if (!seekablePlayback || !dvrRecording) return
+        val url = currentStreamUrl ?: return
+        if (!::mediaPlayer.isInitialized) return
+        if (dvrReopenAttempts >= 5) {
+            reconnectingState.value = false
+            return
+        }
+        dvrReopenAttempts++
+        val offsetMs = if (dvrProgStartSec > 0 && dvrRealStartSec in 1 until dvrProgStartSec)
+            (dvrProgStartSec - dvrRealStartSec) * 1000 else 0L
+        // pozicia v subore = offset + prehrany cas relacie, par sekund vzad ako rezerva
+        val startSec = ((offsetMs + dvrPlayheadMsState.value) / 1000 - 3).coerceAtLeast(0)
+        reconnectingState.value = true
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectHandler.postDelayed({
+            if (!::mediaPlayer.isInitialized) return@postDelayed
+            runCatching {
+                val m = buildMedia(url)
+                m.addOption(":start-time=$startSec")
+                mediaPlayer.media = m
+                m.release()
+                mediaPlayer.play()
+            }
+        }, 2500)
+    }
+
     /** Naplanuje znovupripojenie zivého streamu po vypadku (narastajuce oneskorenie). */
     private fun scheduleReconnect() {
-        if (seekablePlayback) return  // DVR nahravka sa neobnovuje
-        val url = currentStreamUrl ?: return
+        if (seekablePlayback) return  // DVR nahravka sa neobnovuje (in-progress riesi reopenDvrLive)
         if (!::mediaPlayer.isInitialized) return
         if (reconnectAttempts >= maxReconnectAttempts) {
             reconnectingState.value = false
@@ -1657,6 +1701,7 @@ private fun PlayerUi(
     recordingLive: Boolean = false,
     recordingStopSec: Long = 0,
     recordingOffsetMs: Long = 0,
+    onPlayheadMs: (Long) -> Unit = {},
     onOrientationLockChange: (Boolean) -> Unit = {},
     onClose: () -> Unit
 ) {
@@ -1772,9 +1817,12 @@ private fun PlayerUi(
     // lava strana by sa nezmestila nad uroven zivej hrany pri starte).
     val lengthMsLive = androidx.compose.runtime.rememberUpdatedState(lengthMs)
     val offsetMsLive = androidx.compose.runtime.rememberUpdatedState(recordingOffsetMs)
-    // Pri prebiehajucej nahravke nedovol pretocit uplne na zivu hranu (koniec dostupnych dat),
-    // lebo TS stream tam zamrzne a nezotavi sa. Nechaj rezervu ~10 s.
-    val liveMarginMs = 10_000L
+    // Pri prebiehajucej nahravke nedovol pretocit az na zivu hranu (koniec dostupnych dat).
+    // Zapisane data zaostavaju za EPG casom (prava strana) o cca 20-30 s, takze rezerva
+    // pocitana z EPG casu musi byt vacsia, inak playhead skoci do este nezapisanej zony,
+    // narazi na EOF a TS zamrzne. Vacsia rezerva = playhead ostava v spolahlivo nahranych
+    // datach. Hltavy koniec doriesi este aj automaticke znovu-otvorenie streamu.
+    val liveMarginMs = 45_000L
     val maxSeekFrac = if (recordingLive && lengthMs > liveMarginMs)
         (lengthMs - liveMarginMs).toFloat() / lengthMs else 1f
 
@@ -1819,7 +1867,9 @@ private fun PlayerUi(
                         // prehravacie hodiny so skutocnou poziciou. Mapujeme subor->cas relacie:
                         // (p * (offset + dlzka)) - offset. Pri normalnom prehravani sa p meni
                         // plynulo (<<5%), takze sa to nespusti a hodiny tikaju z wall-clocku.
-                        if (initialSeekDone && curLen > 0 &&
+                        // p > 0.02: ignoruj falosne nulove citanie pozicie (caste na rastucom TS
+                        // aj tesne po znovu-otvoreni), nech hodiny neskocia na 0.
+                        if (initialSeekDone && curLen > 0 && p > 0.02f &&
                             kotlin.math.abs(p - posFraction) > 0.05f) {
                             posTimeMs = (p * (curOff + curLen) - curOff).toLong()
                                 .coerceIn(0L, curLen)
@@ -1831,20 +1881,13 @@ private fun PlayerUi(
                         val d = (nowMs - lastPlayTickMs).coerceIn(0L, 3000L)
                         posTimeMs = (posTimeMs + d).coerceIn(0L, curLen)
                     }
+                    // zrkadli playhead do Activity (pre spolahlive znovu-otvorenie in-progress streamu)
+                    if (recordingLive) onPlayheadMs(posTimeMs)
                 }
                 lastPlayTickMs = nowMs
-                // Prebiehajuca relacia: ak playhead dobehne zivu hranu (koniec dostupnych dat),
-                // radsej pozastav nez nechat VLC narazit na EOF (zamrzne a nezotavi sa).
-                // Po skonceni relacie (cas presiel jej koniec) nechaj dohrat az na koniec.
-                if (recordingLive && !dragging) {
-                    val nowSec = System.currentTimeMillis() / 1000
-                    val stillRecording = recordingStopSec > 0 && nowSec < recordingStopSec
-                    val len = player.length
-                    if (stillRecording && len > liveMarginMs && player.isPlaying) {
-                        val edge = 1f - liveMarginMs.toFloat() / len
-                        if (player.position >= edge) player.pause()
-                    }
-                }
+                // Koniec dostupnych dat in-progress nahravky (EOF) riesi reopenDvrLive (znovu
+                // otvori stream a pokracuje do novsich dat). Seek clamp (45 s) drzi playhead
+                // bezpecne za zivou hranou, takze pri normalnom prehravani sa na EOF nenarazi.
                 // priebezne ukladaj poziciu (kazdych ~5s) - z prehravacich hodin (spolahlive)
                 sinceSave++
                 if (sinceSave >= 5 && !askResume) {
