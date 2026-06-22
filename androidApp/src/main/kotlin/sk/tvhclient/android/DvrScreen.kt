@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -1097,24 +1099,48 @@ private fun ArcFolderCard(glyph: String, label: String, count: Int, onClick: () 
 @Composable
 private fun ArcInfoDialog(e: DvrEntry, onDismiss: () -> Unit) {
     val desc = e.dispDescription.ifBlank { e.dispSubtitle }
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(e.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-        text = {
-            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+    // "armed" az ked dobehne chvost dlheho OK (jeho ACTION_UP). Az potom dalsie OK zavrie.
+    var armed by remember { mutableStateOf(false) }
+    val fr = remember { FocusRequester() }
+    Dialog(onDismissRequest = onDismiss) {
+        androidx.compose.material3.Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(fr)
+                .focusable()
+                .onKeyEvent { ev ->
+                    val k = ev.nativeKeyEvent
+                    val ok = k.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                        k.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
+                        k.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+                    if (!ok) return@onKeyEvent false
+                    when (k.action) {
+                        android.view.KeyEvent.ACTION_UP -> { if (!armed) armed = true else onDismiss(); true }
+                        android.view.KeyEvent.ACTION_DOWN -> true
+                        else -> false
+                    }
+                }
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Text(e.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(e.channelName + "  \u00B7  " + formatDateFull(e.start) + "  \u00B7  " + formatTimeHm(e.start),
                     color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(8.dp))
-                Text(if (desc.isNotBlank()) desc else "\u2014", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface)
-            }
-        },
-        confirmButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss, modifier = Modifier.dpadFocusable()) {
-                Text(stringResource(R.string.close))
+                Spacer(Modifier.height(10.dp))
+                Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                    Text(if (desc.isNotBlank()) desc else "\u2014", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface)
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(stringResource(R.string.close) + "  (OK)", color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.End))
             }
         }
-    )
+    }
+    LaunchedEffect(Unit) { fr.requestFocus() }
 }
 
 @Composable
