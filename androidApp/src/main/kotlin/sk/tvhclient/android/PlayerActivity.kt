@@ -494,7 +494,7 @@ class PlayerActivity : ComponentActivity() {
     private fun selectChannelOrArchive(idx: Int, poke: Boolean = true) {
         val ch = liveChannelsState.value.getOrNull(idx)
         val rec = ch?.let { recInProgressByName.value[it.name] }
-        if (rec != null) {
+        if (rec != null && ArchiveChoicePref.get(this)) {
             archiveChoiceSelState.value = 0
             archiveChoiceIdxState.value = idx
             closeChannelList()
