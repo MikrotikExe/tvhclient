@@ -440,13 +440,16 @@ class PlayerActivity : ComponentActivity() {
         if (cur.isEmpty()) return
         val nowS = System.currentTimeMillis() / 1000
         try {
-            // prebiehajuce nahravky -> ktore kanaly sa prave nahravaju (cervena bodka/kazeta)
-            val recNames: Set<String> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                val api = Tvh.apiFor(srv)
-                try { Tvh.fetchDvrInProgress(srv, api).map { it.channelName }.toSet() }
-                catch (e: Exception) { emptySet() }
-                finally { api.close() }
-            }
+            // prebiehajuce nahravky -> ktore kanaly sa prave nahravaju (cervena bodka/kazeta + vyber archiv)
+            val recList: List<sk.tvhclient.shared.model.DvrEntry> =
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val api = Tvh.apiFor(srv)
+                    try { Tvh.fetchDvrInProgress(srv, api) }
+                    catch (e: Exception) { emptyList() }
+                    finally { api.close() }
+                }
+            val recMap = recList.associateBy { it.channelName }
+            recInProgressByName.value = recMap
             if (srv.connectionMode == "htsp") {
                 val map = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     Tvh.fetchEpgUpcoming(srv)
@@ -455,7 +458,7 @@ class PlayerActivity : ComponentActivity() {
                 val updated = cur.map { ch ->
                     val ev = map[ch.uuid]?.firstOrNull { it.start <= nowS && nowS < it.stop }
                     val b = if (ev != null) ch.copy(nowTitle = ev.title, nowStart = ev.start, nowStop = ev.stop) else ch
-                    b.copy(recording = b.name in recNames)
+                    b.copy(recording = b.name in recMap)
                 }
                 liveChannelsState.value = updated
                 LivePlaylist.channels = updated
@@ -478,13 +481,63 @@ class PlayerActivity : ComponentActivity() {
                         nowStart = r.nowStart,
                         nowStop = r.nowStop
                     ) else ch
-                    b.copy(recording = b.name in recNames)
+                    b.copy(recording = b.name in recMap)
                 }
                 liveChannelsState.value = updated
                 LivePlaylist.channels = updated
             }
         } catch (e: Exception) {
         }
+    }
+
+    /** Vyber kanala zo zoznamu: ak sa archivuje, ponukni nazivo/od zaciatku, inak prepni. */
+    private fun selectChannelOrArchive(idx: Int, poke: Boolean = true) {
+        val ch = liveChannelsState.value.getOrNull(idx)
+        val rec = ch?.let { recInProgressByName.value[it.name] }
+        if (rec != null) {
+            archiveChoiceSelState.value = 0
+            archiveChoiceIdxState.value = idx
+            closeChannelList()
+        } else if (idx != liveIndex) switchToIndex(idx, poke) else pokeControls()
+    }
+
+    /** Vyriesi vyber pri archivovanom kanali: nazivo (prepne) alebo od zaciatku (spusti nahravku). */
+    private fun resolveArchiveChoice(fromStart: Boolean) {
+        val idx = archiveChoiceIdxState.value
+        archiveChoiceIdxState.value = -1
+        if (idx < 0) return
+        val ch = liveChannelsState.value.getOrNull(idx) ?: LivePlaylist.channels.getOrNull(idx) ?: return
+        if (!fromStart) {
+            if (idx != liveIndex) switchToIndex(idx) else pokeControls()
+            return
+        }
+        val rec = recInProgressByName.value[ch.name]
+        if (rec == null) {
+            if (idx != liveIndex) switchToIndex(idx)
+            return
+        }
+        playRecordingFromStart(rec, ch.nowStart, ch.nowStop)
+    }
+
+    /** Spusti prebiehajucu nahravku od zaciatku (novy PlayerActivity v DVR rezime). */
+    private fun playRecordingFromStart(rec: sk.tvhclient.shared.model.DvrEntry, progStart: Long, progStop: Long) {
+        val srv = liveServer ?: return
+        val url = Tvh.dvrUrl(srv, rec.uuid)
+        val pStart = if (progStart > 0) progStart else rec.start
+        val pStop = if (progStop > progStart && progStop > 0) progStop else rec.stop
+        val nowSec = System.currentTimeMillis() / 1000
+        val inProgress = pStart > 0 && nowSec < pStop
+        val i = android.content.Intent(this, PlayerActivity::class.java).apply {
+            putExtra(EXTRA_URL, url)
+            putExtra(EXTRA_TITLE, rec.title)
+            putExtra(EXTRA_DURATION_MS, rec.durationSec * 1000)
+            putExtra(EXTRA_DVR_UUID, rec.uuid)
+            putExtra(EXTRA_DVR_RECORDING, inProgress)
+            putExtra(EXTRA_DVR_PROG_START_SEC, pStart)
+            putExtra(EXTRA_DVR_PROG_STOP_SEC, pStop)
+            putExtra(EXTRA_DVR_REAL_START_SEC, rec.realStartSec)
+        }
+        runCatching { startActivity(i) }
     }
 
     /** Prepne na konkretny kanal podla indexu, prebuduje URL a nacita. */
@@ -594,6 +647,10 @@ class PlayerActivity : ComponentActivity() {
     private val resumePromptState = androidx.compose.runtime.mutableStateOf(false)
     private val resumeSelState = androidx.compose.runtime.mutableStateOf(1)   // 0=Nie, 1=Ano (predvolba)
     private val resumeAnswerState = androidx.compose.runtime.mutableStateOf(0) // 0=ziadna, 1=Ano, 2=Nie
+    // Vyber pri archivovanom kanali (nazivo / od zaciatku) priamo v prehravaci
+    private val archiveChoiceIdxState = androidx.compose.runtime.mutableStateOf(-1) // index kanala cakajuci na vyber, -1 = ziadny
+    private val archiveChoiceSelState = androidx.compose.runtime.mutableStateOf(0)   // 0=nazivo, 1=od zaciatku (D-pad)
+    private val recInProgressByName = androidx.compose.runtime.mutableStateOf<Map<String, sk.tvhclient.shared.model.DvrEntry>>(emptyMap())
     private var pinOnCancel: (() -> Unit)? = null
 
     // DVR scrub focus: nahlad pozicie pri vybere casu sipkami (potvrdenie OK)
@@ -787,6 +844,24 @@ class PlayerActivity : ComponentActivity() {
             }
             return true
         }
+
+        // 0b) Vyber pri archivovanom kanali -> sipky vlavo/vpravo + OK + BACK riesime my
+        if (archiveChoiceIdxState.value >= 0) {
+            if (down) {
+                when (kc) {
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT ->
+                        { archiveChoiceSelState.value = 1 - archiveChoiceSelState.value; return true }
+                    android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                    android.view.KeyEvent.KEYCODE_ENTER,
+                    android.view.KeyEvent.KEYCODE_NUMPAD_ENTER ->
+                        { if (event.repeatCount == 0) resolveArchiveChoice(archiveChoiceSelState.value == 1); return true }
+                    android.view.KeyEvent.KEYCODE_BACK ->
+                        { archiveChoiceIdxState.value = -1; return true }
+                }
+            }
+            return true
+        }
         val okKey = kc == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
             kc == android.view.KeyEvent.KEYCODE_ENTER ||
             kc == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
@@ -820,7 +895,7 @@ class PlayerActivity : ComponentActivity() {
                 if (okLongFired) return true
                 if (down && event.repeatCount == 0 && n > 0) {
                     if (navChannelIndexState.value == liveIndexState.value) { closeChannelList(); showControlsFocused() }  // uz hra vybrany -> cela obrazovka + lista s fokusom na play
-                    else switchToIndex(navChannelIndexState.value, poke = false)              // prepni prehravany kanal, ostan v zozname (bez listy)
+                    else selectChannelOrArchive(navChannelIndexState.value, poke = false)      // prepni kanal (alebo ponukni vyber pri archive)
                 }
                 return true
             }
@@ -1386,7 +1461,7 @@ class PlayerActivity : ComponentActivity() {
                 seekHint = seekHintState.value,
                 liveChannels = if (canZap) liveChannelsState.value else emptyList(),
                 liveCurrentIndex = liveIndexState.value,
-                onSelectChannel = { idx -> if (idx != liveIndex) switchToIndex(idx) else pokeControls() },
+                onSelectChannel = { idx -> selectChannelOrArchive(idx) },
                 onRefreshEpg = {
                     lifecycleScope.launch { refreshOverlayEpg() }
                 },
@@ -1414,6 +1489,70 @@ class PlayerActivity : ComponentActivity() {
                 onResumeAnswerHandled = { resumeAnswerState.value = 0 },
                 onClose = { if (!enterPipIfPossible()) finish() }
             )
+            // Vyber pri archivovanom kanali (nazivo / od zaciatku) — overlay v style prehravaca
+            if (archiveChoiceIdxState.value >= 0) {
+                val aCh = liveChannelsState.value.getOrNull(archiveChoiceIdxState.value)
+                if (aCh != null) {
+                    val aSel = archiveChoiceSelState.value
+                    Box(
+                        Modifier.fillMaxSize().background(Color(0xCC0B1220)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth(0.8f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFF1B2433))
+                                .padding(horizontal = 24.dp, vertical = 28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(aCh.name, color = Color.White,
+                                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (aCh.nowTitle.isNotBlank()) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(aCh.nowTitle, color = Color(0xFFB9C2D0),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(androidx.compose.ui.res.stringResource(R.string.channel_archived),
+                                    color = Color(0xFFB9C2D0), style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.width(6.dp))
+                                androidx.compose.material3.Icon(
+                                    Icons.Default.Voicemail, contentDescription = null,
+                                    tint = Color(0xFFE53935),
+                                    modifier = Modifier.size(18.dp).scale(scaleX = 1f, scaleY = -1f))
+                            }
+                            Spacer(Modifier.height(26.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Box(
+                                    Modifier.clip(RoundedCornerShape(12.dp))
+                                        .background(if (aSel == 0) Color(0x553B82F6) else Color.Transparent)
+                                        .border(1.dp, if (aSel == 0) Color(0xFF3B82F6) else Color(0x33FFFFFF), RoundedCornerShape(12.dp))
+                                        .clickable { resolveArchiveChoice(false) }
+                                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                                ) {
+                                    Text(androidx.compose.ui.res.stringResource(R.string.play_live),
+                                        color = if (aSel == 0) Color.White else Color(0xFFB9C2D0),
+                                        fontWeight = FontWeight.SemiBold)
+                                }
+                                Box(
+                                    Modifier.clip(RoundedCornerShape(12.dp))
+                                        .background(if (aSel == 1) Color(0x553B82F6) else Color.Transparent)
+                                        .border(1.dp, if (aSel == 1) Color(0xFF3B82F6) else Color(0x33FFFFFF), RoundedCornerShape(12.dp))
+                                        .clickable { resolveArchiveChoice(true) }
+                                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                                ) {
+                                    Text(androidx.compose.ui.res.stringResource(R.string.play_from_start),
+                                        color = if (aSel == 1) Color.White else Color(0xFFB9C2D0),
+                                        fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             }
         }
     }
