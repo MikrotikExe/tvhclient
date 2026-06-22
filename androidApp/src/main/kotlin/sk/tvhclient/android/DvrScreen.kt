@@ -166,15 +166,6 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
     Column(Modifier.fillMaxSize()) {
         // Vyhladavanie nahravok (cez vsetky, podla nazvu) — klavesnica az po OK
         val searchFocus = remember { FocusRequester() }
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    var progressTick by remember { mutableStateOf(0) }
-    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
-        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
-            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) progressTick++
-        }
-        lifecycleOwner.lifecycle.addObserver(obs)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
-    }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
@@ -920,6 +911,15 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var focused by remember { mutableStateOf<DvrEntry?>(null) }
     val searchFocus = remember { FocusRequester() }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var progressTick by remember { mutableStateOf(0) }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) progressTick++
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
 
     LaunchedEffect(selKey) { selChannel = null; selChannelDate = null; selSub = null; selSeries = null }
     BackHandler {
