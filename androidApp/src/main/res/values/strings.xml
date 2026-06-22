@@ -23,6 +23,7 @@
     <string name="test_http_error">Server returned HTTP error %1$d.</string>
     <string name="test_network_error">Connection failed. Check the address, port and network connection.</string>
     <string name="tab_channels">Channels</string>
+    <string name="home_tv_program">TV Guide</string>
     <string name="search_channels">Search channels</string>
     <string name="all_channels">All</string>
     <string name="no_channels">No channels.</string>

@@ -166,8 +166,60 @@ class MainActivity : ComponentActivity() {
 fun App() {
     val serversVm: ServersViewModel = viewModel()
     val servers by serversVm.servers.collectAsState()
-    // Ziadny server -> uvitacia obrazovka; inak hlavne taby
-    if (servers.isEmpty()) WelcomeScreen(serversVm) else AppMain()
+    // Ziadny server -> uvitacia obrazovka
+    if (servers.isEmpty()) { WelcomeScreen(serversVm); return }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val isTv = remember {
+        val um = ctx.getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        um?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+    }
+    if (isTv) TvHomeHost() else AppMain()
+}
+
+/** TV/box: uvodny launcher + vstup do jednotlivych sekcii (taby) so spat na launcher. */
+@Composable
+private fun TvHomeHost() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var atHome by remember { mutableStateOf(true) }
+    var startTab by remember { mutableStateOf(0) }
+    if (atHome) {
+        TvHomeScreen(
+            onChannels = {
+                // rovno do prehravaca na posledny kanal; ak este ziadny nie je, otvor zoznam
+                val sid = sk.tvhclient.shared.Tvh.store.active()?.id
+                val uuid = LastChannel.get(ctx, sid)
+                if (uuid != null) {
+                    LivePlaylist.setIndexForUuid(uuid)
+                    val title = LivePlaylist.channels.firstOrNull { it.uuid == uuid }?.name ?: ""
+                    runCatching {
+                        ctx.startActivity(Intent(ctx, PlayerActivity::class.java).apply {
+                            putExtra(PlayerActivity.EXTRA_UUID, uuid)
+                            putExtra(PlayerActivity.EXTRA_TITLE, title)
+                        })
+                    }
+                } else { startTab = 0; atHome = false }
+            },
+            onRadio = {
+                val sid = sk.tvhclient.shared.Tvh.store.active()?.id
+                val uuid = LastRadio.get(ctx, sid)
+                if (uuid != null) {
+                    LivePlaylist.setIndexForUuid(uuid)
+                    val title = LivePlaylist.channels.firstOrNull { it.uuid == uuid }?.name ?: ""
+                    runCatching {
+                        ctx.startActivity(Intent(ctx, PlayerActivity::class.java).apply {
+                            putExtra(PlayerActivity.EXTRA_UUID, uuid)
+                            putExtra(PlayerActivity.EXTRA_TITLE, title)
+                        })
+                    }
+                } else { startTab = 1; atHome = false }
+            },
+            onTvProgram = { startTab = 0; atHome = false; TabController.openEpgGrid() },
+            onArchive = { startTab = 2; atHome = false },
+            onSettings = { startTab = 3; atHome = false },
+        )
+    } else {
+        AppMain(initialTab = startTab, onExitToHome = { atHome = true })
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -241,8 +293,8 @@ private fun TabLabel(dot: Color, text: String) {
 }
 
 @Composable
-fun AppMain() {
-    var tab by remember { mutableStateOf(0) }
+fun AppMain(initialTab: Int = 0, onExitToHome: (() -> Unit)? = null) {
+    var tab by remember { mutableStateOf(initialTab) }
     // Reset signaly: klik na tab (aj uz vybrany) vrati danu obrazovku na zaciatok
     var resetCh by remember { mutableStateOf(0) }
     var resetDvr by remember { mutableStateOf(0) }
@@ -279,7 +331,9 @@ fun AppMain() {
     // Spat: z ineho tabu spat na Kanaly; na Kanaloch -> potvrdenie ukoncenia.
     // (Vnutorne obrazovky maju vlastny BackHandler, ten ma prednost.)
     androidx.activity.compose.BackHandler(enabled = !showExit) {
-        if (tab != 0) { resetCh++; tab = 0 } else showExit = true
+        if (tab != 0) { resetCh++; tab = 0 }
+        else if (onExitToHome != null) onExitToHome()   // TV: spat na launcher
+        else showExit = true
     }
 
     val red = Color(0xFFE53935)

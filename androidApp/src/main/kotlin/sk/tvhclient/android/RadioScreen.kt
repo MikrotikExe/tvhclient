@@ -407,7 +407,7 @@ private fun playRadio(
         )
     }
     LivePlaylist.setIndexForUuid(row.channel.uuid)
-    LastChannel.set(context, server.id, row.channel.uuid)
+    LastRadio.set(context, server.id, row.channel.uuid)
     val intent = Intent(context, PlayerActivity::class.java).apply {
         putExtra(PlayerActivity.EXTRA_UUID, row.channel.uuid)
         putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)

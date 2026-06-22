@@ -23,6 +23,7 @@
     <string name="test_http_error">Server vrátil HTTP chybu %1$d.</string>
     <string name="test_network_error">Připojení selhalo. Zkontroluj adresu, port a síťové připojení.</string>
     <string name="tab_channels">Kanály</string>
+    <string name="home_tv_program">TV program</string>
     <string name="search_channels">Hledat kanály</string>
     <string name="all_channels">Všechny</string>
     <string name="no_channels">Žádné kanály.</string>
