@@ -2364,9 +2364,19 @@ private fun PlayerUi(
         if (!hasVideo) {
             val ctxLogo = androidx.compose.ui.platform.LocalContext.current
             val cfgLogo = androidx.compose.ui.platform.LocalConfiguration.current
-            val side = (minOf(cfgLogo.screenWidthDp, cfgLogo.screenHeightDp) * 0.42f).dp
             val logoLoader = remember(server?.id) { PiconImageLoader.get(ctxLogo, server) }
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // Ked je otvoreny zoznam kanalov (TV), presun logo do nahladoveho obdlznika;
+            // inak vycentrovane na celu obrazovku.
+            val side = if (inPreview) {
+                with(density) { (minOf(previewRect!!.width, previewRect!!.height) * 0.55f).toDp() }
+            } else (minOf(cfgLogo.screenWidthDp, cfgLogo.screenHeightDp) * 0.42f).dp
+            val logoBoxMod = if (inPreview) {
+                val r = previewRect!!
+                Modifier
+                    .absoluteOffset { IntOffset(r.left.roundToInt(), r.top.roundToInt()) }
+                    .size(with(density) { r.width.toDp() }, with(density) { r.height.toDp() })
+            } else Modifier.fillMaxSize()
+            Box(logoBoxMod, contentAlignment = Alignment.Center) {
                 var logoOk by remember(centerLogoUrl) {
                     androidx.compose.runtime.mutableStateOf(centerLogoUrl != null)
                 }
