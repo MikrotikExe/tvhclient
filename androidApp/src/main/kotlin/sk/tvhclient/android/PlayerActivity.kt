@@ -490,11 +490,17 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    /** TV/box (Android TV) — na detekciu kde sa ma archivny vyber zobrazovat. */
+    private fun isTvDevice(): Boolean {
+        val um = getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        return um?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+    }
+
     /** Vyber kanala zo zoznamu: ak sa archivuje, ponukni nazivo/od zaciatku, inak prepni. */
     private fun selectChannelOrArchive(idx: Int, poke: Boolean = true) {
         val ch = liveChannelsState.value.getOrNull(idx)
         val rec = ch?.let { recInProgressByName.value[it.name] }
-        if (rec != null && ArchiveChoicePref.get(this)) {
+        if (rec != null && isTvDevice() && ArchiveChoicePref.get(this)) {
             archiveChoiceSelState.value = 0
             archiveChoiceIdxState.value = idx
             closeChannelList()
