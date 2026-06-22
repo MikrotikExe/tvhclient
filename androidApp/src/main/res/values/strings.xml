@@ -267,4 +267,6 @@
     <string name="archive_choice_note">When selecting a channel that is being archived, ask whether to play live or from the start. When off, it switches to live directly.</string>
     <string name="ts_enable_title">Timeshift (pause / rewind live TV)</string>
     <string name="ts_enable_note">Pause and rewind live TV. Works only if the server supports timeshift over HTSP; otherwise it stays off and playback is unaffected.</string>
+    <string name="show_more">More</string>
+    <string name="show_less">Less</string>
 </resources>

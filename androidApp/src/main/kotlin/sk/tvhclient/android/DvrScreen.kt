@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.focusGroup
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
@@ -165,6 +166,15 @@ fun DvrScreen(vm: DvrViewModel = viewModel(), resetSignal: Int = 0) {
     Column(Modifier.fillMaxSize()) {
         // Vyhladavanie nahravok (cez vsetky, podla nazvu) — klavesnica az po OK
         val searchFocus = remember { FocusRequester() }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var progressTick by remember { mutableStateOf(0) }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) progressTick++
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
@@ -926,6 +936,14 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
         entries.map { it.channelName }.filter { it.isNotBlank() }.distinct()
             .sortedBy { loaded.channelOrder[it] ?: Int.MAX_VALUE }
     }
+    val recent = remember(progressTick, entries) {
+        val sid = server?.id
+        if (sid == null) emptyList()
+        else {
+            val byUuid = entries.associateBy { it.uuid }
+            WatchProgress.recent(context, sid).mapNotNull { byUuid[it.first] }
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Text(
@@ -940,6 +958,7 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
                     .padding(vertical = 8.dp)
             ) {
+                item("_recent") { ArcRailItem(stringResource(R.string.dvr_recent), recent.size, selKey == "_recent") { selKey = "_recent" } }
                 item("_search") { ArcRailItem(stringResource(R.string.dvr_search), null, selKey == "_search") { selKey = "_search" } }
                 item("_channels") { ArcRailItem(stringResource(R.string.dvr_by_channel), null, selKey == "_channels") { selKey = "_channels" } }
                 item("all") { ArcRailItem(stringResource(R.string.dvr_all), entries.size, selKey == "all") { selKey = "all" } }
@@ -947,6 +966,10 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
             }
             Column(Modifier.weight(0.74f).fillMaxHeight()) {
                 when {
+                    selKey == "_recent" -> {
+                        ArcFolderHeader(stringResource(R.string.dvr_recent))
+                        ArcRecGrid(recent, loaded, loader, context, progressTick, focused) { focused = it }
+                    }
                     selKey == "_search" -> {
                         TvSearchBar(query, stringResource(R.string.dvr_search), { query = it }, searchFocus,
                             Modifier.fillMaxWidth().padding(8.dp))
@@ -954,7 +977,7 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                         val res = if (q.isBlank()) emptyList()
                             else entries.filter { it.dispTitle.lowercase().contains(q) || it.channelName.lowercase().contains(q) }
                                 .sortedByDescending { it.start }
-                        ArcRecGrid(res, loaded, loader, context, focused) { focused = it }
+                        ArcRecGrid(res, loaded, loader, context, progressTick, focused) { focused = it }
                     }
                     selKey == "_channels" && selChannel == null -> {
                         ArcFolderHeader(stringResource(R.string.dvr_by_channel))
@@ -970,10 +993,10 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                     selKey == "_channels" -> {
                         val list = entries.filter { it.channelName == selChannel && dateKey(it.start) == selChannelDate }
                             .sortedByDescending { it.start }
-                        ArcRecGrid(list, loaded, loader, context, focused) { focused = it }
+                        ArcRecGrid(list, loaded, loader, context, progressTick, focused) { focused = it }
                     }
                     selKey == "all" -> {
-                        ArcRecGrid(entries.sortedByDescending { it.start }, loaded, loader, context, focused) { focused = it }
+                        ArcRecGrid(entries.sortedByDescending { it.start }, loaded, loader, context, progressTick, focused) { focused = it }
                     }
                     else -> {
                         val cat = selKey
@@ -998,9 +1021,9 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                                 } else if (seriesLike) {
                                     val eps = scope.filter { DvrClassifier.seriesCanonicalTitle(it.title) == selSeries }
                                         .sortedByDescending { it.start }
-                                    ArcRecGrid(eps, loaded, loader, context, focused) { focused = it }
+                                    ArcRecGrid(eps, loaded, loader, context, progressTick, focused) { focused = it }
                                 } else {
-                                    ArcRecGrid(scope.sortedByDescending { it.start }, loaded, loader, context, focused) { focused = it }
+                                    ArcRecGrid(scope.sortedByDescending { it.start }, loaded, loader, context, progressTick, focused) { focused = it }
                                 }
                             }
                         }
@@ -1012,10 +1035,10 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.ArcRecGrid(list: List<DvrEntry>, loaded: DvrState.Loaded, loader: coil.ImageLoader, context: Context, focused: DvrEntry?, onFocus: (DvrEntry) -> Unit) {
+private fun ColumnScope.ArcRecGrid(list: List<DvrEntry>, loaded: DvrState.Loaded, loader: coil.ImageLoader, context: Context, progressTick: Int, focused: DvrEntry?, onFocus: (DvrEntry) -> Unit) {
     LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().weight(1f).padding(8.dp)) {
         gridItems(list, key = { it.uuid }) { e ->
-            ArcRecCard(e, loaded.channelPicons[e.channelName], loader, context, onFocus = { onFocus(e) }, onClick = { playDvr(context, e) })
+            ArcRecCard(e, loaded.channelPicons[e.channelName], loader, context, progressTick, onFocus = { onFocus(e) }, onClick = { playDvr(context, e) })
         }
     }
     val f = if (focused != null && list.contains(focused)) focused else list.firstOrNull()
@@ -1112,18 +1135,37 @@ private fun ArcPicon(picon: String?, fallback: String, loader: coil.ImageLoader,
 }
 
 @Composable
-private fun ArcRecCard(e: DvrEntry, picon: String?, loader: coil.ImageLoader, context: Context,
+private fun ArcRecCard(e: DvrEntry, picon: String?, loader: coil.ImageLoader, context: Context, progressTick: Int,
                        onFocus: () -> Unit, onClick: () -> Unit) {
+    val server = remember { Tvh.store.active() }
+    val info = remember(e.uuid, progressTick) { server?.let { WatchProgress.get(context, it.id, e.uuid) } }
     Column(
         Modifier.padding(6.dp).onFocusChanged { if (it.isFocused) onFocus() }
             .dpadFocusable(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ArcPicon(picon, e.channelName, loader, context)
+        Box(Modifier.fillMaxWidth()) {
+            ArcPicon(picon, e.channelName, loader, context)
+            if (info?.completed == true) {
+                androidx.compose.material3.Icon(
+                    Icons.Default.CheckCircle, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(22.dp)
+                )
+            }
+            if (info != null && !info.completed && info.fraction > 0f) {
+                LinearProgressIndicator(
+                    progress = { info.fraction },
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            }
+        }
         Spacer(Modifier.height(6.dp))
         Text(e.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(formatDateFull(e.start), color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(formatDateFull(e.start) + "  \u00B7  " + formatTimeHm(e.start),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall, maxLines = 1)
     }
 }
@@ -1144,19 +1186,29 @@ private fun ArcChannelCard(name: String, picon: String?, count: Int, loader: coi
 
 @Composable
 private fun ArcDetail(f: DvrEntry) {
+    var expanded by remember(f.uuid) { mutableStateOf(false) }
     Column(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
         Text(f.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(f.channelName + "  \u00B7  " + formatDateFull(f.start),
+        Text(f.channelName + "  \u00B7  " + formatDateFull(f.start) + "  \u00B7  " + formatTimeHm(f.start),
             color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
         val desc = f.dispDescription.ifBlank { f.dispSubtitle }
         if (desc.isNotBlank()) {
             Spacer(Modifier.height(4.dp))
             Text(desc, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
-                maxLines = 3, overflow = TextOverflow.Ellipsis)
+                maxLines = if (expanded) 20 else 3, overflow = TextOverflow.Ellipsis)
+            if (desc.length > 90) {
+                Text(
+                    stringResource(if (expanded) R.string.show_less else R.string.show_more),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 2.dp).dpadFocusable(RoundedCornerShape(6.dp))
+                        .clickable { expanded = !expanded }.padding(horizontal = 6.dp, vertical = 4.dp)
+                )
+            }
         }
     }
 }
