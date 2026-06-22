@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.Spacer
@@ -901,49 +902,27 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
     val byCat = remember(entries) { entries.groupBy { DvrClassifier.classify(it) } }
     val cats = remember(byCat) { DvrClassifier.order.filter { byCat.containsKey(it) } }
 
-    var selKey by remember { mutableStateOf("all") }   // "_search" | "_channels" | "all" | catKey
-    var query by remember { mutableStateOf("") }
+    var selKey by remember { mutableStateOf("all") }
     var selChannel by remember { mutableStateOf<String?>(null) }
+    var selChannelDate by remember { mutableStateOf<String?>(null) }
     var selSub by remember { mutableStateOf<String?>(null) }
+    var selSeries by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
     var focused by remember { mutableStateOf<DvrEntry?>(null) }
     val searchFocus = remember { FocusRequester() }
 
-    BackHandler(enabled = selChannel != null) { selChannel = null }
-    BackHandler(enabled = selChannel == null) { onBack() }
-    LaunchedEffect(selKey) { selSub = null; if (selKey != "_channels") selChannel = null }
-
-    val shown: List<DvrEntry> = remember(selKey, query, selChannel, selSub, entries) {
+    LaunchedEffect(selKey) { selChannel = null; selChannelDate = null; selSub = null; selSeries = null }
+    BackHandler {
         when {
-            selKey == "_search" -> {
-                val q = query.trim().lowercase()
-                if (q.isBlank()) emptyList()
-                else entries.filter { it.dispTitle.lowercase().contains(q) || it.channelName.lowercase().contains(q) }
-                    .sortedByDescending { it.start }
-            }
-            selKey == "_channels" -> if (selChannel != null)
-                entries.filter { it.channelName == selChannel }.sortedByDescending { it.start } else emptyList()
-            selKey == "all" -> entries.sortedByDescending { it.start }
-            else -> {
-                val inCat = byCat[selKey] ?: emptyList()
-                if (selSub != null && DvrClassifier.hasSubgenres(selKey)) {
-                    val cons = DvrClassifier.consensusSubgenres(inCat, selKey)
-                    inCat.filter { DvrClassifier.subgenreOf(it, selKey, cons) == selSub }.sortedByDescending { it.start }
-                } else inCat.sortedByDescending { it.start }
-            }
+            selSeries != null -> selSeries = null
+            selChannelDate != null -> selChannelDate = null
+            selSub != null -> selSub = null
+            selChannel != null -> selChannel = null
+            else -> onBack()
         }
     }
-    LaunchedEffect(shown) { if (focused == null || focused !in shown) focused = shown.firstOrNull() }
 
-    val subs: List<String> = remember(selKey, entries) {
-        if (selKey.startsWith("_") || selKey == "all" || !DvrClassifier.hasSubgenres(selKey)) emptyList()
-        else {
-            val inCat = byCat[selKey] ?: emptyList()
-            val cons = DvrClassifier.consensusSubgenres(inCat, selKey)
-            val bySub = inCat.groupBy { DvrClassifier.subgenreOf(it, selKey, cons) }
-            DvrClassifier.subOrderFor(selKey).filter { bySub.containsKey(it) }
-        }
-    }
-    val channels: List<String> = remember(entries) {
+    val channels = remember(entries) {
         entries.map { it.channelName }.filter { it.isNotBlank() }.distinct()
             .sortedBy { loaded.channelOrder[it] ?: Int.MAX_VALUE }
     }
@@ -967,33 +946,119 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                 items(cats, key = { it }) { c -> ArcRailItem(catLabel(c), byCat[c]?.size ?: 0, selKey == c) { selKey = c } }
             }
             Column(Modifier.weight(0.74f).fillMaxHeight()) {
-                if (selKey == "_search") {
-                    TvSearchBar(query, stringResource(R.string.dvr_search), { query = it }, searchFocus,
-                        Modifier.fillMaxWidth().padding(8.dp))
-                }
-                if (subs.isNotEmpty()) {
-                    LazyRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                        item { ArcSubChip(stringResource(R.string.dvr_all), selSub == null) { selSub = null } }
-                        items(subs, key = { it }) { sb -> ArcSubChip(subLabel(sb), selSub == sb) { selSub = sb } }
+                when {
+                    selKey == "_search" -> {
+                        TvSearchBar(query, stringResource(R.string.dvr_search), { query = it }, searchFocus,
+                            Modifier.fillMaxWidth().padding(8.dp))
+                        val q = query.trim().lowercase()
+                        val res = if (q.isBlank()) emptyList()
+                            else entries.filter { it.dispTitle.lowercase().contains(q) || it.channelName.lowercase().contains(q) }
+                                .sortedByDescending { it.start }
+                        ArcRecGrid(res, loaded, loader, context, focused) { focused = it }
                     }
-                }
-                if (selKey == "_channels" && selChannel == null) {
-                    LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxSize().padding(8.dp)) {
-                        gridItems(channels, key = { it }) { ch ->
-                            ArcChannelCard(ch, loaded.channelPicons[ch], entries.count { it.channelName == ch }, loader, context) { selChannel = ch }
+                    selKey == "_channels" && selChannel == null -> {
+                        ArcFolderHeader(stringResource(R.string.dvr_by_channel))
+                        ArcChannelGrid(channels, entries, loaded, loader, context) { selChannel = it }
+                    }
+                    selKey == "_channels" && selChannelDate == null -> {
+                        val chEnt = entries.filter { it.channelName == selChannel }
+                        val byDate = chEnt.groupBy { dateKey(it.start) }
+                        val dks = byDate.keys.sortedDescending()
+                        ArcFolderHeader(selChannel ?: "")
+                        ArcFolderGrid(dks.map { dk -> Triple(dk, byDate[dk]?.firstOrNull()?.let { formatDateFull(it.start) } ?: dk, byDate[dk]?.size ?: 0) }) { selChannelDate = it }
+                    }
+                    selKey == "_channels" -> {
+                        val list = entries.filter { it.channelName == selChannel && dateKey(it.start) == selChannelDate }
+                            .sortedByDescending { it.start }
+                        ArcRecGrid(list, loaded, loader, context, focused) { focused = it }
+                    }
+                    selKey == "all" -> {
+                        ArcRecGrid(entries.sortedByDescending { it.start }, loaded, loader, context, focused) { focused = it }
+                    }
+                    else -> {
+                        val cat = selKey
+                        val inCat = byCat[cat] ?: emptyList()
+                        val hasSub = DvrClassifier.hasSubgenres(cat)
+                        val seriesLike = DvrClassifier.isSeriesLike(cat)
+                        val consensus = if (hasSub) DvrClassifier.consensusSubgenres(inCat, cat) else emptyMap()
+                        when {
+                            hasSub && selSub == null -> {
+                                val bySub = inCat.groupBy { DvrClassifier.subgenreOf(it, cat, consensus) }
+                                val order = DvrClassifier.subOrderFor(cat).filter { bySub.containsKey(it) }
+                                ArcFolderHeader(catLabel(cat))
+                                ArcFolderGrid(order.map { sb -> Triple(sb, subLabel(sb), bySub[sb]?.size ?: 0) }) { selSub = it }
+                            }
+                            else -> {
+                                val scope = if (hasSub) inCat.filter { DvrClassifier.subgenreOf(it, cat, consensus) == selSub } else inCat
+                                if (seriesLike && selSeries == null) {
+                                    val bySeries = scope.groupBy { DvrClassifier.seriesCanonicalTitle(it.title) }
+                                    val titles = bySeries.keys.sortedBy { it.lowercase() }
+                                    ArcFolderHeader(if (hasSub) subLabel(selSub ?: "") else catLabel(cat))
+                                    ArcFolderGrid(titles.map { t -> Triple(t, t, bySeries[t]?.size ?: 0) }, glyph = "\uD83D\uDCFA") { selSeries = it }
+                                } else if (seriesLike) {
+                                    val eps = scope.filter { DvrClassifier.seriesCanonicalTitle(it.title) == selSeries }
+                                        .sortedByDescending { it.start }
+                                    ArcRecGrid(eps, loaded, loader, context, focused) { focused = it }
+                                } else {
+                                    ArcRecGrid(scope.sortedByDescending { it.start }, loaded, loader, context, focused) { focused = it }
+                                }
+                            }
                         }
                     }
-                } else {
-                    LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().weight(1f).padding(8.dp)) {
-                        gridItems(shown, key = { it.uuid }) { e ->
-                            ArcRecCard(e, loaded.channelPicons[e.channelName], loader, context,
-                                onFocus = { focused = e }, onClick = { playDvr(context, e) })
-                        }
-                    }
-                    focused?.let { f -> ArcDetail(f) }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ColumnScope.ArcRecGrid(list: List<DvrEntry>, loaded: DvrState.Loaded, loader: coil.ImageLoader, context: Context, focused: DvrEntry?, onFocus: (DvrEntry) -> Unit) {
+    LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().weight(1f).padding(8.dp)) {
+        gridItems(list, key = { it.uuid }) { e ->
+            ArcRecCard(e, loaded.channelPicons[e.channelName], loader, context, onFocus = { onFocus(e) }, onClick = { playDvr(context, e) })
+        }
+    }
+    val f = if (focused != null && list.contains(focused)) focused else list.firstOrNull()
+    f?.let { ArcDetail(it) }
+}
+
+@Composable
+private fun ColumnScope.ArcChannelGrid(channels: List<String>, entries: List<DvrEntry>, loaded: DvrState.Loaded, loader: coil.ImageLoader, context: Context, onClick: (String) -> Unit) {
+    LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().weight(1f).padding(8.dp)) {
+        gridItems(channels, key = { it }) { ch ->
+            ArcChannelCard(ch, loaded.channelPicons[ch], entries.count { it.channelName == ch }, loader, context) { onClick(ch) }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.ArcFolderGrid(items: List<Triple<String, String, Int>>, glyph: String = "\uD83D\uDCC1", onClick: (String) -> Unit) {
+    LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().weight(1f).padding(8.dp)) {
+        gridItems(items, key = { it.first }) { tr ->
+            ArcFolderCard(glyph, tr.second, tr.third) { onClick(tr.first) }
+        }
+    }
+}
+
+@Composable
+private fun ArcFolderHeader(text: String) {
+    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
+}
+
+@Composable
+private fun ArcFolderCard(glyph: String, label: String, count: Int, onClick: () -> Unit) {
+    Column(
+        Modifier.padding(6.dp).dpadFocusable(RoundedCornerShape(10.dp)).clickable { onClick() }
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+            .padding(12.dp).fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(glyph, style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(6.dp))
+        Text(label, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text("$count", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
 }
 
