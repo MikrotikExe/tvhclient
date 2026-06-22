@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -908,8 +912,8 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
     var selChannelDate by remember { mutableStateOf<String?>(null) }
     var selSub by remember { mutableStateOf<String?>(null) }
     var selSeries by remember { mutableStateOf<String?>(null) }
+    fun openSection(key: String) { selKey = key; selChannel = null; selChannelDate = null; selSub = null; selSeries = null }
     var query by remember { mutableStateOf("") }
-    var focused by remember { mutableStateOf<DvrEntry?>(null) }
     val searchFocus = remember { FocusRequester() }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var progressTick by remember { mutableStateOf(0) }
@@ -958,17 +962,17 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
                     .padding(vertical = 8.dp)
             ) {
-                item("_recent") { ArcRailItem(stringResource(R.string.dvr_recent), recent.size, selKey == "_recent") { selKey = "_recent" } }
-                item("_search") { ArcRailItem(stringResource(R.string.dvr_search), null, selKey == "_search") { selKey = "_search" } }
-                item("_channels") { ArcRailItem(stringResource(R.string.dvr_by_channel), null, selKey == "_channels") { selKey = "_channels" } }
-                item("all") { ArcRailItem(stringResource(R.string.dvr_all), entries.size, selKey == "all") { selKey = "all" } }
-                items(cats, key = { it }) { c -> ArcRailItem(catLabel(c), byCat[c]?.size ?: 0, selKey == c) { selKey = c } }
+                item("_recent") { ArcRailItem(stringResource(R.string.dvr_recent), recent.size, selKey == "_recent") { openSection("_recent") } }
+                item("_search") { ArcRailItem(stringResource(R.string.dvr_search), null, selKey == "_search") { openSection("_search") } }
+                item("_channels") { ArcRailItem(stringResource(R.string.dvr_by_channel), null, selKey == "_channels") { openSection("_channels") } }
+                item("all") { ArcRailItem(stringResource(R.string.dvr_all), entries.size, selKey == "all") { openSection("all") } }
+                items(cats, key = { it }) { c -> ArcRailItem(catLabel(c), byCat[c]?.size ?: 0, selKey == c) { openSection(c) } }
             }
             Column(Modifier.weight(0.74f).fillMaxHeight()) {
                 when {
                     selKey == "_recent" -> {
                         ArcFolderHeader(stringResource(R.string.dvr_recent))
-                        ArcRecGrid(recent, loaded, loader, context, progressTick, focused) { focused = it }
+                        ArcRecGrid(recent, loaded, loader, context, progressTick)
                     }
                     selKey == "_search" -> {
                         TvSearchBar(query, stringResource(R.string.dvr_search), { query = it }, searchFocus,
@@ -977,7 +981,7 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                         val res = if (q.isBlank()) emptyList()
                             else entries.filter { it.dispTitle.lowercase().contains(q) || it.channelName.lowercase().contains(q) }
                                 .sortedByDescending { it.start }
-                        ArcRecGrid(res, loaded, loader, context, progressTick, focused) { focused = it }
+                        ArcRecGrid(res, loaded, loader, context, progressTick)
                     }
                     selKey == "_channels" && selChannel == null -> {
                         ArcFolderHeader(stringResource(R.string.dvr_by_channel))
@@ -993,10 +997,10 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                     selKey == "_channels" -> {
                         val list = entries.filter { it.channelName == selChannel && dateKey(it.start) == selChannelDate }
                             .sortedByDescending { it.start }
-                        ArcRecGrid(list, loaded, loader, context, progressTick, focused) { focused = it }
+                        ArcRecGrid(list, loaded, loader, context, progressTick)
                     }
                     selKey == "all" -> {
-                        ArcRecGrid(entries.sortedByDescending { it.start }, loaded, loader, context, progressTick, focused) { focused = it }
+                        ArcRecGrid(entries.sortedByDescending { it.start }, loaded, loader, context, progressTick)
                     }
                     else -> {
                         val cat = selKey
@@ -1021,9 +1025,9 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                                 } else if (seriesLike) {
                                     val eps = scope.filter { DvrClassifier.seriesCanonicalTitle(it.title) == selSeries }
                                         .sortedByDescending { it.start }
-                                    ArcRecGrid(eps, loaded, loader, context, progressTick, focused) { focused = it }
+                                    ArcRecGrid(eps, loaded, loader, context, progressTick)
                                 } else {
-                                    ArcRecGrid(scope.sortedByDescending { it.start }, loaded, loader, context, progressTick, focused) { focused = it }
+                                    ArcRecGrid(scope.sortedByDescending { it.start }, loaded, loader, context, progressTick)
                                 }
                             }
                         }
@@ -1035,14 +1039,18 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.ArcRecGrid(list: List<DvrEntry>, loaded: DvrState.Loaded, loader: coil.ImageLoader, context: Context, progressTick: Int, focused: DvrEntry?, onFocus: (DvrEntry) -> Unit) {
+private fun ColumnScope.ArcRecGrid(list: List<DvrEntry>, loaded: DvrState.Loaded, loader: coil.ImageLoader, context: Context, progressTick: Int) {
+    var focused by remember { mutableStateOf<DvrEntry?>(null) }
+    var infoEntry by remember { mutableStateOf<DvrEntry?>(null) }
     LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().weight(1f).padding(8.dp)) {
         gridItems(list, key = { it.uuid }) { e ->
-            ArcRecCard(e, loaded.channelPicons[e.channelName], loader, context, progressTick, onFocus = { onFocus(e) }, onClick = { playDvr(context, e) })
+            ArcRecCard(e, loaded.channelPicons[e.channelName], loader, context, progressTick,
+                onFocus = { focused = e }, onClick = { playDvr(context, e) }, onLong = { infoEntry = e })
         }
     }
     val f = if (focused != null && list.contains(focused)) focused else list.firstOrNull()
     f?.let { ArcDetail(it) }
+    infoEntry?.let { ent -> ArcInfoDialog(ent) { infoEntry = null } }
 }
 
 @Composable
@@ -1083,6 +1091,29 @@ private fun ArcFolderCard(glyph: String, label: String, count: Int, onClick: () 
             fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text("$count", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
+}
+
+@Composable
+private fun ArcInfoDialog(e: DvrEntry, onDismiss: () -> Unit) {
+    val desc = e.dispDescription.ifBlank { e.dispSubtitle }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(e.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                Text(e.channelName + "  \u00B7  " + formatDateFull(e.start) + "  \u00B7  " + formatTimeHm(e.start),
+                    color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+                Text(if (desc.isNotBlank()) desc else "\u2014", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface)
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss, modifier = Modifier.dpadFocusable()) {
+                Text(stringResource(R.string.close))
+            }
+        }
+    )
 }
 
 @Composable
@@ -1134,26 +1165,31 @@ private fun ArcPicon(picon: String?, fallback: String, loader: coil.ImageLoader,
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ArcRecCard(e: DvrEntry, picon: String?, loader: coil.ImageLoader, context: Context, progressTick: Int,
-                       onFocus: () -> Unit, onClick: () -> Unit) {
+                       onFocus: () -> Unit, onClick: () -> Unit, onLong: () -> Unit) {
     val server = remember { Tvh.store.active() }
     val info = remember(e.uuid, progressTick) { server?.let { WatchProgress.get(context, it.id, e.uuid) } }
+    val seen = info?.completed == true
     Column(
         Modifier.padding(6.dp).onFocusChanged { if (it.isFocused) onFocus() }
-            .dpadFocusable(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(6.dp),
+            .dpadFocusable(RoundedCornerShape(10.dp))
+            .combinedClickable(onClick = { onClick() }, onLongClick = { onLong() }).padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(Modifier.fillMaxWidth()) {
             ArcPicon(picon, e.channelName, loader, context)
-            if (info?.completed == true) {
+            if (seen) {
+                Box(Modifier.matchParentSize().clip(RoundedCornerShape(8.dp))
+                    .background(androidx.compose.ui.graphics.Color(0x99000000)))
                 androidx.compose.material3.Icon(
                     Icons.Default.CheckCircle, contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(22.dp)
+                    modifier = Modifier.align(Alignment.Center).size(34.dp)
                 )
             }
-            if (info != null && !info.completed && info.fraction > 0f) {
+            if (info != null && !seen && info.fraction > 0f) {
                 LinearProgressIndicator(
                     progress = { info.fraction },
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
@@ -1186,7 +1222,6 @@ private fun ArcChannelCard(name: String, picon: String?, count: Int, loader: coi
 
 @Composable
 private fun ArcDetail(f: DvrEntry) {
-    var expanded by remember(f.uuid) { mutableStateOf(false) }
     Column(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .padding(horizontal = 20.dp, vertical = 12.dp)
@@ -1199,16 +1234,7 @@ private fun ArcDetail(f: DvrEntry) {
         if (desc.isNotBlank()) {
             Spacer(Modifier.height(4.dp))
             Text(desc, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
-                maxLines = if (expanded) 20 else 3, overflow = TextOverflow.Ellipsis)
-            if (desc.length > 90) {
-                Text(
-                    stringResource(if (expanded) R.string.show_less else R.string.show_more),
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 2.dp).dpadFocusable(RoundedCornerShape(6.dp))
-                        .clickable { expanded = !expanded }.padding(horizontal = 6.dp, vertical = 4.dp)
-                )
-            }
+                maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
 }

@@ -269,4 +269,5 @@
     <string name="ts_enable_note">Pause and rewind live TV. Works only if the server supports timeshift over HTSP; otherwise it stays off and playback is unaffected.</string>
     <string name="show_more">More</string>
     <string name="show_less">Less</string>
+    <string name="close">Close</string>
 </resources>

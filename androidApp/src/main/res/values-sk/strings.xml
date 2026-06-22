@@ -269,4 +269,5 @@
     <string name="ts_enable_note">Pozastavenie a pretáčanie živého vysielania. Funguje len ak server podporuje timeshift cez HTSP; inak ostáva vypnutý a prehrávanie to neovplyvní.</string>
     <string name="show_more">Viac</string>
     <string name="show_less">Menej</string>
+    <string name="close">Zavrieť</string>
 </resources>
