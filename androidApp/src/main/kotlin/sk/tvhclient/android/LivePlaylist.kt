@@ -15,7 +15,8 @@ object LivePlaylist {
         val nowStop: Long,
         val nextTitle: String = "",
         val nextStart: Long = 0,
-        val nextStop: Long = 0
+        val nextStop: Long = 0,
+        val recording: Boolean = false
     )
 
     @Volatile

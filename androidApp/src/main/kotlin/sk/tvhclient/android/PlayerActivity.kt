@@ -42,6 +42,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Voicemail
+import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -438,20 +440,25 @@ class PlayerActivity : ComponentActivity() {
         if (cur.isEmpty()) return
         val nowS = System.currentTimeMillis() / 1000
         try {
+            // prebiehajuce nahravky -> ktore kanaly sa prave nahravaju (cervena bodka/kazeta)
+            val recNames: Set<String> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val api = Tvh.apiFor(srv)
+                try { Tvh.fetchDvrInProgress(srv, api).map { it.channelName }.toSet() }
+                catch (e: Exception) { emptySet() }
+                finally { api.close() }
+            }
             if (srv.connectionMode == "htsp") {
                 val map = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     Tvh.fetchEpgUpcoming(srv)
                 }
-                if (map.isNotEmpty()) {
-                    epgUpcomingState.value = map
-                    val updated = cur.map { ch ->
-                        val ev = map[ch.uuid]?.firstOrNull { it.start <= nowS && nowS < it.stop }
-                        if (ev != null) ch.copy(nowTitle = ev.title, nowStart = ev.start, nowStop = ev.stop)
-                        else ch
-                    }
-                    liveChannelsState.value = updated
-                    LivePlaylist.channels = updated
+                if (map.isNotEmpty()) epgUpcomingState.value = map
+                val updated = cur.map { ch ->
+                    val ev = map[ch.uuid]?.firstOrNull { it.start <= nowS && nowS < it.stop }
+                    val b = if (ev != null) ch.copy(nowTitle = ev.title, nowStart = ev.start, nowStop = ev.stop) else ch
+                    b.copy(recording = b.name in recNames)
                 }
+                liveChannelsState.value = updated
+                LivePlaylist.channels = updated
             } else {
                 // HTTP: now/next je v dumpe kanalov -> nacitaj nanovo
                 val rows = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -466,11 +473,12 @@ class PlayerActivity : ComponentActivity() {
                 }
                 val updated = cur.map { ch ->
                     val r = rows[ch.uuid]
-                    if (r != null) ch.copy(
+                    val b = if (r != null) ch.copy(
                         nowTitle = r.nowTitle ?: "",
                         nowStart = r.nowStart,
                         nowStop = r.nowStop
                     ) else ch
+                    b.copy(recording = b.name in recNames)
                 }
                 liveChannelsState.value = updated
                 LivePlaylist.channels = updated
@@ -3095,8 +3103,17 @@ private fun PlayerUi(
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(ch.name, color = playerFg(), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(ch.name, color = playerFg(), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                            style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.weight(1f, fill = false))
+                                        if (ch.recording) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Box(Modifier.size(8.dp)
+                                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                                .background(Color(0xFFE53935)))
+                                        }
+                                    }
                                     if (ch.nowTitle.isNotBlank())
                                         Text(ch.nowTitle, color = playerFgDim(), style = MaterialTheme.typography.bodySmall,
                                             maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -3109,12 +3126,22 @@ private fun PlayerUi(
                     }
                     // PRAVA: detail vybraneho + nahlad hraneho + dalsie programy
                     Column(Modifier.fillMaxHeight().weight(1f).padding(horizontal = 22.dp, vertical = 6.dp)) {
-                        Text(
-                            (curT?.title?.takeIf { it.isNotBlank() }) ?: liveChannels.getOrNull(detT)?.nowTitle ?: "",
-                            color = playerFg(), style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold, maxLines = 1,
-                            modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                (curT?.title?.takeIf { it.isNotBlank() }) ?: liveChannels.getOrNull(detT)?.nowTitle ?: "",
+                                color = playerFg(), style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold, maxLines = 1,
+                                modifier = Modifier.weight(1f).basicMarquee(iterations = Int.MAX_VALUE)
+                            )
+                            if (liveChannels.getOrNull(detT)?.recording == true) {
+                                Spacer(Modifier.width(8.dp))
+                                androidx.compose.material3.Icon(
+                                    Icons.Default.Voicemail, contentDescription = null,
+                                    tint = Color(0xFFE53935),
+                                    modifier = Modifier.size(22.dp).scale(scaleX = 1f, scaleY = -1f)
+                                )
+                            }
+                        }
                         if (curT != null)
                             Text(hhmm(curT.start) + " – " + hhmm(curT.stop), color = accentC,
                                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
