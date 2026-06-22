@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -876,7 +877,6 @@ private fun subLabel(key: String): String {
 
 @Composable
 /** TV/box Archiv: lavy panel kategorii + mriezka relacii (picon kanala) + popis zameranej relacie. */
-@Composable
 fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
     BackHandler { onBack() }
     val context = LocalContext.current
@@ -1017,7 +1017,9 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
     }
 }
 
-private fun catLabel(key: String): String {    val resId = when (key) {
+@Composable
+private fun catLabel(key: String): String {
+    val resId = when (key) {
         DvrClassifier.FILM -> R.string.cat_film
         DvrClassifier.SERIAL -> R.string.cat_serial
         DvrClassifier.SPORT -> R.string.cat_sport
