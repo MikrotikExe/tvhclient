@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -876,9 +877,8 @@ private fun subLabel(key: String): String {
 }
 
 @Composable
-/** TV/box Archiv: lavy panel kategorii + mriezka relacii (picon kanala) + popis zameranej relacie. */
+/** TV/box Archiv: lavy panel (Hladat, Podla kanalu, Vsetko + zanre) + mriezka relacii + popis. */
 fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
-    BackHandler { onBack() }
     val context = LocalContext.current
     val state by vm.state.collectAsState()
     val server = remember { Tvh.store.active() }
@@ -891,131 +891,211 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
 
     val loaded = state as? DvrState.Loaded
     if (loaded == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        BackHandler { onBack() }
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
             androidx.compose.material3.CircularProgressIndicator()
         }
         return
     }
     val entries = loaded.entries
     val byCat = remember(entries) { entries.groupBy { DvrClassifier.classify(it) } }
-    val cats = remember(byCat) { listOf("all") + DvrClassifier.order.filter { byCat.containsKey(it) } }
-    var selCat by remember { mutableStateOf("all") }
-    val shown = remember(selCat, entries) {
-        (if (selCat == "all") entries else (byCat[selCat] ?: emptyList()))
-            .sortedByDescending { it.start }
-    }
+    val cats = remember(byCat) { DvrClassifier.order.filter { byCat.containsKey(it) } }
+
+    var selKey by remember { mutableStateOf("all") }   // "_search" | "_channels" | "all" | catKey
+    var query by remember { mutableStateOf("") }
+    var selChannel by remember { mutableStateOf<String?>(null) }
+    var selSub by remember { mutableStateOf<String?>(null) }
     var focused by remember { mutableStateOf<DvrEntry?>(null) }
+    val searchFocus = remember { FocusRequester() }
+
+    BackHandler(enabled = selChannel != null) { selChannel = null }
+    BackHandler(enabled = selChannel == null) { onBack() }
+    LaunchedEffect(selKey) { selSub = null; if (selKey != "_channels") selChannel = null }
+
+    val shown: List<DvrEntry> = remember(selKey, query, selChannel, selSub, entries) {
+        when {
+            selKey == "_search" -> {
+                val q = query.trim().lowercase()
+                if (q.isBlank()) emptyList()
+                else entries.filter { it.dispTitle.lowercase().contains(q) || it.channelName.lowercase().contains(q) }
+                    .sortedByDescending { it.start }
+            }
+            selKey == "_channels" -> if (selChannel != null)
+                entries.filter { it.channelName == selChannel }.sortedByDescending { it.start } else emptyList()
+            selKey == "all" -> entries.sortedByDescending { it.start }
+            else -> {
+                val inCat = byCat[selKey] ?: emptyList()
+                if (selSub != null && DvrClassifier.hasSubgenres(selKey)) {
+                    val cons = DvrClassifier.consensusSubgenres(inCat, selKey)
+                    inCat.filter { DvrClassifier.subgenreOf(it, selKey, cons) == selSub }.sortedByDescending { it.start }
+                } else inCat.sortedByDescending { it.start }
+            }
+        }
+    }
     LaunchedEffect(shown) { if (focused == null || focused !in shown) focused = shown.firstOrNull() }
+
+    val subs: List<String> = remember(selKey, entries) {
+        if (selKey.startsWith("_") || selKey == "all" || !DvrClassifier.hasSubgenres(selKey)) emptyList()
+        else {
+            val inCat = byCat[selKey] ?: emptyList()
+            val cons = DvrClassifier.consensusSubgenres(inCat, selKey)
+            val bySub = inCat.groupBy { DvrClassifier.subgenreOf(it, selKey, cons) }
+            DvrClassifier.subOrderFor(selKey).filter { bySub.containsKey(it) }
+        }
+    }
+    val channels: List<String> = remember(entries) {
+        entries.map { it.channelName }.filter { it.isNotBlank() }.distinct()
+            .sortedBy { loaded.channelOrder[it] ?: Int.MAX_VALUE }
+    }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Text(
             stringResource(R.string.dvr_archive).uppercase(),
             color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
         )
         Row(Modifier.fillMaxSize()) {
-            // Lavy panel kategorii
             LazyColumn(
                 Modifier.fillMaxHeight().weight(0.26f)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
                     .padding(vertical = 8.dp)
             ) {
-                items(cats, key = { it }) { c ->
-                    val sel = c == selCat
-                    val label = if (c == "all") stringResource(R.string.dvr_all) else catLabel(c)
-                    val cnt = if (c == "all") entries.size else (byCat[c]?.size ?: 0)
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .dpadFocusable(RoundedCornerShape(8.dp))
-                            .clickable { selCat = c }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            label, Modifier.weight(1f),
-                            color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text("$cnt", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+                item("_search") { ArcRailItem(stringResource(R.string.dvr_search), null, selKey == "_search") { selKey = "_search" } }
+                item("_channels") { ArcRailItem(stringResource(R.string.dvr_by_channel), null, selKey == "_channels") { selKey = "_channels" } }
+                item("all") { ArcRailItem(stringResource(R.string.dvr_all), entries.size, selKey == "all") { selKey = "all" } }
+                items(cats, key = { it }) { c -> ArcRailItem(catLabel(c), byCat[c]?.size ?: 0, selKey == c) { selKey = c } }
             }
-            // Vpravo: mriezka relacii + popis zameranej
             Column(Modifier.weight(0.74f).fillMaxHeight()) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    modifier = Modifier.fillMaxWidth().weight(1f).padding(8.dp)
-                ) {
-                    gridItems(shown, key = { it.uuid }) { e ->
-                        Column(
-                            Modifier.padding(6.dp)
-                                .onFocusChanged { if (it.isFocused) focused = e }
-                                .dpadFocusable(RoundedCornerShape(10.dp))
-                                .clickable { playDvr(context, e) }
-                                .padding(6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                val picon = loaded.channelPicons[e.channelName]
-                                if (picon != null) {
-                                    coil.compose.AsyncImage(
-                                        model = coil.request.ImageRequest.Builder(context).data(picon).build(),
-                                        contentDescription = null, imageLoader = loader,
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                        modifier = Modifier.fillMaxSize().padding(8.dp)
-                                    )
-                                } else {
-                                    Text(e.channelName.take(3).uppercase(),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        style = MaterialTheme.typography.titleMedium)
-                                }
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Text(e.title, color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(formatDateFull(e.start), color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                        }
+                if (selKey == "_search") {
+                    TvSearchBar(query, stringResource(R.string.dvr_search), { query = it }, searchFocus,
+                        Modifier.fillMaxWidth().padding(8.dp))
+                }
+                if (subs.isNotEmpty()) {
+                    LazyRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+                        item { ArcSubChip(stringResource(R.string.dvr_all), selSub == null) { selSub = null } }
+                        items(subs, key = { it }) { sb -> ArcSubChip(subLabel(sb), selSub == sb) { selSub = sb } }
                     }
                 }
-                // Popis zameranej relacie
-                focused?.let { f ->
-                    Column(
-                        Modifier.fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                            .padding(horizontal = 20.dp, vertical = 12.dp)
-                    ) {
-                        Text(f.title, color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            f.channelName + "  ·  " + formatDateFull(f.start),
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        val desc = f.dispDescription.ifBlank { f.dispSubtitle }
-                        if (desc.isNotBlank()) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(desc, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 3, overflow = TextOverflow.Ellipsis)
+                if (selKey == "_channels" && selChannel == null) {
+                    LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxSize().padding(8.dp)) {
+                        gridItems(channels, key = { it }) { ch ->
+                            ArcChannelCard(ch, loaded.channelPicons[ch], entries.count { it.channelName == ch }, loader, context) { selChannel = ch }
                         }
                     }
+                } else {
+                    LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().weight(1f).padding(8.dp)) {
+                        gridItems(shown, key = { it.uuid }) { e ->
+                            ArcRecCard(e, loaded.channelPicons[e.channelName], loader, context,
+                                onFocus = { focused = e }, onClick = { playDvr(context, e) })
+                        }
+                    }
+                    focused?.let { f -> ArcDetail(f) }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun ArcRailItem(label: String, count: Int?, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().dpadFocusable(RoundedCornerShape(8.dp)).clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, Modifier.weight(1f),
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (count != null) Text("$count", color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun ArcSubChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.padding(end = 8.dp).clip(RoundedCornerShape(16.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.30f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .dpadFocusable(RoundedCornerShape(16.dp)).clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Text(label, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+@Composable
+private fun ArcPicon(picon: String?, fallback: String, loader: coil.ImageLoader, context: Context) {
+    Box(
+        Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center
+    ) {
+        if (picon != null) {
+            coil.compose.AsyncImage(
+                model = coil.request.ImageRequest.Builder(context).data(picon).build(),
+                contentDescription = null, imageLoader = loader,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().padding(8.dp)
+            )
+        } else {
+            Text(fallback.take(3).uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+private fun ArcRecCard(e: DvrEntry, picon: String?, loader: coil.ImageLoader, context: Context,
+                       onFocus: () -> Unit, onClick: () -> Unit) {
+    Column(
+        Modifier.padding(6.dp).onFocusChanged { if (it.isFocused) onFocus() }
+            .dpadFocusable(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        ArcPicon(picon, e.channelName, loader, context)
+        Spacer(Modifier.height(6.dp))
+        Text(e.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(formatDateFull(e.start), color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall, maxLines = 1)
+    }
+}
+
+@Composable
+private fun ArcChannelCard(name: String, picon: String?, count: Int, loader: coil.ImageLoader, context: Context, onClick: () -> Unit) {
+    Column(
+        Modifier.padding(6.dp).dpadFocusable(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        ArcPicon(picon, name, loader, context)
+        Spacer(Modifier.height(6.dp))
+        Text(name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("$count", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun ArcDetail(f: DvrEntry) {
+    Column(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        Text(f.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(f.channelName + "  \u00B7  " + formatDateFull(f.start),
+            color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+        val desc = f.dispDescription.ifBlank { f.dispSubtitle }
+        if (desc.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(desc, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
+                maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
 
 @Composable
 private fun catLabel(key: String): String {
