@@ -106,9 +106,10 @@ fun TvHomeScreen(
             Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Image(
-                painter = androidx.compose.ui.res.painterResource(R.mipmap.ic_launcher),
-                contentDescription = null,
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { c ->
+                    android.widget.ImageView(c).apply { setImageResource(R.mipmap.ic_launcher) }
+                },
                 modifier = Modifier.size(72.dp).clip(RoundedCornerShape(16.dp))
             )
             Spacer(Modifier.height(12.dp))
