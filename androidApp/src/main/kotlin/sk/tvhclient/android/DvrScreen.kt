@@ -1100,8 +1100,8 @@ private fun ArcFolderCard(glyph: String, label: String, count: Int, onClick: () 
 @Composable
 private fun ArcInfoDialog(e: DvrEntry, onDismiss: () -> Unit) {
     val desc = e.dispDescription.ifBlank { e.dispSubtitle }
-    // Po otvoreni kratke "ustalenie" (350 ms) — chvost dlheho OK sa ignoruje. Potom OK zavrie.
-    var ready by remember { mutableStateOf(false) }
+    // Zavri az po novom celom stlaceni OK (cerstve DOWN repeatCount==0). Chvost dlheho OK (uvolnenie) sa ignoruje.
+    var sawFreshDown by remember { mutableStateOf(false) }
     val fr = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss) {
         androidx.compose.material3.Surface(
@@ -1117,8 +1117,11 @@ private fun ArcInfoDialog(e: DvrEntry, onDismiss: () -> Unit) {
                         k.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
                         k.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
                     if (!ok) return@onKeyEvent false
-                    if (k.action == android.view.KeyEvent.ACTION_UP && ready) onDismiss()
-                    true
+                    when (k.action) {
+                        android.view.KeyEvent.ACTION_DOWN -> { if (k.repeatCount == 0) sawFreshDown = true; true }
+                        android.view.KeyEvent.ACTION_UP -> { if (sawFreshDown) onDismiss(); true }
+                        else -> false
+                    }
                 }
         ) {
             Column(Modifier.padding(20.dp)) {
@@ -1138,7 +1141,7 @@ private fun ArcInfoDialog(e: DvrEntry, onDismiss: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(Unit) { fr.requestFocus(); kotlinx.coroutines.delay(350); ready = true }
+    LaunchedEffect(Unit) { fr.requestFocus() }
 }
 
 @Composable
