@@ -981,9 +981,9 @@ fun TvArchiveScreen(vm: DvrViewModel = viewModel(), onBack: () -> Unit) {
                     selKey == "_search" -> {
                         TvSearchBar(query, stringResource(R.string.dvr_search), { query = it }, searchFocus,
                             Modifier.fillMaxWidth().padding(8.dp))
-                        val q = query.trim().lowercase()
+                        val q = normalizeSearch(query.trim())
                         val res = if (q.isBlank()) emptyList()
-                            else entries.filter { it.dispTitle.lowercase().contains(q) || it.channelName.lowercase().contains(q) }
+                            else entries.filter { normalizeSearch(it.dispTitle).contains(q) || normalizeSearch(it.channelName).contains(q) }
                                 .sortedByDescending { it.start }
                         ArcRecGrid(res, loaded, loader, context, progressTick)
                     }
