@@ -72,7 +72,6 @@ object ParentalLock {
         p(c).edit().putLong(KEY_UNTIL, until).apply()
     }
 
-    fun relock(c: Context) = p(c).edit().putLong(KEY_UNTIL, 0L).apply()
 
     /** Treba teraz vypytat PIN? (zamok zapnuty, PIN nastaveny a nie sme v okne) */
     fun needsPin(c: Context): Boolean = isEnabled(c) && hasPin(c) && !isUnlocked(c)

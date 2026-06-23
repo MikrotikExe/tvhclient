@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.window.Dialog
@@ -30,7 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -1157,19 +1155,6 @@ private fun ArcRailItem(label: String, count: Int?, selected: Boolean, onClick: 
             style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (count != null) Text("$count", color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-@Composable
-private fun ArcSubChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.padding(end = 8.dp).clip(RoundedCornerShape(16.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.30f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            .dpadFocusable(RoundedCornerShape(16.dp)).clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
-        Text(label, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
     }
 }
 

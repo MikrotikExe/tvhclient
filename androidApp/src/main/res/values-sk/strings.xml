@@ -215,7 +215,6 @@
     <string name="privacy_policy">Zásady ochrany osobných údajov</string>
     <string name="terms_of_use">Podmienky používania</string>
     <string name="info_app_version">Verzia aplikácie</string>
-    <string name="info_release_version">Verzia vydania</string>
     <string name="info_tvh_version">Verzia Tvheadendu</string>
     <string name="info_api_version">Verzia API</string>
     <string name="info_active_server">Aktívny server</string>
@@ -267,7 +266,5 @@
     <string name="archive_choice_note">Pri výbere kanála, ktorý sa archivuje, ponúknuť voľbu prehrať naživo alebo od začiatku. Keď je vypnuté, prepne rovno naživo.</string>
     <string name="ts_enable_title">Timeshift (pauza / pretáčanie živej TV)</string>
     <string name="ts_enable_note">Pozastavenie a pretáčanie živého vysielania. Funguje len ak server podporuje timeshift cez HTSP; inak ostáva vypnutý a prehrávanie to neovplyvní.</string>
-    <string name="show_more">Viac</string>
-    <string name="show_less">Menej</string>
     <string name="close">Zavrieť</string>
 </resources>
