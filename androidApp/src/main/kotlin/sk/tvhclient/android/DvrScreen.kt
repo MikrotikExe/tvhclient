@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.heightIn
@@ -1099,8 +1100,8 @@ private fun ArcFolderCard(glyph: String, label: String, count: Int, onClick: () 
 @Composable
 private fun ArcInfoDialog(e: DvrEntry, onDismiss: () -> Unit) {
     val desc = e.dispDescription.ifBlank { e.dispSubtitle }
-    // "armed" az ked dobehne chvost dlheho OK (jeho ACTION_UP). Az potom dalsie OK zavrie.
-    var armed by remember { mutableStateOf(false) }
+    // Po otvoreni kratke "ustalenie" (350 ms) — chvost dlheho OK sa ignoruje. Potom OK zavrie.
+    var ready by remember { mutableStateOf(false) }
     val fr = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss) {
         androidx.compose.material3.Surface(
@@ -1116,11 +1117,8 @@ private fun ArcInfoDialog(e: DvrEntry, onDismiss: () -> Unit) {
                         k.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
                         k.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
                     if (!ok) return@onKeyEvent false
-                    when (k.action) {
-                        android.view.KeyEvent.ACTION_UP -> { if (!armed) armed = true else onDismiss(); true }
-                        android.view.KeyEvent.ACTION_DOWN -> true
-                        else -> false
-                    }
+                    if (k.action == android.view.KeyEvent.ACTION_UP && ready) onDismiss()
+                    true
                 }
         ) {
             Column(Modifier.padding(20.dp)) {
@@ -1140,7 +1138,7 @@ private fun ArcInfoDialog(e: DvrEntry, onDismiss: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(Unit) { fr.requestFocus() }
+    LaunchedEffect(Unit) { fr.requestFocus(); kotlinx.coroutines.delay(350); ready = true }
 }
 
 @Composable
@@ -1202,19 +1200,19 @@ private fun ArcRecCard(e: DvrEntry, picon: String?, loader: coil.ImageLoader, co
     Column(
         Modifier.padding(6.dp).onFocusChanged { if (it.isFocused) onFocus() }
             .dpadFocusable(RoundedCornerShape(10.dp))
-            .onKeyEvent { ev ->
+            .onPreviewKeyEvent { ev ->
                 val k = ev.nativeKeyEvent
                 val ok = k.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
                     k.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
                     k.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
-                if (!ok) return@onKeyEvent false
+                if (!ok) return@onPreviewKeyEvent false
                 when (k.action) {
-                    android.view.KeyEvent.ACTION_DOWN -> {
-                        if (k.repeatCount == 0) longFired = false
-                        else if (k.repeatCount == 1) { longFired = true; onLong() }
-                        true
+                    android.view.KeyEvent.ACTION_DOWN -> when (k.repeatCount) {
+                        0 -> { longFired = false; false }          // nechaj clickable trackovat kratky klik
+                        1 -> { longFired = true; onLong(); true }   // dlhe OK -> info, pohlt
+                        else -> true
                     }
-                    android.view.KeyEvent.ACTION_UP -> { if (!longFired) onClick(); longFired = false; true }
+                    android.view.KeyEvent.ACTION_UP -> if (longFired) { longFired = false; true } else false
                     else -> false
                 }
             }
