@@ -411,6 +411,7 @@ private fun playRadio(
     val intent = Intent(context, PlayerActivity::class.java).apply {
         putExtra(PlayerActivity.EXTRA_UUID, row.channel.uuid)
         putExtra(PlayerActivity.EXTRA_TITLE, row.channel.name)
+        putExtra(PlayerActivity.EXTRA_KIND, "radio")
         putExtra(PlayerActivity.EXTRA_PROG_START, row.nowStart)
         putExtra(PlayerActivity.EXTRA_PROG_STOP, row.nowStop)
         putExtra(PlayerActivity.EXTRA_PROG_TITLE, row.nowTitle ?: "")

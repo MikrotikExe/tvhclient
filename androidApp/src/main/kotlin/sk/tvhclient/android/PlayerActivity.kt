@@ -140,6 +140,7 @@ class PlayerActivity : ComponentActivity() {
     private var liveUuids: List<String> = emptyList()
     private var liveNames: List<String> = emptyList()
     private var liveIndex: Int = -1
+    private var playKind: String = "tv"
     // pre opatovne pripojenie videa po navrate z pozadia
     private var videoLayout: VLCVideoLayout? = null
     private var wasPlaying: Boolean = false
@@ -564,6 +565,11 @@ class PlayerActivity : ComponentActivity() {
     }
 
     /** Prepne na konkretny kanal podla indexu, prebuduje URL a nacita. */
+    private fun saveLastLive(serverId: String?, uuid: String?) {
+        if (serverId == null || uuid == null) return
+        if (playKind == "radio") LastRadio.set(this, serverId, uuid) else LastChannel.set(this, serverId, uuid)
+    }
+
     private fun switchToIndex(i: Int, poke: Boolean = true) {
         if (i < 0 || i >= liveUuids.size) return
         if (i == liveIndex) { if (poke) pokeControls(); return }  // ten isty kanal -> nenacitavaj znova
@@ -579,6 +585,7 @@ class PlayerActivity : ComponentActivity() {
         val name = liveNames.getOrElse(i) { "" }
         liveTitleState.value = name
         liveUuidState.value = uuid
+        saveLastLive(srv.id, uuid)
         // novy kanal = neznama relacia; skry progress bar starej relacie
         val ch = LivePlaylist.channels.getOrNull(i)
         liveProgStartState.value = ch?.nowStart ?: 0L
@@ -1220,6 +1227,7 @@ class PlayerActivity : ComponentActivity() {
         val channelUuid = intent.getStringExtra(EXTRA_UUID)
         val channelTitle = intent.getStringExtra(EXTRA_TITLE) ?: ""
         val directUrl = intent.getStringExtra(EXTRA_URL)
+        playKind = intent.getStringExtra(EXTRA_KIND) ?: "tv"
         val durationMs = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
         val progStart = intent.getLongExtra(EXTRA_PROG_START, 0L)
         val progStop = intent.getLongExtra(EXTRA_PROG_STOP, 0L)
@@ -1351,6 +1359,7 @@ class PlayerActivity : ComponentActivity() {
             liveIndex = LivePlaylist.index.takeIf { it in liveUuids.indices }
                 ?: liveUuids.indexOf(channelUuid)
             liveServer = server
+            saveLastLive(server.id, channelUuid)
         }
         liveChannelsState.value = LivePlaylist.channels
         liveIndexState.value = liveIndex
@@ -1821,6 +1830,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_RETURN_UUID = "return_live_uuid"
         const val EXTRA_RETURN_TITLE = "return_live_title"
         const val EXTRA_URL = "stream_url"
+        const val EXTRA_KIND = "play_kind"
         const val EXTRA_DURATION_MS = "duration_ms"
         const val EXTRA_PROG_START = "prog_start"
         const val EXTRA_PROG_STOP = "prog_stop"

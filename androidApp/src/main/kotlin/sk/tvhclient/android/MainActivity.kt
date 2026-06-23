@@ -200,11 +200,12 @@ private fun TvHomeHost() {
     var play by remember { mutableStateOf("") }
     var showExit by remember { mutableStateOf(false) }
 
-    fun playUuid(uuid: String, title: String) {
+    fun playUuid(uuid: String, title: String, kind: String = "tv") {
         runCatching {
             ctx.startActivity(Intent(ctx, PlayerActivity::class.java).apply {
                 putExtra(PlayerActivity.EXTRA_UUID, uuid)
                 putExtra(PlayerActivity.EXTRA_TITLE, title)
+                putExtra(PlayerActivity.EXTRA_KIND, kind)
             })
         }
     }
@@ -255,7 +256,7 @@ private fun TvHomeHost() {
                 play = ""
                 if (target != null) {
                     LivePlaylist.setIndexForUuid(target)
-                    playUuid(target, LivePlaylist.channels.firstOrNull { it.uuid == target }?.name ?: "")
+                    playUuid(target, LivePlaylist.channels.firstOrNull { it.uuid == target }?.name ?: "", "radio")
                 }
             } else if (st is RadioState.Error || st is RadioState.NoServer) {
                 play = ""
