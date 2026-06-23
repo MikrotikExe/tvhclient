@@ -122,6 +122,8 @@ class PlayerActivity : ComponentActivity() {
 
     private lateinit var libVlc: LibVLC
     private var htspFeeder: HtspTsFeeder? = null
+    private var httpFeeder: HttpTsFeeder? = null
+    private var dvrViaFeeder = false
     private var htspLive = false
     private var htspStream = false
     private val htspLiveState = androidx.compose.runtime.mutableStateOf(false)
@@ -209,12 +211,39 @@ class PlayerActivity : ComponentActivity() {
     /** Bezne HTTP prehravanie (zastavi pripadny HTSP feed). */
     private fun playHttp(url: String) {
         htspFeeder?.stop(); htspFeeder = null
+        httpFeeder?.stop(); httpFeeder = null
         htspStream = false
         htspLive = false
         htspLiveState.value = false
         resetTimeshift()
         currentStreamUrl = url
         val media = buildMedia(url)
+        mediaPlayer.media = media
+        media.release()
+        mediaPlayer.play()
+    }
+
+    /**
+     * M253 — DVR/archiv cez HttpTsFeeder: appka stiahne dvrfile s digest auth
+     * (OkHttp + DigestAuthenticator) a podava libVLC cez pipe. Rovny princip ako
+     * HTSP live; rieši digest-only servery kde creds v URL (user:pass@host)
+     * libVLC nezvladne. startByte = pripadny offset pre resume cez HTTP Range.
+     */
+    private fun playDvrViaFeeder(server: sk.tvhclient.shared.model.TvhServer, url: String, startByte: Long = 0L) {
+        htspFeeder?.stop(); htspFeeder = null
+        httpFeeder?.stop()
+        htspStream = false
+        htspLive = false
+        htspLiveState.value = false
+        resetTimeshift()
+        currentStreamUrl = url
+        val feeder = HttpTsFeeder(server, url, startByte)
+        httpFeeder = feeder
+        val fd = feeder.start(lifecycleScope)
+        val media = Media(libVlc, fd)
+        media.setHWDecoderEnabled(true, false)
+        media.addOption(":demux=ts")
+        media.addOption(":file-caching=1500")
         mediaPlayer.media = media
         media.release()
         mediaPlayer.play()
@@ -228,6 +257,7 @@ class PlayerActivity : ComponentActivity() {
     private fun playHtspLive(server: sk.tvhclient.shared.model.TvhServer, channelId: Long, timeshift: Boolean): Boolean {
         return try {
             htspFeeder?.stop()
+            httpFeeder?.stop(); httpFeeder = null
             val feeder = HtspTsFeeder(server, if (timeshift) 3600 else 0)
             htspFeeder = feeder
             resetTimeshift()
@@ -1426,7 +1456,16 @@ class PlayerActivity : ComponentActivity() {
                                 pokeControls()
                             }
                         } else {
-                            playHttp(streamUrl)
+                            if (directUrl != null && server.username.isNotEmpty() && server.authMode == "digest") {
+                                // DVR/archiv na digest-only serveri: libVLC nezvladne creds v URL,
+                                // tak stiahneme cez feeder s digest auth (M253). Basic/auto/none
+                                // ostavaju na priamej (seekovatelnej) HTTP ceste.
+                                dvrViaFeeder = true
+                                playDvrViaFeeder(server, streamUrl)
+                            } else {
+                                dvrViaFeeder = false
+                                playHttp(streamUrl)
+                            }
                             pokeControls()
                         }
                     }
@@ -1689,11 +1728,18 @@ class PlayerActivity : ComponentActivity() {
         reconnectHandler.postDelayed({
             if (!::mediaPlayer.isInitialized) return@postDelayed
             runCatching {
-                val m = buildMedia(url)
-                m.addOption(":start-time=$startSec")
-                mediaPlayer.media = m
-                m.release()
-                mediaPlayer.play()
+                if (dvrViaFeeder) {
+                    // pokracuj od miesta kam sme dosli (rastuci subor) cez HTTP Range
+                    val srv = liveServer ?: return@runCatching
+                    val from = httpFeeder?.bytesWritten ?: 0L
+                    playDvrViaFeeder(srv, url, from)
+                } else {
+                    val m = buildMedia(url)
+                    m.addOption(":start-time=$startSec")
+                    mediaPlayer.media = m
+                    m.release()
+                    mediaPlayer.play()
+                }
             }
         }, 2500)
     }
@@ -1817,6 +1863,8 @@ class PlayerActivity : ComponentActivity() {
         }
         htspFeeder?.stop()
         htspFeeder = null
+        httpFeeder?.stop()
+        httpFeeder = null
         stopTimeshiftTicker()
         skipFlushJob?.cancel()
         if (::libVlc.isInitialized) {
