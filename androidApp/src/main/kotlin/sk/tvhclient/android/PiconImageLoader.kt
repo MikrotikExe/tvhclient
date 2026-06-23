@@ -10,13 +10,10 @@ import okhttp3.OkHttpClient
 import sk.tvhclient.shared.model.TvhServer
 
 /**
- * Coil ImageLoader pre picony. Auth ide cez Authorization: Basic hlavicku
- * (OkHttp neposle userinfo z URL). Disk cache 50 MB + memory cache —
- * picony sa stahuju lazily ako sa scrolluje, ziadny upfront burst (na
- * rozdiel od E2 boxu kde plugin riesil OOM cez early-abort).
- *
- * Pozn.: pre digest-only servery treba Authenticator (M3 polish). M1 sa
- * pripojil so stock auth, takze Basic hlavicka pokryva tvoj server.
+ * Coil ImageLoader pre picony. Auth: Basic preemptivne (rychla cesta pre
+ * basic/auto servery) + DigestAuthenticator na 401 challenge, takze picony
+ * idu aj z digest-only servera v defaultnom rezime. Disk cache 50 MB + memory
+ * cache — picony sa stahuju lazily ako sa scrolluje, ziadny upfront burst.
  */
 object PiconImageLoader {
 
@@ -37,19 +34,29 @@ object PiconImageLoader {
     }
 
     private fun build(context: Context, server: TvhServer?): ImageLoader {
-        val authHeader: String? = if (server != null && server.username.isNotEmpty()) {
+        val hasCreds = server != null && server.username.isNotEmpty()
+        // Basic posleme preemptivne len ked nie je vynuteny digest (setri roundtrip
+        // na basic/auto serveroch); pri digest-only ho vyriesi Authenticator nizsie.
+        val preemptiveBasic: String? = if (hasCreds && server!!.authMode != "digest") {
             val raw = "${server.username}:${server.password}"
             "Basic " + Base64.encodeToString(raw.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         } else null
 
-        val ok = OkHttpClient.Builder()
+        val builder = OkHttpClient.Builder()
             .addInterceptor(Interceptor { chain ->
                 val req = chain.request().newBuilder().apply {
-                    if (authHeader != null) header("Authorization", authHeader)
+                    if (preemptiveBasic != null) header("Authorization", preemptiveBasic)
                 }.build()
                 chain.proceed(req)
             })
-            .build()
+
+        // Digest (a Basic fallback) cez 401 challenge — aby picony isli aj z
+        // digest-only servera, nie len ked je vynuteny Basic.
+        if (hasCreds && server!!.authMode != "none") {
+            builder.authenticator(DigestAuthenticator(server.username, server.password))
+        }
+
+        val ok = builder.build()
 
         return ImageLoader.Builder(context)
             .okHttpClient(ok)
