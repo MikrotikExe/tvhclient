@@ -36,7 +36,7 @@ android {
         applicationId = "sk.tvhclient"
         minSdk = 23
         targetSdk = 35
-        versionCode = 19
+        versionCode = 20
         versionName = "1.0.0"
         buildConfigField(
             "String",
@@ -78,6 +78,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Natívne debug symboly (libVLC) v App Bundle -> Play vie čitateľne
+            // zobraziť pády/ANR v natívnom kóde a nehlási chýbajúce symboly.
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
             // Play: vlastny kluc ak je keystore.properties; inak (CI test) debug
             // podpis, nech je release APK instalovatelny na otestovanie R8.
             signingConfig = if (keystorePropsFile.exists()) {
