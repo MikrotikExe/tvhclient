@@ -22,6 +22,15 @@ class DigestAuthenticator(
 ) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
+        return try {
+            buildAuth(response)
+        } catch (_: Throwable) {
+            // nikdy nezhod appku kvoli auth/hashu — radsej tiche zlyhanie
+            null
+        }
+    }
+
+    private fun buildAuth(response: Response): Request? {
         if (response.request.header("Authorization")?.startsWith("Digest") == true) return null
         if (priorResponseCount(response) >= 3) return null
 
@@ -83,13 +92,14 @@ class DigestAuthenticator(
 
     /** Hash podla algoritmu vyzvy. Vracia hex. */
     private fun h(algorithm: String, data: String): String {
-        val name = when {
-            algorithm.startsWith("SHA-256") -> "SHA-256"
-            algorithm.startsWith("SHA-512-256") -> "SHA-512/256"
-            else -> "MD5"
+        val bytes = data.toByteArray(Charsets.UTF_8)
+        return when {
+            algorithm.startsWith("SHA-512-256") -> Sha512_256.hex(bytes)
+            algorithm.startsWith("SHA-256") ->
+                MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+            else ->
+                MessageDigest.getInstance("MD5").digest(bytes).joinToString("") { "%02x".format(it) }
         }
-        val md = MessageDigest.getInstance(name)
-        return md.digest(data.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 
     private fun randomHex(bytes: Int): String =
