@@ -13,6 +13,10 @@ android {
     namespace = "sk.tvhclient.android"
     compileSdk = 35
 
+    // NDK je potrebne, aby AGP vedel vytiahnut natívne debug symboly z libVLC
+    // .so (objcopy). Verzia musi byt v CI nainstalovana (viz workflow).
+    ndkVersion = "27.0.12077973"
+
     // Podpis pre Play: kluc sa cita z keystore.properties (nie je v gite).
     // Ak subor chyba (napr. CI debug build), release sa proste nepodpise.
     val keystoreProps = Properties()
@@ -36,7 +40,7 @@ android {
         applicationId = "sk.tvhclient"
         minSdk = 23
         targetSdk = 35
-        versionCode = 20
+        versionCode = 21
         versionName = "1.0.0"
         buildConfigField(
             "String",
