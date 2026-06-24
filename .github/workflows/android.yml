@@ -26,8 +26,11 @@ jobs:
         with:
           gradle-version: '8.10'
 
+      - name: Set up Android SDK (sdkmanager na PATH)
+        uses: android-actions/setup-android@v3
+
       - name: Install Android NDK (pre natívne debug symboly libVLC)
-        run: yes | sdkmanager "ndk;27.0.12077973"
+        run: sdkmanager "ndk;27.0.12077973"
 
       - name: Set up signing (z GitHub secrets)
         if: ${{ env.KEYSTORE_BASE64 != '' }}
