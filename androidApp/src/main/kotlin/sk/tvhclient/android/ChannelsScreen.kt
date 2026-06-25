@@ -396,6 +396,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
             isFav = isFav,
             isLocked = isLocked,
             isHidden = isHidden,
+            lockEnabled = ParentalLock.isEnabled(ctx),
             onProgram = { epgFor = cr; contextRow = null },
             onToggleFav = {
                 Favorites.toggle(ctx, serverId, cr.channel.uuid); favTick++; contextRow = null
@@ -454,6 +455,7 @@ fun ChannelActionDialog(
     isFav: Boolean,
     isLocked: Boolean,
     isHidden: Boolean,
+    lockEnabled: Boolean,
     onProgram: () -> Unit,
     onToggleFav: () -> Unit,
     onProfile: () -> Unit,
@@ -478,10 +480,12 @@ fun ChannelActionDialog(
                     onToggleFav
                 )
                 ActionRow(stringResource(R.string.ch_profile), onProfile)
-                ActionRow(
-                    if (isLocked) stringResource(R.string.plock_unlock) else stringResource(R.string.plock_lock),
-                    onToggleLock
-                )
+                if (lockEnabled) {
+                    ActionRow(
+                        if (isLocked) stringResource(R.string.plock_unlock) else stringResource(R.string.plock_lock),
+                        onToggleLock
+                    )
+                }
                 ActionRow(
                     if (isHidden) stringResource(R.string.ch_unhide) else stringResource(R.string.ch_hide),
                     onToggleHide
