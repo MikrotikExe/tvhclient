@@ -810,6 +810,10 @@ class PlayerActivity : ComponentActivity() {
         val c = pinOnCancel
         closePin(); c?.invoke()
     }
+    private fun pinDel() {
+        if (pinEntryState.value.isNotEmpty()) pinEntryState.value = pinEntryState.value.dropLast(1)
+        pinErrorState.value = false
+    }
 
     // Pocitadlo na obnovu ikon zamku v in-player zozname po zmene zamku.
     private val lockTickState = androidx.compose.runtime.mutableStateOf(0)
@@ -1683,10 +1687,10 @@ class PlayerActivity : ComponentActivity() {
                             }
                         }
                     }
-                    // rodicovsky zamok: ak je pociatocny kanal zamknuty a sme mimo grace okna,
-                    // vypytaj PIN. Plati pre KAZDE otvorenie vratane re-openu posledneho kanala
-                    // (nezavisle na tom, ci volajuci poslal EXTRA_REQUIRE_PIN).
-                    if (ParentalLock.channelNeedsPin(this, server.id, channelUuid)) {
+                    // rodicovsky zamok: pri KAZDOM otvoreni prehravaca so zamknutym kanalom
+                    // vypytaj PIN (bez ohladu na grace okno). Grace ("nepytat X min") plati len
+                    // pri prepinani v ramci otvoreneho prehravaca (zoznam / pozadie / cislice).
+                    if (ParentalLock.channelLockedProtected(this, server.id, channelUuid)) {
                         requestPin(onOk = doPlay, onCancel = { finish() })
                     } else doPlay()
                 },
@@ -1766,6 +1770,9 @@ class PlayerActivity : ComponentActivity() {
                 pinPrompt = pinPromptState.value,
                 pinLen = pinEntryState.value.length,
                 pinError = pinErrorState.value,
+                onPinDigit = { d -> pinDigit(d) },
+                onPinBack = { pinDel() },
+                onPinCancel = { cancelPin() },
                 scrubFrac = scrubFractionState.value,
                 progNextTitle = liveNextTitleState.value,
                 progNextStart = liveNextStartState.value,
@@ -1861,7 +1868,8 @@ class PlayerActivity : ComponentActivity() {
                         ParentalLock.isChannelLocked(this@PlayerActivity, liveServer?.id, cCh.uuid)
                     }
                     Box(
-                        Modifier.fillMaxSize().background(Color(0xCC0B1220)),
+                        Modifier.fillMaxSize().background(Color(0xCC0B1220))
+                            .clickable { closeChannelContextMenu() },   // ťuknutie mimo zatvori + blokuje pozadie
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -2295,6 +2303,9 @@ private fun PlayerUi(
     pinPrompt: Boolean = false,
     pinLen: Int = 0,
     pinError: Boolean = false,
+    onPinDigit: (Int) -> Unit = {},
+    onPinBack: () -> Unit = {},
+    onPinCancel: () -> Unit = {},
     scrubFrac: Float = 0f,
     progNextTitle: String = "",
     progNextStart: Long = 0,
@@ -3550,12 +3561,32 @@ private fun PlayerUi(
                                 }
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(
-                                        ch.name,
-                                        color = playerFg(),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            ch.name,
+                                            color = playerFg(),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (ch.recording) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Box(
+                                                Modifier.size(8.dp)
+                                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                                    .background(Color(0xFFE53935))
+                                            )
+                                        }
+                                        if (locked) {
+                                            Spacer(Modifier.width(6.dp))
+                                            androidx.compose.material3.Icon(
+                                                imageVector = androidx.compose.material.icons.Icons.Filled.Lock,
+                                                contentDescription = null,
+                                                tint = playerFgDim(),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
                                     if (ch.nowTitle.isNotBlank()) {
                                         Text(
                                             ch.nowTitle,
@@ -3577,15 +3608,6 @@ private fun PlayerUi(
                                             )
                                         }
                                     }
-                                }
-                                if (locked) {
-                                    Spacer(Modifier.width(8.dp))
-                                    androidx.compose.material3.Icon(
-                                        imageVector = androidx.compose.material.icons.Icons.Filled.Lock,
-                                        contentDescription = null,
-                                        tint = playerFgDim(),
-                                        modifier = Modifier.size(18.dp)
-                                    )
                                 }
                             }
                         }
@@ -3903,13 +3925,14 @@ private fun PlayerUi(
         // Rodicovsky zamok: zadanie PIN (cislice z dialkoveho riesi Activity)
         if (pinPrompt) {
             Box(
-                Modifier.fillMaxSize().background(playerScrim()),
+                Modifier.fillMaxSize().background(Color(0xCC0B1220))
+                    .pointerInput(Unit) { detectTapGestures { } },   // blokuj vstup do pozadia
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         androidx.compose.ui.res.stringResource(R.string.plock_enter),
-                        color = playerFg(),
+                        color = Color.White,
                         style = MaterialTheme.typography.titleLarge
                     )
                     Spacer(Modifier.height(20.dp))
@@ -3917,7 +3940,7 @@ private fun PlayerUi(
                         repeat(4) { i ->
                             Box(
                                 Modifier.size(20.dp).clip(CircleShape).background(
-                                    if (i < pinLen) Color(0xFF3B82F6) else playerTrack()
+                                    if (i < pinLen) Color(0xFF3B82F6) else Color(0x44FFFFFF)
                                 )
                             )
                         }
@@ -3929,12 +3952,49 @@ private fun PlayerUi(
                             color = Color(0xFFFF6B6B)
                         )
                     }
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
                     Text(
                         androidx.compose.ui.res.stringResource(R.string.plock_hint),
-                        color = playerFgDim(),
+                        color = Color(0xFFB9C2D0),
                         style = MaterialTheme.typography.bodySmall
                     )
+                    // Dotykova ciselna mriezka — len na telefone/tablete (na TV sa zadava dialkovym)
+                    if (!isTvGest) {
+                        Spacer(Modifier.height(20.dp))
+                        val padKeys = listOf(
+                            listOf("1", "2", "3"),
+                            listOf("4", "5", "6"),
+                            listOf("7", "8", "9"),
+                            listOf("del", "0", "x")
+                        )
+                        padKeys.forEach { rowKeys ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                rowKeys.forEach { label ->
+                                    Box(
+                                        Modifier.size(width = 70.dp, height = 52.dp)
+                                            .clip(RoundedCornerShape(26.dp))
+                                            .background(Color(0x22FFFFFF))
+                                            .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(26.dp))
+                                            .clickable {
+                                                when (label) {
+                                                    "del" -> onPinBack()
+                                                    "x" -> onPinCancel()
+                                                    else -> onPinDigit(label.toInt())
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            when (label) { "del" -> "\u232B"; "x" -> "\u2715"; else -> label },
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.titleLarge
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                        }
+                    }
                 }
             }
         }

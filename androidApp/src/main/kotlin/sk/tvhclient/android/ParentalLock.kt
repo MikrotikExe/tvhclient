@@ -84,6 +84,14 @@ object ParentalLock {
     fun channelNeedsPin(c: Context, serverId: String?, uuid: String?): Boolean =
         needsPin(c) && protectChannels(c) && isChannelLocked(c, serverId, uuid)
 
+    /**
+     * Je kanal zamknuty a chraneny PINom — BEZ ohladu na grace okno.
+     * Pouzite pri starte prehravaca: kazde otvorenie zamknuteho kanala ma vypytat PIN,
+     * grace okno ("nepytat X min") plati len pri prepinani v ramci otvoreneho prehravaca.
+     */
+    fun channelLockedProtected(c: Context, serverId: String?, uuid: String?): Boolean =
+        isEnabled(c) && hasPin(c) && protectChannels(c) && isChannelLocked(c, serverId, uuid)
+
     /** Treba PIN pre vstup do nastaveni? */
     fun settingsNeedsPin(c: Context): Boolean = needsPin(c) && protectSettings(c)
 }

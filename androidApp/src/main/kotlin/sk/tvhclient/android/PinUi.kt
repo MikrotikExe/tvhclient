@@ -102,7 +102,12 @@ private fun PinDialogGrid(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 6.dp) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF1B2433),
+            contentColor = Color.White,
+            tonalElevation = 6.dp
+        ) {
             Column(
                 Modifier
                     .padding(24.dp)

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Voicemail
 import androidx.compose.material3.Icon
 import androidx.compose.ui.draw.scale
@@ -892,7 +893,12 @@ private fun ChannelItem(
                 }
                 if (locked) {
                     Spacer(Modifier.width(6.dp))
-                    Text("\uD83D\uDD12", style = MaterialTheme.typography.bodySmall)
+                    androidx.compose.material3.Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
                 if (hidden) {
                     Spacer(Modifier.width(6.dp))
