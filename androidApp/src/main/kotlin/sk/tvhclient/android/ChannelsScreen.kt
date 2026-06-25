@@ -290,7 +290,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                     // Vyhladavanie: plochy filtrovany zoznam
                     val q = query.trim().lowercase()
                     val results = s.allRows.filter { it.channel.name.lowercase().contains(q) }
-                    ChannelView(viewMode, results, listStateSearch, nowTick, epgMap, recordingByChannel, onRecordingTap = { r, rec -> recChoice = r to rec }, onTopUp = { runCatching { searchFocus.requestFocus() } }) { contextRow = it }
+                    ChannelView(viewMode, results, listStateSearch, nowTick, epgMap, recordingByChannel, onRecordingTap = { r, rec -> recChoice = r to rec }, onTopUp = { runCatching { searchFocus.requestFocus() } }, onShowEpg = { contextRow = it }, lockTick = lockTick, hiddenTick = hiddenTick)
                 } else {
                     // Filtre podla tagov
                     val tags = s.categories.mapNotNull { it.tag }
@@ -332,7 +332,7 @@ fun ChannelsScreen(vm: ChannelsViewModel = viewModel(), resetSignal: Int = 0, on
                         LastChannel.get(ctx, serverId)?.takeIf { u -> rows.any { it.channel.uuid == u } }
                             ?: rows.firstOrNull()?.channel?.uuid
                     }
-                    ChannelView(viewMode, rows, listStateMain, nowTick, epgMap, recordingByChannel, onRecordingTap = { r, rec -> recChoice = r to rec }, focusUuid = focusUuid, onTopUp = { runCatching { searchFocus.requestFocus() } }) { contextRow = it }
+                    ChannelView(viewMode, rows, listStateMain, nowTick, epgMap, recordingByChannel, onRecordingTap = { r, rec -> recChoice = r to rec }, focusUuid = focusUuid, onTopUp = { runCatching { searchFocus.requestFocus() } }, onShowEpg = { contextRow = it }, lockTick = lockTick, hiddenTick = hiddenTick)
                 }
             }
         }
@@ -620,10 +620,12 @@ private fun ChannelView(
     onRecordingTap: (ChannelRow, sk.tvhclient.shared.model.DvrEntry) -> Unit,
     focusUuid: String? = null,
     onTopUp: () -> Unit = {},
-    onShowEpg: (ChannelRow) -> Unit
+    onShowEpg: (ChannelRow) -> Unit,
+    lockTick: Int = 0,
+    hiddenTick: Int = 0
 ) {
     when (mode) {
-        ChannelViewMode.LIST -> ChannelList(rows, listState, nowSec, epgMap, recordingByChannel, onRecordingTap, focusUuid, onTopUp, onShowEpg)
+        ChannelViewMode.LIST -> ChannelList(rows, listState, nowSec, epgMap, recordingByChannel, onRecordingTap, focusUuid, onTopUp, onShowEpg, lockTick, hiddenTick)
         ChannelViewMode.GRID -> ChannelGrid(rows, nowSec, epgMap, columns = 2, recordingByChannel, onRecordingTap, onShowEpg)
         ChannelViewMode.TILES -> ChannelGrid(rows, nowSec, epgMap, columns = 4, recordingByChannel, onRecordingTap, onShowEpg)
     }
@@ -741,7 +743,9 @@ private fun ChannelList(
     onRecordingTap: (ChannelRow, sk.tvhclient.shared.model.DvrEntry) -> Unit,
     focusUuid: String? = null,
     onTopUp: () -> Unit = {},
-    onShowEpg: (ChannelRow) -> Unit
+    onShowEpg: (ChannelRow) -> Unit,
+    lockTick: Int = 0,
+    hiddenTick: Int = 0
 ) {
     val context = LocalContext.current
     val server = remember { Tvh.store.active() }
@@ -808,7 +812,7 @@ private fun ChannelList(
             }
             ChannelItem(row, loader, context, nowSec, epgMap[row.channel.uuid],
                 recordingByChannel[row.channel.name], onRecordingTap, onShowEpg,
-                itemModifier = keyMod)
+                itemModifier = keyMod, lockTick = lockTick, hiddenTick = hiddenTick)
         }
     }
 }
@@ -824,11 +828,17 @@ private fun ChannelItem(
     recording: sk.tvhclient.shared.model.DvrEntry?,
     onRecordingTap: (ChannelRow, sk.tvhclient.shared.model.DvrEntry) -> Unit,
     onShowEpg: (ChannelRow) -> Unit,
-    itemModifier: Modifier = Modifier
+    itemModifier: Modifier = Modifier,
+    lockTick: Int = 0,
+    hiddenTick: Int = 0
 ) {
     val (curTitle, curStart, curStop) = currentNow(row, epgList, nowSec)
-    val locked = ParentalLock.isChannelLocked(context, Tvh.store.active()?.id, row.channel.uuid)
-    val hidden = HiddenChannels.isHidden(context, Tvh.store.active()?.id, row.channel.uuid)
+    val locked = remember(lockTick, row.channel.uuid) {
+        ParentalLock.isChannelLocked(context, Tvh.store.active()?.id, row.channel.uuid)
+    }
+    val hidden = remember(hiddenTick, row.channel.uuid) {
+        HiddenChannels.isHidden(context, Tvh.store.active()?.id, row.channel.uuid)
+    }
     Row(
         modifier = itemModifier
             .fillMaxWidth()
