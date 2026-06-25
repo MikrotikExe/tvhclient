@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.Forward30
 import coil.request.ImageRequest
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -822,9 +823,9 @@ class PlayerActivity : ComponentActivity() {
             ParentalLock.setChannelLocked(this, srv.id, uuid, !now)
             lockTickState.value = lockTickState.value + 1
         }
-        // ako na telefone: ak je zamok aktivny a sme mimo okna, najprv over PIN
-        // (bez otvorenia grace okna, nech zamykanie ostane "stickove")
-        if (ParentalLock.needsPin(this)) requestPin(onOk = doToggle, onCancel = { }, markUnlock = false)
+        // ak je zamok aktivny a sme mimo okna, najprv over PIN; po zadani plati grace okno
+        // (rovnake pravidlo "po odomknuti nepytat X min" ako pri prepinani) -> markUnlock = true
+        if (ParentalLock.needsPin(this)) requestPin(onOk = doToggle, onCancel = { }, markUnlock = true)
         else doToggle()
     }
 
@@ -856,7 +857,7 @@ class PlayerActivity : ComponentActivity() {
         closeChannelContextMenu()
         if (ch == null) return
         when (key) {
-            "info" -> openEpgInApp()                              // TV program (guide); BACK vrati do prehravaca
+            "info" -> showChannelInfo(idx)                       // detail relacie priamo v prehravaci
             "fromstart" -> {
                 val rec = recInProgressByName.value[ch.name]
                 if (rec != null) playRecordingFromStart(rec, ch.nowStart, ch.nowStop)
@@ -865,6 +866,55 @@ class PlayerActivity : ComponentActivity() {
             "lock" -> toggleLockAt(idx)                           // uz riesi PIN + grace okno
         }
     }
+
+    // --- Info o relacii (detail) v prehravaci ---
+    private val infoVisibleState = androidx.compose.runtime.mutableStateOf(false)
+    private val infoChannelState = androidx.compose.runtime.mutableStateOf("")
+    private val infoTitleState = androidx.compose.runtime.mutableStateOf("")
+    private val infoTimeState = androidx.compose.runtime.mutableStateOf("")
+    private val infoDescState = androidx.compose.runtime.mutableStateOf("")
+
+    private fun fmtClock(s: Long): String =
+        if (s <= 0) "" else java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date(s * 1000))
+    private fun fmtRange(a: Long, b: Long): String {
+        val sa = fmtClock(a); val sb = fmtClock(b)
+        return if (sa.isNotBlank() && sb.isNotBlank()) "$sa - $sb" else sa
+    }
+
+    private fun applyInfo(ev: sk.tvhclient.shared.model.EpgEvent) {
+        if (ev.title.isNotBlank()) infoTitleState.value = ev.title
+        if (ev.start > 0) infoTimeState.value = fmtRange(ev.start, ev.stop)
+        infoDescState.value = ev.bestDescription
+    }
+
+    /** Zobrazi detail aktualnej relacie kanala (z EPG); okamzite ukaze now-polia, popis doplni async. */
+    private fun showChannelInfo(idx: Int) {
+        val ch = liveChannelsState.value.getOrNull(idx) ?: return
+        infoChannelState.value = ch.name
+        infoTitleState.value = ch.nowTitle
+        infoTimeState.value = fmtRange(ch.nowStart, ch.nowStop)
+        infoDescState.value = ""
+        infoVisibleState.value = true
+        val srv = Tvh.store.active() ?: return
+        val nowSec = System.currentTimeMillis() / 1000
+        fun pick(list: List<sk.tvhclient.shared.model.EpgEvent>) =
+            list.firstOrNull { it.start <= nowSec && nowSec < it.stop } ?: list.minByOrNull { it.start }
+        val cached = epgUpcomingState.value[ch.uuid]
+        if (!cached.isNullOrEmpty()) {
+            pick(cached)?.let { applyInfo(it) }
+        } else {
+            lifecycleScope.launch {
+                val list = runCatching {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        Tvh.fetchEpgForChannel(srv, Tvh.apiFor(srv), ch.uuid)
+                    }
+                }.getOrDefault(emptyList())
+                if (infoVisibleState.value) pick(list)?.let { applyInfo(it) }
+            }
+        }
+    }
+    private fun closeChannelInfo() { infoVisibleState.value = false }
 
     private fun openChannelList() {
         if (liveUuids.size < 2) return
@@ -1070,7 +1120,18 @@ class PlayerActivity : ComponentActivity() {
             return true
         }
 
-        // 0b) EPG kláves -> TV program; INFO kláves -> okno s relaciou (vzdy)
+        // 0d) Info o relacii (detail) -> hociktore OK/BACK/vlavo zatvori
+        if (infoVisibleState.value) {
+            if (down) when (kc) {
+                android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                android.view.KeyEvent.KEYCODE_ENTER,
+                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+                android.view.KeyEvent.KEYCODE_BACK,
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { closeChannelInfo(); return true }
+            }
+            return true
+        }
+
         if (down) {
             when (kc) {
                 android.view.KeyEvent.KEYCODE_GUIDE,
@@ -1840,6 +1901,44 @@ class PlayerActivity : ComponentActivity() {
                                         fontWeight = FontWeight.SemiBold)
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            // Info o relacii (detail) — overlay v style prehravaca
+            if (infoVisibleState.value) {
+                Box(
+                    Modifier.fillMaxSize().background(Color(0xCC0B1220))
+                        .clickable { closeChannelInfo() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth(0.78f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF1B2433))
+                            .padding(horizontal = 24.dp, vertical = 24.dp)
+                    ) {
+                        if (infoChannelState.value.isNotBlank()) {
+                            Text(infoChannelState.value, color = Color(0xFF6699FF),
+                                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(6.dp))
+                        }
+                        Text(infoTitleState.value.ifBlank { infoChannelState.value },
+                            color = Color.White, style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold)
+                        if (infoTimeState.value.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(infoTimeState.value, color = Color(0xFFB9C2D0),
+                                style = MaterialTheme.typography.titleMedium)
+                        }
+                        if (infoDescState.value.isNotBlank()) {
+                            Spacer(Modifier.height(14.dp))
+                            Text(infoDescState.value, color = Color(0xFFD7DEE8),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier
+                                    .heightIn(max = 260.dp)
+                                    .verticalScroll(androidx.compose.foundation.rememberScrollState()))
                         }
                     }
                 }
