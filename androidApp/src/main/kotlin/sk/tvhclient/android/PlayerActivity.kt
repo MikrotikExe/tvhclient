@@ -824,13 +824,13 @@ class PlayerActivity : ComponentActivity() {
             listOf("1", "2", "3"),
             listOf("4", "5", "6"),
             listOf("7", "8", "9"),
-            listOf("del", "0", "x")
+            listOf("del", "0", "list")
         )
         val r = pinGridRowState.value.coerceIn(0, 3)
         val c = pinGridColState.value.coerceIn(0, 2)
         when (val label = grid[r][c]) {
             "del" -> pinDel()
-            "x" -> cancelPin()
+            "list" -> pinOpenChannelList()
             else -> pinDigit(label.toInt())
         }
     }
@@ -853,6 +853,14 @@ class PlayerActivity : ComponentActivity() {
         pinOnSuccess = null; pinOnCancel = null
         pinMarkUnlock = true
         pinChannelIndex = null
+    }
+    /** M267: z PIN vyzvy zamknuteho kanala otvor zoznam kanalov, nech si pouzivatel vyberie
+     *  iny (nezamknuty) kanal. Vyzvu zatvorime bez onCancel (teda bez finish), aby prehravac
+     *  nezhasol. Ak je len jeden kanal, niet kam prepnut -> sprav cancel (finish). */
+    private fun pinOpenChannelList() {
+        if (liveUuids.size < 2) { cancelPin(); return }
+        closePin()
+        openChannelList()
     }
     private fun pinDigit(d: Int) {
         if (pinEntryState.value.length >= 4) return
@@ -1858,6 +1866,7 @@ class PlayerActivity : ComponentActivity() {
                 onPinDigit = { d -> pinDigit(d) },
                 onPinBack = { pinDel() },
                 onPinCancel = { cancelPin() },
+                onPinOpenList = { pinOpenChannelList() },
                 pinGridRow = pinGridRowState.value,
                 pinGridCol = pinGridColState.value,
                 scrubFrac = scrubFractionState.value,
@@ -2408,6 +2417,7 @@ private fun PlayerUi(
     onPinDigit: (Int) -> Unit = {},
     onPinBack: () -> Unit = {},
     onPinCancel: () -> Unit = {},
+    onPinOpenList: () -> Unit = {},
     pinGridRow: Int = 0,
     pinGridCol: Int = 0,
     scrubFrac: Float = 0f,
@@ -4086,7 +4096,7 @@ private fun PlayerUi(
                         listOf("1", "2", "3"),
                         listOf("4", "5", "6"),
                         listOf("7", "8", "9"),
-                        listOf("del", "0", "x")
+                        listOf("del", "0", "list")
                     )
                     padKeys.forEachIndexed { r, rowKeys ->
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -4104,14 +4114,14 @@ private fun PlayerUi(
                                         .clickable {
                                             when (label) {
                                                 "del" -> onPinBack()
-                                                "x" -> onPinCancel()
+                                                "list" -> onPinOpenList()
                                                 else -> onPinDigit(label.toInt())
                                             }
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        when (label) { "del" -> "\u232B"; "x" -> "\u2715"; else -> label },
+                                        when (label) { "del" -> "\u232B"; "list" -> "\u2630"; else -> label },
                                         color = Color.White,
                                         style = MaterialTheme.typography.titleLarge
                                     )
