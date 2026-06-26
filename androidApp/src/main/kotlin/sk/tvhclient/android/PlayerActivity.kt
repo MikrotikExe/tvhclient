@@ -1119,7 +1119,10 @@ class PlayerActivity : ComponentActivity() {
                 if (digit >= 0) { pinDigit(digit); return true }
                 when (kc) {
                     android.view.KeyEvent.KEYCODE_DEL -> { pinDel(); return true }
-                    android.view.KeyEvent.KEYCODE_BACK -> { cancelPin(); return true }
+                    // M267-fix: sipka Spat pocas PIN vyzvy zamknuteho kanala vrati pouzivatela
+                    // k zoznamu kanalov (nech si vyberie nezamknuty), neukoncuje prehravac.
+                    // Plati LEN pocas PIN vyzvy (mimo nej ma BACK svoju beznu funkciu nizsie).
+                    android.view.KeyEvent.KEYCODE_BACK -> { pinOpenChannelList(); return true }
                 }
                 // M262: pocas vyzvy sa da prepnut na iny kanal — len hardverove CHANNEL +/-
                 // (D-pad teraz ovlada PIN mriezku). Volny kanal sa zacne hrat, dalsi zamknuty
