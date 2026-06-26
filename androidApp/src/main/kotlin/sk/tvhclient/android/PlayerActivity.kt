@@ -1104,6 +1104,15 @@ class PlayerActivity : ComponentActivity() {
                         android.view.KeyEvent.KEYCODE_DPAD_UP -> { switchFromPin(pci, +1); return true }
                         android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
                         android.view.KeyEvent.KEYCODE_DPAD_DOWN -> { switchFromPin(pci, -1); return true }
+                        // OK = otvor zoznam kanalov (vyber volny kanal priamo); zamknuty si znova vypyta PIN
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                        android.view.KeyEvent.KEYCODE_ENTER,
+                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            okLongFired = true   // nasledne OK-up sa prehltne (nevyberie hned kanal)
+                            closePin()
+                            openChannelList()
+                            return true
+                        }
                     }
                 }
             }
