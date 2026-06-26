@@ -2863,11 +2863,6 @@ private fun PlayerUi(
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(1200)
         onPrefetchEpg()   // M274: refresh len ak je cache prazdna/zastarana
-        // M269: po EPG predtiahni aj picony vsetkych kanalov na disk, nech prvy
-        // otvoreny zoznam a scrollovanie idu z cache, nie zo siete.
-        runCatching {
-            PiconImageLoader.prefetch(ctx, server, LivePlaylist.channels.map { it.piconUrl })
-        }
     }
 
     // Kym je zoznam kanalov otvoreny, obnovuj EPG (now/next) aby relacie

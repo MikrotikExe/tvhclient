@@ -649,10 +649,6 @@ private fun ChannelGrid(
     val context = LocalContext.current
     val server = remember { Tvh.store.active() }
     val loader = remember(server?.id) { PiconImageLoader.get(context, server) }
-    // M269: po nacitani zoznamu predtiahni picony na disk, nech scrollovanie ide z cache.
-    LaunchedEffect(server?.id, rows.size) {
-        PiconImageLoader.prefetch(context, server, rows.map { it.piconUrl })
-    }
     if (rows.isEmpty()) {
         EmptyStatus(stringResource(R.string.no_channels))
         return

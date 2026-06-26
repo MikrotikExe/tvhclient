@@ -7,7 +7,6 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import sk.tvhclient.shared.model.TvhServer
@@ -67,14 +66,7 @@ object PiconImageLoader {
             builder.authenticator(DigestAuthenticator(server.username, server.password))
         }
 
-        // M269: viac subeznych pozadovaniek na host — pri otvoreni zoznamu sa
-        // davka piconov stiahne paralelnejsie (default OkHttp je len 5/host).
-        val dispatcher = Dispatcher().apply {
-            maxRequests = 24
-            maxRequestsPerHost = 12
-        }
-
-        val ok = builder.dispatcher(dispatcher).build()
+        val ok = builder.build()
 
         return ImageLoader.Builder(context)
             .okHttpClient(ok)
