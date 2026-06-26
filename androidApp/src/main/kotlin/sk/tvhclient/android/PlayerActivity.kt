@@ -188,6 +188,9 @@ class PlayerActivity : ComponentActivity() {
     // cache mapa kanal(uuid) -> aktualna + najblizsie relacie (pre EPG browser na TV)
     private val epgUpcomingState =
         androidx.compose.runtime.mutableStateOf<Map<String, List<sk.tvhclient.shared.model.EpgEvent>>>(emptyMap())
+    // M270: spinner pri prvom/zastaranom nacitani EPG v zozname kanalov
+    private val epgLoadingState = androidx.compose.runtime.mutableStateOf(false)
+    private var epgLastOkMs = 0L
 
     // D-pad / diaľkové: signál na zobrazenie ovládania, info pre seek a sw dekóder
     private val controlsPokeState = androidx.compose.runtime.mutableStateOf(0)
@@ -576,7 +579,34 @@ class PlayerActivity : ComponentActivity() {
                 liveChannelsState.value = updated
                 LivePlaylist.channels = updated
             }
+            epgLastOkMs = System.currentTimeMillis()
         } catch (e: Exception) {
+        }
+    }
+
+    /** M270: EPG je zastarane (treba spinner pri prvom nacitani) ak este nikdy nebezalo,
+     *  je starsie nez 3 h (dlho vypnuty box), alebo je cache prazdna v HTSP rezime. */
+    private fun epgIsStale(): Boolean {
+        if (epgLastOkMs == 0L) return true
+        if (System.currentTimeMillis() - epgLastOkMs > 3L * 60 * 60 * 1000) return true
+        return liveServer?.connectionMode == "htsp" && epgUpcomingState.value.isEmpty()
+    }
+
+    /** M270: prve nacitanie EPG po otvoreni zoznamu. Spinner ukaze LEN ak je cache
+     *  prazdna/zastarana a nacitanie trva dlhsie nez prah (350 ms) — pri rychlom serveri
+     *  ani pri prepinani/periodickom refreshe sa neobjavi. */
+    private fun refreshOverlayEpgInitial() {
+        lifecycleScope.launch {
+            var spinJob: kotlinx.coroutines.Job? = null
+            if (epgIsStale()) {
+                spinJob = launch {
+                    kotlinx.coroutines.delay(350)
+                    epgLoadingState.value = true
+                }
+            }
+            refreshOverlayEpg()
+            spinJob?.cancel()
+            epgLoadingState.value = false
         }
     }
 
@@ -1861,6 +1891,8 @@ class PlayerActivity : ComponentActivity() {
                 onRefreshEpg = {
                     lifecycleScope.launch { refreshOverlayEpg() }
                 },
+                onRefreshEpgInitial = { refreshOverlayEpgInitial() },
+                epgLoading = epgLoadingState.value,
                 numberEntry = numEntryState.value,
                 timeshiftOffsetMs = timeshiftOffsetState.value,
                 pinPrompt = pinPromptState.value,
@@ -2383,6 +2415,8 @@ private fun PlayerUi(
     onChannelLongPress: (Int) -> Unit = {},
     lockTick: Int = 0,
     onRefreshEpg: () -> Unit = {},
+    onRefreshEpgInitial: () -> Unit = {},
+    epgLoading: Boolean = false,
     numberEntry: String = "",
     timeshiftOffsetMs: Long = 0L,
     controlsPoke: Int = 0,
@@ -2775,9 +2809,10 @@ private fun PlayerUi(
     // postupne prechadzali na dalsie
     LaunchedEffect(showChannelList) {
         if (showChannelList) {
+            onRefreshEpgInitial()   // M270: prve nacitanie so spinnerom (len ak je cache prazdna/zastarana)
             while (true) {
-                onRefreshEpg()
                 kotlinx.coroutines.delay(60_000)
+                onRefreshEpg()      // periodicky refresh bez spinnera
             }
         }
     }
@@ -3599,6 +3634,14 @@ private fun PlayerUi(
                             color = playerFg(),
                             style = MaterialTheme.typography.titleMedium
                         )
+                        if (epgLoading) {
+                            Spacer(Modifier.weight(1f))
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = playerAccent(),
+                                strokeWidth = 2.dp
+                            )
+                        }
                     }
                 }
                     Box(
@@ -3807,6 +3850,14 @@ private fun PlayerUi(
                 ) {
                     Text(dateStr, color = playerFgDim(), style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.weight(1f))
+                    if (epgLoading) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = accentC,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(12.dp))
+                    }
                     Text(hhmm(nowT), color = playerFg(),
                         style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 }
