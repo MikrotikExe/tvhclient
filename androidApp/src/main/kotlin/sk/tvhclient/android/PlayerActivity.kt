@@ -2937,10 +2937,11 @@ private fun PlayerUi(
     ) { onClose() }
     // M280: BACK pri cistom zivom prehravani (mimo PiP) -> potvrdenie ukoncenia (ako exit v menu),
     // aby nechcene stlacenie Spat hned neukoncilo prehravanie.
+    // M280-fix: LEN na TV (zariadenia bez PiP). Na mobile/tablete (pipSupported) sa
+    // potvrdenie nezobrazuje vobec — BACK tam riesi PiP / bezne spravanie.
     androidx.activity.compose.BackHandler(
-        enabled = !seekable && !controlsVisible && menu == null && !showChannelList && !showOptions
-                  && !returnLiveOnBack && !showInfo
-                  && !(autoPipEnabled && pipSupported && playing)
+        enabled = !pipSupported && !seekable && !controlsVisible && menu == null
+                  && !showChannelList && !showOptions && !returnLiveOnBack && !showInfo
     ) { onRequestExit() }
 
     // M266: predbezne nacitanie EPG (now/next) na pozadi kratko po starte prehravaca,
