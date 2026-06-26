@@ -5,6 +5,9 @@ import android.util.Base64
 import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import sk.tvhclient.shared.model.TvhServer
@@ -57,7 +60,14 @@ object PiconImageLoader {
             builder.authenticator(DigestAuthenticator(server.username, server.password))
         }
 
-        val ok = builder.build()
+        // M269: viac subeznych pozadovaniek na host — pri otvoreni zoznamu sa
+        // davka piconov stiahne paralelnejsie (default OkHttp je len 5/host).
+        val dispatcher = Dispatcher().apply {
+            maxRequests = 24
+            maxRequestsPerHost = 12
+        }
+
+        val ok = builder.dispatcher(dispatcher).build()
 
         return ImageLoader.Builder(context)
             .okHttpClient(ok)
@@ -71,5 +81,27 @@ object PiconImageLoader {
                     .build()
             }
             .build()
+    }
+
+    /**
+     * M269: predbezne stiahnutie piconov na disk (napr. po starte prehravaca alebo
+     * pri nacitani zoznamu kanalov), aby pri scrollovani isli z cache, nie zo siete.
+     * Pouzivame LEN disk cache — memory cache zamerne vypnuta, aby sme pri davke
+     * desiatok piconov nezaplnili RAM bitmapmi; samotne zobrazenie si potom dekoduje
+     * z disku na svoj rozmer a ulozi do memory. null/prazdne URL preskakujeme.
+     */
+    fun prefetch(context: Context, server: TvhServer?, urls: List<String?>) {
+        val clean = urls.asSequence().filterNotNull().filter { it.isNotBlank() }.distinct().toList()
+        if (clean.isEmpty()) return
+        val il = get(context, server)
+        val app = context.applicationContext
+        for (u in clean) {
+            val req = ImageRequest.Builder(app)
+                .data(u)
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .diskCachePolicy(CachePolicy.ENABLED)
+                .build()
+            runCatching { il.enqueue(req) }
+        }
     }
 }
