@@ -195,26 +195,6 @@ class TvhApi(private val server: TvhServer) {
             runCatching { decode<sk.tvhclient.shared.model.DvrEntry>(it) }.getOrNull()
         }.dedupByUuid()
 
-    /** Zmaze nahravku aj subor (api/dvr/entry/remove). */
-    suspend fun dvrRemove(uuid: String): Boolean = runCatching {
-        apiGet("api/dvr/entry/remove", mapOf("uuid" to uuid))
-        true
-    }.getOrDefault(false)
-
-    /** Zrusi naplanovanu/prebiehajucu nahravku (api/dvr/entry/cancel). */
-    suspend fun dvrCancel(uuid: String): Boolean = runCatching {
-        apiGet("api/dvr/entry/cancel", mapOf("uuid" to uuid))
-        true
-    }.getOrDefault(false)
-
-    /** Naplanuje nahravku z EPG eventu (api/dvr/entry/create_by_event). */
-    suspend fun dvrRecordEvent(eventId: Long, configUuid: String = ""): Boolean = runCatching {
-        val params = mutableMapOf("event_id" to eventId.toString())
-        if (configUuid.isNotBlank()) params["config_uuid"] = configUuid
-        apiGet("api/dvr/entry/create_by_event", params)
-        true
-    }.getOrDefault(false)
-
     fun close() = client.close()
 }
 

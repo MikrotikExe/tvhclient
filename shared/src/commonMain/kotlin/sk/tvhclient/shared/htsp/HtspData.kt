@@ -19,7 +19,6 @@ object HtspData {
     private val cache = HashMap<String, Cache>()
     private data class NowCache(val ts: Long, val map: Map<String, List<EpgEvent>>)
     private val nowCache = HashMap<String, NowCache>()
-    private val gridCache = HashMap<String, NowCache>()
     private data class CapCache(val ts: Long, val reachable: Boolean, val caps: List<String>)
     private val capCache = HashMap<String, CapCache>()
 
@@ -75,24 +74,7 @@ object HtspData {
         return out
     }
 
-    /** Hromadne EPG pre mriezku cez JEDEN async dump (metadata s EPG) — nie
-     *  591x getEvents. Vyrazne rychlejsie. Cache 10 min. */
-    suspend fun epgGridMap(server: TvhServer, nowSec: Long, force: Boolean = false): Map<String, List<EpgEvent>> {
-        val gc = gridCache[server.id]
-        if (!force && gc != null && nowSec - gc.ts < 600) return gc.map
-        val meta = metadata(server, withEpg = true, nowSec = nowSec, epgMaxDays = 3)
-        val out = HashMap<String, MutableList<EpgEvent>>()
-        for (e in meta.events) {
-            val ev = mapEvent(e) ?: continue
-            val cid = ev.channelUuid ?: continue
-            out.getOrPut(cid) { ArrayList() }.add(ev)
-        }
-        val result = out.mapValues { entry -> entry.value.sortedBy { it.start } }
-        gridCache[server.id] = NowCache(nowSec, result)
-        return result
-    }
-
-    fun clear(serverId: String) { cache.remove(serverId); nowCache.remove(serverId); gridCache.remove(serverId); capCache.remove(serverId) }
+    fun clear(serverId: String) { cache.remove(serverId); nowCache.remove(serverId); capCache.remove(serverId) }
 
     /**
      * M160 — schopnosti HTSP servera z `hello` (servercapability). Pripoji sa
@@ -125,10 +107,6 @@ object HtspData {
         val (reachable, caps) = capabilities(server, nowSec)
         return reachable && caps.contains("timeshift")
     }
-
-    /** Synchronne z cache (bez siete). False ak este neoverene alebo nepodporovane. */
-    fun timeshiftCapableCached(serverId: String): Boolean =
-        capCache[serverId]?.let { it.reachable && it.caps.contains("timeshift") } ?: false
 
     // ---- mapovanie ----
 
