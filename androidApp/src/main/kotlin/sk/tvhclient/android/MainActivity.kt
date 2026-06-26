@@ -337,14 +337,22 @@ private fun TvExitDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
                 .focusRequester(fr)
                 .focusable()
                 .onPreviewKeyEvent { e ->
-                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when (e.nativeKeyEvent.keyCode) {
-                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { sel = 0; true }
-                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> { sel = 1; true }
-                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
-                        android.view.KeyEvent.KEYCODE_ENTER,
-                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER ->
-                            { if (sel == 1) onConfirm() else onCancel(); true }
+                    val code = e.nativeKeyEvent.keyCode
+                    val activate = code == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                        code == android.view.KeyEvent.KEYCODE_ENTER ||
+                        code == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+                    when (e.type) {
+                        KeyEventType.KeyDown -> when (code) {
+                            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { sel = 0; true }
+                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> { sel = 1; true }
+                            // M268: aktivaciu (OK/Enter) spravime az na KeyUp a spotrebujeme aj ten.
+                            // Inak sa po zavreti dialogu (Zrusit) KeyUp prenesie na domovsku dlazdicu,
+                            // ktorej clickable sa spusti a omylom otvori prehravac. KeyDown len spotrebuj.
+                            else -> activate
+                        }
+                        KeyEventType.KeyUp ->
+                            if (activate) { if (sel == 1) onConfirm() else onCancel(); true }
+                            else false
                         else -> false   // BACK necha zavriet cez BackHandler
                     }
                 },
