@@ -1031,6 +1031,9 @@ class PlayerActivity : ComponentActivity() {
 
     // --- Info o relacii (detail) v prehravaci ---
     private val infoVisibleState = androidx.compose.runtime.mutableStateOf(false)
+    // M280: potvrdenie ukoncenia ziveho prehravania (BACK) — ako exit dialog v menu
+    private val exitConfirmState = androidx.compose.runtime.mutableStateOf(false)
+    private val exitConfirmSelState = androidx.compose.runtime.mutableStateOf(0) // 0=Zrusit, 1=Ukoncit
     private val infoChannelState = androidx.compose.runtime.mutableStateOf("")
     private val infoTitleState = androidx.compose.runtime.mutableStateOf("")
     private val infoTimeState = androidx.compose.runtime.mutableStateOf("")
@@ -1315,6 +1318,26 @@ class PlayerActivity : ComponentActivity() {
                 android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
                 android.view.KeyEvent.KEYCODE_BACK,
                 android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { closeChannelInfo(); return true }
+            }
+            return true
+        }
+
+        // 0e) Potvrdenie ukoncenia ziveho prehravania (BACK) -> sipky + OK + BACK riesime my
+        if (exitConfirmState.value) {
+            if (down) when (kc) {
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT ->
+                    { exitConfirmSelState.value = 1 - exitConfirmSelState.value; return true }
+                android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                android.view.KeyEvent.KEYCODE_ENTER,
+                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    if (event.repeatCount == 0) {
+                        if (exitConfirmSelState.value == 1) finish() else exitConfirmState.value = false
+                    }
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_BACK ->
+                    { exitConfirmState.value = false; return true }
             }
             return true
         }
@@ -1985,6 +2008,7 @@ class PlayerActivity : ComponentActivity() {
                     if (it) { resumeSelState.value = 1; resumeAnswerState.value = 0 }
                 },
                 onResumeAnswerHandled = { resumeAnswerState.value = 0 },
+                onRequestExit = { exitConfirmSelState.value = 0; exitConfirmState.value = true },
                 onClose = { closePlayer() },
                 returnLiveOnBack = returnLiveUuid != null
             )
@@ -2104,6 +2128,60 @@ class PlayerActivity : ComponentActivity() {
                                         color = if (rowSel) Color.White else Color(0xFFB9C2D0),
                                         fontWeight = FontWeight.SemiBold)
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+            // M280: Potvrdenie ukoncenia ziveho prehravania (BACK) — styl ako exit dialog v menu.
+            // Navigaciu D-pad/OK/BACK riesi dispatchKeyEvent (sekcia 0e); tu len vizual + dotyk.
+            if (exitConfirmState.value) {
+                val eSel = exitConfirmSelState.value
+                Box(
+                    Modifier.fillMaxSize().background(Color(0xCC0B1220))
+                        .clickable { exitConfirmState.value = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth(0.7f).widthIn(max = 440.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF1B2433))
+                            .padding(horizontal = 28.dp, vertical = 28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.player_exit_title),
+                            color = Color.White,
+                            style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.player_exit_msg),
+                            color = Color(0xFFB9C2D0),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Box(
+                                Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(if (eSel == 0) Color(0x553B82F6) else Color.Transparent)
+                                    .border(1.dp, if (eSel == 0) Color(0xFF3B82F6) else Color(0x33FFFFFF), RoundedCornerShape(12.dp))
+                                    .clickable { exitConfirmState.value = false }
+                                    .padding(horizontal = 22.dp, vertical = 12.dp)
+                            ) {
+                                Text(androidx.compose.ui.res.stringResource(R.string.exit_no),
+                                    color = if (eSel == 0) Color.White else Color(0xFFB9C2D0),
+                                    fontWeight = FontWeight.SemiBold)
+                            }
+                            Box(
+                                Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(if (eSel == 1) Color(0x55FF6B6B) else Color.Transparent)
+                                    .border(1.dp, if (eSel == 1) Color(0xFFFF6B6B) else Color(0x33FFFFFF), RoundedCornerShape(12.dp))
+                                    .clickable { finish() }
+                                    .padding(horizontal = 22.dp, vertical = 12.dp)
+                            ) {
+                                Text(androidx.compose.ui.res.stringResource(R.string.exit_yes), color = Color(0xFFFF6B6B),
+                                    fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -2537,6 +2615,7 @@ private fun PlayerUi(
     onResumeAnswerHandled: () -> Unit = {},
     onOrientationLockChange: (Boolean) -> Unit = {},
     returnLiveOnBack: Boolean = false,
+    onRequestExit: () -> Unit = {},
     onClose: () -> Unit
 ) {
     var controlsVisible by remember { mutableStateOf(false) }
@@ -2856,6 +2935,13 @@ private fun PlayerUi(
     androidx.activity.compose.BackHandler(
         enabled = returnLiveOnBack && !controlsVisible && menu == null && !showChannelList && !showOptions
     ) { onClose() }
+    // M280: BACK pri cistom zivom prehravani (mimo PiP) -> potvrdenie ukoncenia (ako exit v menu),
+    // aby nechcene stlacenie Spat hned neukoncilo prehravanie.
+    androidx.activity.compose.BackHandler(
+        enabled = !seekable && !controlsVisible && menu == null && !showChannelList && !showOptions
+                  && !returnLiveOnBack && !showInfo
+                  && !(autoPipEnabled && pipSupported && playing)
+    ) { onRequestExit() }
 
     // M266: predbezne nacitanie EPG (now/next) na pozadi kratko po starte prehravaca,
     // aby prvy otvoreny zoznam kanalov mal data uz z cache (epgUpcomingState) bez sietoveho
