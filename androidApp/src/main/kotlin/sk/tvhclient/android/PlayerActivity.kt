@@ -187,10 +187,11 @@ class PlayerActivity : ComponentActivity() {
         androidx.compose.runtime.mutableStateOf<List<LivePlaylist.LiveChannel>>(emptyList())
     // cache mapa kanal(uuid) -> aktualna + najblizsie relacie (pre EPG browser na TV)
     private val epgUpcomingState =
-        androidx.compose.runtime.mutableStateOf<Map<String, List<sk.tvhclient.shared.model.EpgEvent>>>(emptyMap())
+        androidx.compose.runtime.mutableStateOf<Map<String, List<sk.tvhclient.shared.model.EpgEvent>>>(LivePlaylist.epgUpcoming)
     // M270: spinner pri prvom/zastaranom nacitani EPG v zozname kanalov
     private val epgLoadingState = androidx.compose.runtime.mutableStateOf(false)
-    private var epgLastOkMs = 0L
+    // M271: cas poslednej obnovy nacitavame z procesovej cache, aby reopen nesťahoval znova
+    private var epgLastOkMs = LivePlaylist.epgLastOkMs
 
     // D-pad / diaľkové: signál na zobrazenie ovládania, info pre seek a sw dekóder
     private val controlsPokeState = androidx.compose.runtime.mutableStateOf(0)
@@ -580,6 +581,9 @@ class PlayerActivity : ComponentActivity() {
                 LivePlaylist.channels = updated
             }
             epgLastOkMs = System.currentTimeMillis()
+            // M271: zapis do procesovej cache, nech reopen prehravaca nesťahuje znova
+            LivePlaylist.epgLastOkMs = epgLastOkMs
+            LivePlaylist.epgUpcoming = epgUpcomingState.value
         } catch (e: Exception) {
         }
     }
@@ -597,15 +601,15 @@ class PlayerActivity : ComponentActivity() {
      *  ani pri prepinani/periodickom refreshe sa neobjavi. */
     private fun refreshOverlayEpgInitial() {
         lifecycleScope.launch {
-            var spinJob: kotlinx.coroutines.Job? = null
-            if (epgIsStale()) {
-                spinJob = launch {
-                    kotlinx.coroutines.delay(350)
-                    epgLoadingState.value = true
-                }
+            // M271: ak mame cerstve EPG (cache z nedavneho otvorenia), nesťahuj znova —
+            // odpadne otravne nacitavanie pri kazdom reopene. Fetch len ked je stale.
+            if (!epgIsStale()) return@launch
+            val spinJob = launch {
+                kotlinx.coroutines.delay(350)
+                epgLoadingState.value = true
             }
             refreshOverlayEpg()
-            spinJob?.cancel()
+            spinJob.cancel()
             epgLoadingState.value = false
         }
     }

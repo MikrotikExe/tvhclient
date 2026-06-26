@@ -37,6 +37,13 @@ object PiconImageLoader {
         }
     }
 
+    /** M272: rucne vycistenie picon cache (memory + disk) — pre „Obnovit zoznam" v nastaveniach. */
+    fun clearCache(context: Context, server: TvhServer?) {
+        val il = get(context, server)
+        runCatching { il.memoryCache?.clear() }
+        runCatching { il.diskCache?.clear() }
+    }
+
     private fun build(context: Context, server: TvhServer?): ImageLoader {
         val hasCreds = server != null && server.username.isNotEmpty()
         // Basic posleme preemptivne len ked nie je vynuteny digest (setri roundtrip

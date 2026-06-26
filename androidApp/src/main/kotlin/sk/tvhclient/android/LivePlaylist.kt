@@ -22,6 +22,18 @@ object LivePlaylist {
     @Volatile
     var channels: List<LiveChannel> = emptyList()
 
+    // M271: procesova cache EPG (uuid -> relacie) + cas poslednej uspesnej obnovy.
+    // Prezije zatvorenie/otvorenie prehravaca, takze sa nesťahuje znova pri kazdom otvoreni.
+    @Volatile
+    var epgUpcoming: Map<String, List<sk.tvhclient.shared.model.EpgEvent>> = emptyMap()
+    @Volatile
+    var epgLastOkMs: Long = 0L
+
+    fun clearEpg() {
+        epgUpcoming = emptyMap()
+        epgLastOkMs = 0L
+    }
+
     @Volatile
     var index: Int = -1
 

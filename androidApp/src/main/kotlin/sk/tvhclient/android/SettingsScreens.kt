@@ -327,6 +327,26 @@ internal fun PlaybackSettings(ctx: android.content.Context) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+
+    // M272: rucne obnovenie zoznamu kanalov, EPG a piconov — vymaze cache a stiahne nanovo.
+    Spacer(Modifier.height(16.dp))
+    val reloadDone = stringResource(R.string.reload_data_done)
+    OutlinedButton(onClick = {
+        val srv = sk.tvhclient.shared.Tvh.store.active()
+        LivePlaylist.clearEpg()
+        LivePlaylist.channels = emptyList()
+        PiconImageLoader.clearCache(ctx, srv)
+        TabController.dataReload.value++
+        android.widget.Toast.makeText(ctx, reloadDone, android.widget.Toast.LENGTH_SHORT).show()
+    }) {
+        Text(stringResource(R.string.reload_data_title))
+    }
+    Spacer(Modifier.height(8.dp))
+    Text(
+        stringResource(R.string.reload_data_note),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 // --- Playlist: rodicovsky zamok (PIN) ---

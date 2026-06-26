@@ -267,4 +267,7 @@
     <string name="ts_enable_title">Timeshift (pauza / pretáčanie živej TV)</string>
     <string name="ts_enable_note">Pozastavenie a pretáčanie živého vysielania. Funguje len ak server podporuje timeshift cez HTSP; inak ostáva vypnutý a prehrávanie to neovplyvní.</string>
     <string name="close">Zavrieť</string>
+    <string name="reload_data_title">Obnoviť kanály, EPG a picony</string>
+    <string name="reload_data_note">Vymaže cache a znova stiahne zoznam kanálov, EPG a picony. Použi, ak niečo vyzerá zastarané.</string>
+    <string name="reload_data_done">Obnovujem…</string>
 </resources>
