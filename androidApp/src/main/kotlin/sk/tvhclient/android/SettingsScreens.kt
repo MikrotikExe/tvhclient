@@ -66,7 +66,7 @@ internal fun GeneralSettings(ctx: android.content.Context) {
     DropdownField(
         label = stringResource(R.string.language),
         value = lang,
-        options = listOf("", "sk", "cs", "en", "de", "es", "fr", "it", "hu", "nl", "pl", "pt", "ro", "ru", "uk"),
+        options = listOf("", "sk", "cs", "en", "de", "es", "fr", "it", "hu", "nl", "pl", "pt", "ro", "ru", "uk", "zh", "hi", "ja", "ko", "tr", "vi", "ar", "in", "bn"),
         optionLabel = {
             when (it) {
                 "sk" -> "Slovenčina"
@@ -83,6 +83,15 @@ internal fun GeneralSettings(ctx: android.content.Context) {
                 "ro" -> "Română"
                 "ru" -> "Русский"
                 "uk" -> "Українська"
+                "zh" -> "中文"
+                "hi" -> "हिन्दी"
+                "ja" -> "日本語"
+                "ko" -> "한국어"
+                "tr" -> "Türkçe"
+                "vi" -> "Tiếng Việt"
+                "ar" -> "العربية"
+                "in" -> "Bahasa Indonesia"
+                "bn" -> "বাংলা"
                 else -> stringResource(R.string.lang_system)
             }
         },
