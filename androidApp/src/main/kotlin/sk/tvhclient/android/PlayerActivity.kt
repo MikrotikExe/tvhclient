@@ -108,6 +108,7 @@ import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
+import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 import sk.tvhclient.shared.Tvh
@@ -1210,13 +1211,14 @@ class PlayerActivity : ComponentActivity() {
             s?.forEach { sb.append("spu(id=${it.id},name='${it.name}') ") }
             val m = mediaPlayer.media
             try {
-                val tracks = m?.tracks
-                sb.append("| mediaTracks=${tracks?.size ?: -1}: ")
-                tracks?.forEach { t ->
+                val count = m?.trackCount ?: 0
+                sb.append("| mediaTracks=$count: ")
+                for (i in 0 until count) {
+                    val t = m?.getTrack(i) ?: continue
                     val type = when (t.type) {
-                        Media.Track.Type.Audio -> "AUDIO"
-                        Media.Track.Type.Video -> "VIDEO"
-                        Media.Track.Type.Text -> "TEXT/SUB"
+                        IMedia.Track.Type.Audio -> "AUDIO"
+                        IMedia.Track.Type.Video -> "VIDEO"
+                        IMedia.Track.Type.Text -> "TEXT/SUB"
                         else -> "UNKNOWN"
                     }
                     sb.append("$type(id=${t.id},lang=${t.language},codec=${t.codec}) ")
@@ -2639,7 +2641,11 @@ private fun MediaPlayer.trackLanguages(): Map<Int, String?> {
     val out = HashMap<Int, String?>()
     val m = media ?: return out
     try {
-        m.tracks?.forEach { t -> out[t.id] = t.language }
+        val count = m.trackCount
+        for (i in 0 until count) {
+            val t = m.getTrack(i) ?: continue
+            out[t.id] = t.language
+        }
     } catch (_: Throwable) {
     } finally {
         runCatching { m.release() }
