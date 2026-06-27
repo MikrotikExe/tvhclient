@@ -16,6 +16,11 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -347,9 +352,22 @@ private fun TvSelectDialog(
 ) {
     var sel by remember { mutableStateOf(options.indexOf(current).coerceAtLeast(0)) }
     val fr = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 6.dp) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(Unit) {
+        runCatching { listState.scrollToItem(sel) }
+        runCatching { fr.requestFocus() }
+    }
+    // pri pohybe sipkami drz vybranu polozku vo viditelnej casti zoznamu
+    LaunchedEffect(sel) { runCatching { listState.animateScrollToItem(sel) } }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            tonalElevation = 6.dp,
+            modifier = Modifier.width(340.dp)
+        ) {
             Column(
                 Modifier
                     .padding(16.dp)
@@ -372,8 +390,11 @@ private fun TvSelectDialog(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    options.forEachIndexed { i, opt ->
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.heightIn(max = 360.dp)
+                ) {
+                    itemsIndexed(options) { i, opt ->
                         val selected = i == sel
                         Box(
                             Modifier
