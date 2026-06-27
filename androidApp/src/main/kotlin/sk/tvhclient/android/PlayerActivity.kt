@@ -57,7 +57,6 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.PictureInPictureAlt
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.Forward30
 import coil.request.ImageRequest
@@ -1828,15 +1827,12 @@ class PlayerActivity : ComponentActivity() {
             "--network-caching=1500",
             "--no-drop-late-frames",
             "--no-skip-frames",
-            // Tlmenie logov: libVLC pri TS/HTSP streame chrli obrovske mnozstvo sprav.
-            // Ak ich nikto neodobera, systemovy log buffer sa zaplni a vlakno libVLC sa
-            // zablokuje na zapise -> prestanu dobiehat stopy (DVB titulky / audio jazyky)
-            // az kym sa log nezacne citat (napr. logcat). --quiet + --no-stats tomu zabrania.
+            // --quiet/--no-stats len tlmia spam libVLC do logu (kozmeticke, nesuvisia
+            // s doplnanim stop — to riesi poll po Event.Playing, vid scheduleTrackRefresh()).
             "--quiet",
             "--no-stats",
             "--http-user-agent=" + userAgent()
         )
-        startLogDrain()  // odcerpavaj log, nech sa libVLC nezasekne na zaplnenom buffri
         libVlc = LibVLC(this, options)
         mediaPlayer = MediaPlayer(libVlc)
 
@@ -1866,6 +1862,8 @@ class PlayerActivity : ComponentActivity() {
                         val n = runCatching { mediaPlayer.videoTracksCount }.getOrNull()
                         if (n != null && n >= 0) hasVideoState.value = n > 0
                     }, 1500)
+                    // doplnenie audio jazykov / DVB titulkov, ktore libVLC doparsuje az po starte
+                    scheduleTrackRefresh()
                 }
                 MediaPlayer.Event.Buffering -> {
                     if (event.buffering >= 100f) { seekSpinnerJob?.cancel(); seekingState.value = false }
@@ -2573,48 +2571,24 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    // --- Odcerpavanie log bufferu ---
-    // libVLC pri TS/HTSP streame zaplavi Android log. Ak ho nikto necita, natívne vlakno
-    // libVLC sa zablokuje na zapise do logu -> prestanu dobiehat stopy (DVB titulky /
-    // audio jazyky), kym sa log nezacne citat (preto sa stopy objavili az po spusteni
-    // `logcat`). Tento daemon priebezne odoberá vlastny log appky, takze sa buffer
-    // nezaplni a libVLC bezi plynulo. LibVLC binding nema ziadne API na stlmenie logov.
-    @Volatile private var logDrainProc: Process? = null
-    private var logDrainThread: Thread? = null
-    private fun startLogDrain() {
-        if (logDrainThread != null) return
-        logDrainThread = Thread {
-            // Skus najprv root (su -c logcat) — odcerpa cely systemovy buffer rovnako ako
-            // rucne spusteny `logcat` v Termuxe. Bez rootu fallback na vlastne logy appky.
-            val cmds = listOf(
-                arrayOf("su", "-c", "logcat -v brief"),
-                arrayOf("logcat", "-v", "brief")
-            )
-            for (cmd in cmds) {
-                if (Thread.currentThread().isInterrupted) break
-                try {
-                    val proc = Runtime.getRuntime().exec(cmd)
-                    logDrainProc = proc
-                    val r = proc.inputStream.bufferedReader()
-                    val buf = CharArray(8192)
-                    var read = false
-                    while (!Thread.currentThread().isInterrupted) {
-                        val n = r.read(buf)
-                        if (n < 0) break  // proc skoncil (napr. su nedostupne) -> skus fallback
-                        read = true       // citaj a zahadzuj
-                    }
-                    if (read) break        // tento prikaz fungoval, fallback netreba
-                } catch (_: Throwable) {
-                    // prikaz zlyhal (napr. su neexistuje) -> skus dalsi
-                }
-            }
-        }.apply { isDaemon = true; name = "vlc-log-drain"; start() }
+    // --- Doplnenie stop po starte (audio jazyky / DVB titulky) ---
+    // Pri prvom napojeni streamu libVLC este nema doparsovane doplnkove ES; jazyky audio
+    // stop a DVB titulkove stopy sa objavia az par sekund po starte. ESAdded udalost na
+    // niektorych streamoch nechodi spolahlivo, preto po Event.Playing kratko pollujeme a
+    // obnovujeme pripadne otvorene track menu (zvysenim trackListVersionState), kym sa
+    // stopy doplnia. Bez prerusenia prehravania — len precitanie zoznamu nanovo.
+    private val trackRefreshHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private fun scheduleTrackRefresh() {
+        trackRefreshHandler.removeCallbacksAndMessages(null)
+        // niekolko vln v priebehu ~8 s — staci aby sa stihli doparsovat jazyky aj DVB titulky
+        for (delay in longArrayOf(800L, 1600L, 2600L, 4000L, 6000L, 8000L)) {
+            trackRefreshHandler.postDelayed({
+                trackListVersionState.value = trackListVersionState.value + 1
+            }, delay)
+        }
     }
-    private fun stopLogDrain() {
-        logDrainThread?.interrupt()
-        logDrainThread = null
-        runCatching { logDrainProc?.destroy() }
-        logDrainProc = null
+    private fun cancelTrackRefresh() {
+        trackRefreshHandler.removeCallbacksAndMessages(null)
     }
 
     override fun onDestroy() {
@@ -2638,7 +2612,7 @@ class PlayerActivity : ComponentActivity() {
         httpFeeder = null
         stopTimeshiftTicker()
         skipFlushJob?.cancel()
-        stopLogDrain()
+        cancelTrackRefresh()
         if (::libVlc.isInitialized) {
             libVlc.release()
         }
@@ -2719,7 +2693,8 @@ private fun MediaPlayer.trackLanguages(): Map<Int, String?> {
 private fun MediaPlayer.audioTrackItems(): List<TrackItem> {
     val descs = audioTracks ?: return emptyList()
     val langs = trackLanguages()
-    return descs.map { d ->
+    // id < 0 je vstavana "Disable" polozka libVLC — preskoc (audio sa nevypina)
+    return descs.filter { it.id >= 0 }.map { d ->
         val disp = langDisplay(langs[d.id])
         val base = d.name
         val name = when {
@@ -2734,7 +2709,9 @@ private fun MediaPlayer.audioTrackItems(): List<TrackItem> {
 private fun MediaPlayer.spuTrackItems(): List<TrackItem> {
     val descs = spuTracks ?: return emptyList()
     val langs = trackLanguages()
-    return descs.map { d ->
+    // id < 0 je vstavana "Disable" polozka libVLC — preskoc; vypnutie titulkov
+    // riesi TrackMenu vlastnym riadkom "Vypnute" (allowOff), inak by boli dva
+    return descs.filter { it.id >= 0 }.map { d ->
         val disp = langDisplay(langs[d.id])
         val base = d.name
         val name = when {
