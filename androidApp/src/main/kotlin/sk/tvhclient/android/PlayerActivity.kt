@@ -2573,11 +2573,74 @@ class PlayerActivity : ComponentActivity() {
 /** Jedna stopa (audio alebo titulky) z libVLC. */
 internal data class TrackItem(val id: Int, val name: String)
 
-private fun MediaPlayer.audioTrackItems(): List<TrackItem> =
-    audioTracks?.map { TrackItem(it.id, it.name ?: "Audio ${it.id}") } ?: emptyList()
+/** ISO-639 kod jazyka (napr. "slo","eng") -> citatelny nazov v jazyku zariadenia.
+ *  Vracia null ak je kod prazdny / neznamy ("und"), aby sa pouzil fallback. */
+private fun langDisplay(code: String?): String? {
+    val c = code?.lowercase()?.trim() ?: return null
+    if (c.isEmpty() || c == "und" || c == "unknown" || c == "qaa") return null
+    // ISO-639-2 (3-pismenove, B aj T varianty) -> ISO-639-1 pre caste jazyky.
+    val iso2 = mapOf(
+        "slo" to "sk", "slk" to "sk", "cze" to "cs", "ces" to "cs",
+        "eng" to "en", "ger" to "de", "deu" to "de", "hun" to "hu",
+        "pol" to "pl", "rus" to "ru", "fre" to "fr", "fra" to "fr",
+        "spa" to "es", "ita" to "it", "dut" to "nl", "nld" to "nl",
+        "por" to "pt", "rum" to "ro", "ron" to "ro", "ukr" to "uk",
+        "gre" to "el", "ell" to "el", "hrv" to "hr", "srp" to "sr",
+        "tur" to "tr", "ara" to "ar", "jpn" to "ja", "kor" to "ko",
+        "zho" to "zh", "chi" to "zh"
+    )[c] ?: if (c.length == 2) c else null
+    return try {
+        if (iso2 != null) {
+            val n = java.util.Locale(iso2).displayLanguage
+            if (n.isNotBlank() && !n.equals(iso2, ignoreCase = true))
+                n.replaceFirstChar { it.uppercase() }
+            else c.uppercase()
+        } else c.uppercase()
+    } catch (_: Throwable) { c.uppercase() }
+}
 
-private fun MediaPlayer.spuTrackItems(): List<TrackItem> =
-    spuTracks?.map { TrackItem(it.id, it.name ?: "Titulky ${it.id}") } ?: emptyList()
+/** Mapa ES id -> jazyk z metadat aktualneho media (audio aj titulky maju language). */
+private fun MediaPlayer.trackLanguages(): Map<Int, String?> {
+    val out = HashMap<Int, String?>()
+    val m = media ?: return out
+    try {
+        m.tracks?.forEach { t -> out[t.id] = t.language }
+    } catch (_: Throwable) {
+    } finally {
+        runCatching { m.release() }
+    }
+    return out
+}
+
+private fun MediaPlayer.audioTrackItems(): List<TrackItem> {
+    val descs = audioTracks ?: return emptyList()
+    val langs = trackLanguages()
+    return descs.map { d ->
+        val disp = langDisplay(langs[d.id])
+        val base = d.name
+        val name = when {
+            disp != null -> disp
+            !base.isNullOrBlank() -> base
+            else -> "Audio ${d.id}"
+        }
+        TrackItem(d.id, name)
+    }
+}
+
+private fun MediaPlayer.spuTrackItems(): List<TrackItem> {
+    val descs = spuTracks ?: return emptyList()
+    val langs = trackLanguages()
+    return descs.map { d ->
+        val disp = langDisplay(langs[d.id])
+        val base = d.name
+        val name = when {
+            disp != null -> disp
+            !base.isNullOrBlank() -> base
+            else -> "Titulky ${d.id}"
+        }
+        TrackItem(d.id, name)
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
