@@ -128,55 +128,59 @@ fun TvTextField(
             if (!editing) { starting = false; pending = "" }
             if (everEdited) runCatching { boxFocus.requestFocus() }
         }
-        val fieldColumn: @Composable (Modifier) -> Unit = { colMod ->
-            Column(
-                modifier = colMod
-                    .heightIn(min = 56.dp)
-                    .focusRequester(boxFocus)
-                    .dpadFocusable()
-                    .onPreviewKeyEvent { e ->
-                        // Pripojena klavesnica: znaky napisane skor, nez sa stihne otvorit IME pole,
-                        // sa zhromazdia do bufra (v spravnom poradi) a aplikuju sa naraz pri aktivacii.
-                        if (e.type == KeyEventType.KeyDown) {
-                            val ch = e.nativeKeyEvent.unicodeChar
-                            if (ch != 0 && !Character.isISOControl(ch)) {
-                                pending += ch.toChar()
-                                everEdited = true
-                                if (!starting) { starting = true; editing = true }
-                                true
-                            } else false
-                        } else false
-                    }
-                    .clickable { editing = true; everEdited = true }
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                val shown = when {
-                    value.isBlank() -> "\u2014"
-                    password && !revealed -> "\u2022".repeat(value.length)
-                    else -> value
-                }
-                Text(
-                    shown,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (value.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
-                    else MaterialTheme.colorScheme.onSurface
-                )
+        // obsah pola (popis + hodnota/bodky) — zdielany pre obe vetvy
+        val labelValue: @Composable () -> Unit = {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            val shown = when {
+                value.isBlank() -> "\u2014"
+                password && !revealed -> "\u2022".repeat(value.length)
+                else -> value
             }
+            Text(
+                shown,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (value.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.onSurface
+            )
+        }
+        // zachytenie znakov z pripojenej klavesnice pred otvorenim IME (v spravnom poradi)
+        val captureKeys = Modifier.onPreviewKeyEvent { e ->
+            if (e.type == KeyEventType.KeyDown) {
+                val ch = e.nativeKeyEvent.unicodeChar
+                if (ch != 0 && !Character.isISOControl(ch)) {
+                    pending += ch.toChar()
+                    everEdited = true
+                    if (!starting) { starting = true; editing = true }
+                    true
+                } else false
+            } else false
         }
         if (password) {
-            // M282: na TV sa oko v IME poli neda zamerit dialkovym; preto je tu zvlast
-            // fokusovatelne (D-pad) tlacidlo oka vedla pola — OK prepne viditelnost hesla.
-            Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-                fieldColumn(Modifier.weight(1f))
+            // M282-fix: oko je VNUTRI ramika pola (vpravo), aby malo pole hesla rovnaku sirku
+            // ako ostatne polia (symetria). Textova cast je fokusovatelna (OK = uprava),
+            // oko je samostatne fokusovatelne (OK = zobrazit/skryt heslo) — obe dosiahnutelne D-padom.
+            Row(
+                modifier = modifier
+                    .heightIn(min = 56.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .focusRequester(boxFocus)
+                        .dpadFocusable(RoundedCornerShape(4.dp))
+                        .then(captureKeys)
+                        .clickable { editing = true; everEdited = true }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) { labelValue() }
                 Box(
                     Modifier
-                        .padding(start = 8.dp)
+                        .padding(end = 6.dp)
                         .dpadFocusable()
                         .clickable { revealed = !revealed }
                         .padding(10.dp),
@@ -192,7 +196,16 @@ fun TvTextField(
                 }
             }
         } else {
-            fieldColumn(modifier)
+            Column(
+                modifier = modifier
+                    .heightIn(min = 56.dp)
+                    .focusRequester(boxFocus)
+                    .dpadFocusable()
+                    .then(captureKeys)
+                    .clickable { editing = true; everEdited = true }
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) { labelValue() }
         }
     }
 }
