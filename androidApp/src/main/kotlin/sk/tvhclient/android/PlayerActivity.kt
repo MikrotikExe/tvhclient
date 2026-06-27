@@ -1188,12 +1188,47 @@ class PlayerActivity : ComponentActivity() {
         }
     }
     private fun openAudioMenu() {
+        logTrackDiag("audio")
         trackMenuKind = "audio"; trackNavState.value = 0
         openAudioMenuState.value = openAudioMenuState.value + 1
     }
     private fun openSpuMenu() {
+        logTrackDiag("spu")
         trackMenuKind = "spu"; trackNavState.value = 0
         openSpuMenuState.value = openSpuMenuState.value + 1
+    }
+
+    /** Diagnostika: co libVLC vidi v streame. Vypise do logcatu pod tagom TVHTRACKS.
+     *  Pomaha zistit, preco sa titulky nezobrazuju (ci ich libVLC vobec deteguje). */
+    private fun logTrackDiag(where: String) {
+        if (!::mediaPlayer.isInitialized) return
+        val sb = StringBuilder("[$where] ")
+        try {
+            val a = mediaPlayer.audioTracks
+            val s = mediaPlayer.spuTracks
+            sb.append("audioTracks=${a?.size ?: -1} spuTracks=${s?.size ?: -1}; ")
+            s?.forEach { sb.append("spu(id=${it.id},name='${it.name}') ") }
+            val m = mediaPlayer.media
+            try {
+                val tracks = m?.tracks
+                sb.append("| mediaTracks=${tracks?.size ?: -1}: ")
+                tracks?.forEach { t ->
+                    val type = when (t.type) {
+                        Media.Track.Type.Audio -> "AUDIO"
+                        Media.Track.Type.Video -> "VIDEO"
+                        Media.Track.Type.Text -> "TEXT/SUB"
+                        else -> "UNKNOWN"
+                    }
+                    sb.append("$type(id=${t.id},lang=${t.language},codec=${t.codec}) ")
+                }
+            } catch (_: Throwable) {
+            } finally {
+                runCatching { m?.release() }
+            }
+        } catch (e: Throwable) {
+            sb.append("CHYBA: ${e.message}")
+        }
+        android.util.Log.i("TVHTRACKS", sb.toString())
     }
     private fun closeTrackMenu() { closeMenuState.value = closeMenuState.value + 1 }
     private fun selectTrackAtNav() {
