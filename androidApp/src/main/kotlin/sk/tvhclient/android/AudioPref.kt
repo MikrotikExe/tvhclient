@@ -66,7 +66,15 @@ object AudioPref {
         "bn" to "বাংলা",
         "zh" to "中文",
         "ja" to "日本語",
-        "ko" to "한국어"
+        "ko" to "한국어",
+        "el" to "Ελληνικά",
+        "fa" to "فارسی",
+        "sr" to "Српски",
+        "hr" to "Hrvatski",
+        "bg" to "Български",
+        "sl" to "Slovenščina",
+        "ur" to "اردو",
+        "th" to "ไทย"
     )
 
     private fun stripAccents(s: String): String {
@@ -110,6 +118,14 @@ object AudioPref {
         "zh" -> listOf("chinese", "mandarin", "zho", "chi")
         "ja" -> listOf("japanese", "japan", "jpn")
         "ko" -> listOf("korean", "korea", "kor")
+        "el" -> listOf("greek", "ell", "gre")
+        "fa" -> listOf("persian", "farsi", "fas", "per")
+        "sr" -> listOf("serbian", "srpski", "srpsk", "srp", "scc")
+        "hr" -> listOf("croatian", "hrvatsk", "hrv", "scr")
+        "bg" -> listOf("bulgarian", "bulgar", "bul")
+        "sl" -> listOf("slovenian", "slovensc", "slovene", "slv")
+        "ur" -> listOf("urdu", "urd")
+        "th" -> listOf("thai", "tha")
         else -> emptyList()
     }
 
