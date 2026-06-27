@@ -930,6 +930,10 @@ class PlayerActivity : ComponentActivity() {
     private val controlNavState = androidx.compose.runtime.mutableStateOf(0)
     // Navigacia track menu (audio/titulky)
     private val trackNavState = androidx.compose.runtime.mutableStateOf(0)
+    // Verzia zoznamu stop — zvysi sa ked libVLC prida/ubere stopu (ESAdded/ESDeleted).
+    // DVB titulky a viacjazycne audio sa objavia az par sekund po starte streamu;
+    // toto vynuti obnovu otvoreneho track menu, nech sa stopy doplnia automaticky.
+    private val trackListVersionState = androidx.compose.runtime.mutableStateOf(0)
     private val closeMenuState = androidx.compose.runtime.mutableStateOf(0)
     private var trackMenuKind = "audio"
     private var okLongFired = false
@@ -1824,6 +1828,12 @@ class PlayerActivity : ComponentActivity() {
             "--network-caching=1500",
             "--no-drop-late-frames",
             "--no-skip-frames",
+            // Tlmenie logov: libVLC pri TS/HTSP streame chrli obrovske mnozstvo sprav.
+            // Ak ich nikto neodobera, systemovy log buffer sa zaplni a vlakno libVLC sa
+            // zablokuje na zapise -> prestanu dobiehat stopy (DVB titulky / audio jazyky)
+            // az kym sa log nezacne citat (napr. logcat). --quiet + --no-stats tomu zabrania.
+            "--quiet",
+            "--no-stats",
             "--http-user-agent=" + userAgent()
         )
         libVlc = LibVLC(this, options)
@@ -1862,6 +1872,12 @@ class PlayerActivity : ComponentActivity() {
                 MediaPlayer.Event.Paused -> { isPlayingState.value = false; keepScreenOn(false); refreshPipIfActive() }
                 MediaPlayer.Event.Stopped -> { isPlayingState.value = false; keepScreenOn(false); refreshPipIfActive() }
                 MediaPlayer.Event.Vout -> { if (event.voutCount > 0) hasVideoState.value = true }
+                MediaPlayer.Event.ESAdded,
+                MediaPlayer.Event.ESDeleted -> {
+                    // libVLC priebezne registruje stopy (DVB titulky / audio jazyky sa
+                    // objavia az par sekund po starte) -> obnov otvorene track menu
+                    trackListVersionState.value = trackListVersionState.value + 1
+                }
                 MediaPlayer.Event.EndReached -> {
                     isPlayingState.value = false
                     if (!seekablePlayback) {
@@ -2027,6 +2043,7 @@ class PlayerActivity : ComponentActivity() {
                 onOptionsSelect = { idx -> selectOption(idx) },
                 controlNavIndex = controlNavState.value,
                 trackNavIndex = trackNavState.value,
+                trackListVersion = trackListVersionState.value,
                 closeMenuSignal = closeMenuState.value,
                 openAudioSignal = openAudioMenuState.value,
                 openSpuSignal = openSpuMenuState.value,
@@ -2748,6 +2765,7 @@ private fun PlayerUi(
     onOptionsSelect: (Int) -> Unit = {},
     controlNavIndex: Int = 0,
     trackNavIndex: Int = 0,
+    trackListVersion: Int = 0,
     closeMenuSignal: Int = 0,
     openAudioSignal: Int = 0,
     openSpuSignal: Int = 0,
@@ -4345,6 +4363,9 @@ private fun PlayerUi(
 
         // Menu stop (audio / titulky)
         if (menu != null) {
+            // trackListVersion: cita sa zamerne, nech sa zoznam prerenderuje, ked
+            // libVLC prida stopu (DVB titulky / audio jazyky sa objavia az po starte).
+            @Suppress("UNUSED_EXPRESSION") trackListVersion
             val items = if (menu == "audio") player.audioTrackItems() else player.spuTrackItems()
             val currentId = if (menu == "audio") player.audioTrack else player.spuTrack
             TrackMenu(
