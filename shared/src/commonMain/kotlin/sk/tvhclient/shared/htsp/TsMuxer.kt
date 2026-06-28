@@ -40,12 +40,14 @@ class TsMuxer(streams: List<Stream>) {
     private val programNumber = 1
     private val siInterval = 20   // re-emit PAT/PMT po kazdych N muxpkt
 
-    private val tracks: List<Track>
-    private val trackByEs: Map<Int, Track>
+    private val tracks = ArrayList<Track>()
+    private var trackByEs: Map<Int, Track> = emptyMap()
+    private val pendingSubs = ArrayList<Track>()   // DVB titulky cakajuce na prvy paket
     private val pcrPid: Int
     private var patCc = 0
     private var pmtCc = 0
     private var psiCounter = 0
+    private var pmtVersion = 0
 
     // Prepis casovych znaciek na spojitu vystupnu os — aby libVLC nevidel spatny/dopredny
     // skok pri subscriptionSkip (RW/FF). Pri beznom zivom je offset konstantny (= pass-through).
@@ -57,11 +59,11 @@ class TsMuxer(streams: List<Stream>) {
 
     init {
         var nextPid = 0x1001
-        val list = ArrayList<Track>()
         for (s in streams) {
             if (s.type == "DVBSUB") {
-                // DVB titulky: stream_type 0x06 (private PES), PES stream_id 0xBD
-                list.add(Track(
+                // DVB titulky NEohlasujeme hned — libVLC cez pipe spadne, ak stopa pri starte
+                // mlci (titulky chodia riedko). Pridame ju az ked pride prvy titulkovy paket.
+                pendingSubs.add(Track(
                     esIndex = s.index, pid = nextPid++, streamType = 0x06, streamId = 0xBD,
                     isVideo = false, language = s.language, isSubtitle = true,
                     compositionId = s.compositionId, ancillaryId = s.ancillaryId
@@ -69,11 +71,10 @@ class TsMuxer(streams: List<Stream>) {
                 continue
             }
             val m = mapType(s.type) ?: continue
-            list.add(Track(s.index, nextPid++, m.first, m.second, m.third, s.language))
+            tracks.add(Track(s.index, nextPid++, m.first, m.second, m.third, s.language))
         }
-        tracks = list
-        trackByEs = list.associateBy { it.esIndex }
-        pcrPid = (tracks.firstOrNull { it.isVideo } ?: tracks.firstOrNull { !it.isSubtitle } ?: tracks.firstOrNull())?.pid ?: 0x1001
+        trackByEs = tracks.associateBy { it.esIndex }
+        pcrPid = (tracks.firstOrNull { it.isVideo } ?: tracks.firstOrNull())?.pid ?: 0x1001
     }
 
     fun hasTracks(): Boolean = tracks.isNotEmpty()
@@ -98,12 +99,24 @@ class TsMuxer(streams: List<Stream>) {
 
     /** Jeden muxpkt → TS bajty. Prazdne ak je stopa nepodporovana. */
     fun mux(esIndex: Int, payload: ByteArray, pts: Long?, dts: Long?, randomAccess: Boolean): ByteArray {
-        val t = trackByEs[esIndex] ?: return ByteArray(0)
+        var t = trackByEs[esIndex]
+        var activated = ByteArray(0)
+        if (t == null) {
+            // prvy paket cakajuceho titulku -> aktivuj stopu a posli nove PAT/PMT (nova verzia)
+            val pend = pendingSubs.firstOrNull { it.esIndex == esIndex } ?: return ByteArray(0)
+            pendingSubs.remove(pend)
+            tracks.add(pend)
+            trackByEs = tracks.associateBy { it.esIndex }
+            pmtVersion = (pmtVersion + 1) and 0x1F
+            t = pend
+            activated = flatten(listOf(pat(), pmt()))
+            psiCounter = siInterval
+        }
         // DVB titulky: Tvheadend posiela holé segmenty bez PES data-field obalu, treba
-        // ho rekonstruovat (data_identifier 0x20 + subtitle_stream_id 0x00 + ... + 0xff),
-        // inak libVLC payload nerozpozna. Vid parse_subtitles v TVH (orezava 0x20 0x00 aj 0xff).
+        // ho rekonstruovat (data_identifier 0x20 + subtitle_stream_id 0x00 + ... + 0xff).
+        // Casovanie titulku NEsmie prepisat spolocnu os (remapSub), inak by skakalo video.
         val es = if (t.isSubtitle) wrapDvbSub(payload) else payload
-        val (outPts, outDts) = remap(pts, dts)
+        val (outPts, outDts) = if (t.isSubtitle) remapSub(pts, dts) else remap(pts, dts)
         val packets = ArrayList<ByteArray>()
         psiCounter -= 1
         if (psiCounter <= 0) {
@@ -112,7 +125,7 @@ class TsMuxer(streams: List<Stream>) {
         val pes = buildPes(t, es, outPts, outDts)
         val pcr = if (t.pid == pcrPid) (outDts ?: outPts) else null
         writePackets(t, pes, pcr, randomAccess, packets)
-        return flatten(packets)
+        return activated + flatten(packets)
     }
 
     /** Obali holý DVB titulkový payload z HTSP späť do PES data-field formátu. */
@@ -123,6 +136,14 @@ class TsMuxer(streams: List<Stream>) {
         payload.copyInto(out, 2)
         out[out.size - 1] = 0xFF.toByte()   // end_of_PES_data_field_marker
         return out
+    }
+
+    /** Premap titulkoveho casu pomocou existujuceho offsetu, bez re-base a bez vplyvu na os. */
+    private fun remapSub(pts: Long?, dts: Long?): Pair<Long?, Long?> {
+        if (!hasOffset) return Pair(pts, dts)
+        val outPts = pts?.let { (it - tsOffset).coerceAtLeast(0L) }
+        val outDts = dts?.let { (it - tsOffset).coerceAtLeast(0L) }
+        return Pair(outPts, outDts)
     }
 
     /** Premapuj vstupne pts/dts na spojitu rastucu vystupnu os. */
@@ -193,9 +214,9 @@ class TsMuxer(streams: List<Stream>) {
         val sectionLen = 5 + 4 + esTotal + 4
         body.add((0xB0 or ((sectionLen ushr 8) and 0x0F)).toByte())
         body.add((sectionLen and 0xFF).toByte())
-        body.add(((programNumber ushr 8) and 0xFF).toByte())
+        body.add((programNumber ushr 8 and 0xFF).toByte())
         body.add((programNumber and 0xFF).toByte())
-        body.add(0xC1.toByte())
+        body.add((0xC0 or ((pmtVersion and 0x1F) shl 1) or 0x01).toByte())  // version_number, current
         body.add(0x00); body.add(0x00)
         body.add((0xE0 or ((pcrPid ushr 8) and 0x1F)).toByte())
         body.add((pcrPid and 0xFF).toByte())
