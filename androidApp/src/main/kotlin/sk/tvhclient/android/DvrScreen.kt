@@ -275,10 +275,15 @@ private fun DvrContent(
 ) {
     val server = remember { Tvh.store.active() }
     val piconLoader = remember(server?.id) { PiconImageLoader.get(context, server) }
+    // Klasifikacia je draha (strip diakritiky + regexy nad title/subtitle/popis/kanal).
+    // Klasifikuj kazdu nahravku RAZ na nacitanie (memoizovane podla entries), nie pri
+    // kazdej rekompozicii/navigacii - pri ~7000 nahravkach to inak sekalo pri kazdom kliku.
+    val catOf = remember(entries) { entries.associateWith { DvrClassifier.classify(it) } }
+    val byCatAll = remember(entries) { entries.groupBy { catOf.getValue(it) } }
     when (nav) {
         is DvrNav.Root -> {
             // Zlozky: Posledne sledovane + Podla kanalov + kategorie
-            val byCat = entries.groupBy { DvrClassifier.classify(it) }
+            val byCat = byCatAll
             val recentCount = remember(progressTick, entries) {
                 if (server == null) 0 else {
                     val uuids = entries.mapTo(HashSet()) { it.uuid }
@@ -344,10 +349,12 @@ private fun DvrContent(
         is DvrNav.Channels -> {
             // Kanaly ktore maju nahravky, zoradene podla cisla kanala (ako v zozname),
             // kanaly bez cisla na koniec podla abecedy.
-            val byChannel = entries.groupBy { it.channelName.ifBlank { "—" } }
-            val channels = byChannel.keys.sortedWith(
-                compareBy({ channelOrder[it] ?: Int.MAX_VALUE }, { it.lowercase() })
-            )
+            val byChannel = remember(entries) { entries.groupBy { it.channelName.ifBlank { "—" } } }
+            val channels = remember(byChannel, channelOrder) {
+                byChannel.keys.sortedWith(
+                    compareBy({ channelOrder[it] ?: Int.MAX_VALUE }, { it.lowercase() })
+                )
+            }
             if (viewMode == ChannelViewMode.LIST) {
                 LazyColumn(Modifier.fillMaxSize()) {
                     item("hdr") { Header(stringResource(R.string.dvr_by_channel)) }
@@ -391,9 +398,11 @@ private fun DvrContent(
         }
 
         is DvrNav.Dates -> {
-            val chEntries = entries.filter { it.channelName.ifBlank { "—" } == nav.channel }
-            val byDate = chEntries.groupBy { dateKey(it.start) }
-            val dates = byDate.keys.sortedDescending()
+            val byDate = remember(entries, nav.channel) {
+                entries.filter { it.channelName.ifBlank { "—" } == nav.channel }
+                    .groupBy { dateKey(it.start) }
+            }
+            val dates = remember(byDate) { byDate.keys.sortedDescending() }
             if (viewMode == ChannelViewMode.LIST) {
                 LazyColumn(Modifier.fillMaxSize()) {
                     item("hdr") { Header(nav.channel) }
@@ -419,18 +428,22 @@ private fun DvrContent(
         }
 
         is DvrNav.Day -> {
-            val list = entries
-                .filter { it.channelName.ifBlank { "—" } == nav.channel && dateKey(it.start) == nav.dateKey }
-                .sortedByDescending { it.start }
+            val list = remember(entries, nav.channel, nav.dateKey) {
+                entries
+                    .filter { it.channelName.ifBlank { "—" } == nav.channel && dateKey(it.start) == nav.dateKey }
+                    .sortedByDescending { it.start }
+            }
             RecordingList(list, context, progressTick, header = nav.channel, viewMode = viewMode)
         }
 
         is DvrNav.Category -> {
-            val inCat = entries.filter { DvrClassifier.classify(it) == nav.catKey }
+            val inCat = byCatAll[nav.catKey].orEmpty()
             if (DvrClassifier.hasSubgenres(nav.catKey)) {
-                // Zlozky sub-zanrov ktore maju zaznamy (serialovy konsenzus)
-                val consensus = DvrClassifier.consensusSubgenres(inCat, nav.catKey)
-                val bySub = inCat.groupBy { DvrClassifier.subgenreOf(it, nav.catKey, consensus) }
+                // Zlozky sub-zanrov ktore maju zaznamy (serialovy konsenzus) - memoizovane
+                val bySub = remember(inCat, nav.catKey) {
+                    val consensus = DvrClassifier.consensusSubgenres(inCat, nav.catKey)
+                    inCat.groupBy { DvrClassifier.subgenreOf(it, nav.catKey, consensus) }
+                }
                 val order = DvrClassifier.subOrderFor(nav.catKey)
                 if (viewMode == ChannelViewMode.LIST) {
                     LazyColumn(Modifier.fillMaxSize()) {
@@ -456,16 +469,18 @@ private fun DvrContent(
         }
 
         is DvrNav.Subgenre -> {
-            val catEntries = entries.filter { DvrClassifier.classify(it) == nav.catKey }
-            val consensus = DvrClassifier.consensusSubgenres(catEntries, nav.catKey)
-            val inSub = catEntries.filter {
-                DvrClassifier.subgenreOf(it, nav.catKey, consensus) == nav.subKey
+            val catEntries = byCatAll[nav.catKey].orEmpty()
+            val inSub = remember(catEntries, nav.catKey, nav.subKey) {
+                val consensus = DvrClassifier.consensusSubgenres(catEntries, nav.catKey)
+                catEntries.filter {
+                    DvrClassifier.subgenreOf(it, nav.catKey, consensus) == nav.subKey
+                }
             }
             if (DvrClassifier.isSeriesLike(nav.catKey)) {
                 // Zoskup epizody pod serial (canonical title). Vzdy zlozka,
                 // aj ked ma serial len jednu epizodu (konzistentne).
-                val bySeries = inSub.groupBy { DvrClassifier.seriesCanonicalTitle(it.title) }
-                val titles = bySeries.keys.sortedBy { it.lowercase() }
+                val bySeries = remember(inSub) { inSub.groupBy { DvrClassifier.seriesCanonicalTitle(it.title) } }
+                val titles = remember(bySeries) { bySeries.keys.sortedBy { it.lowercase() } }
                 if (viewMode == ChannelViewMode.LIST) {
                     LazyColumn(Modifier.fillMaxSize()) {
                         item("hdr") { Header(subLabel(nav.subKey)) }
@@ -492,12 +507,14 @@ private fun DvrContent(
         }
 
         is DvrNav.Series -> {
-            val catEntries = entries.filter { DvrClassifier.classify(it) == nav.catKey }
-            val consensus = DvrClassifier.consensusSubgenres(catEntries, nav.catKey)
-            val eps = catEntries.filter {
-                DvrClassifier.subgenreOf(it, nav.catKey, consensus) == nav.subKey &&
-                DvrClassifier.seriesCanonicalTitle(it.title) == nav.seriesTitle
-            }.sortedByDescending { it.start }
+            val catEntries = byCatAll[nav.catKey].orEmpty()
+            val eps = remember(catEntries, nav.catKey, nav.subKey, nav.seriesTitle) {
+                val consensus = DvrClassifier.consensusSubgenres(catEntries, nav.catKey)
+                catEntries.filter {
+                    DvrClassifier.subgenreOf(it, nav.catKey, consensus) == nav.subKey &&
+                    DvrClassifier.seriesCanonicalTitle(it.title) == nav.seriesTitle
+                }.sortedByDescending { it.start }
+            }
             RecordingList(eps, context, progressTick, header = nav.seriesTitle, viewMode = viewMode)
         }
     }
