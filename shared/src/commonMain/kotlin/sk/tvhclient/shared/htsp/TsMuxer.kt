@@ -110,10 +110,12 @@ class TsMuxer(streams: List<Stream>) {
         var t = trackByEs[esIndex]
         var activated = ByteArray(0)
         if (t == null) {
-            // prvy paket cakajuceho titulku -> aktivuj stopu a posli nove PAT/PMT (nova verzia)
+            // prvy paket cakajuceho titulku potvrdzuje, ze libVLC za behu prijme novu stopu;
+            // pridame NARAZ vsetky cakajuce titulky, nech je zoznam kompletny a rovnaky na
+            // kazdom zariadeni (inak by sa jazyky objavovali postupne, ako ktory "prehovori").
             val pend = pendingSubs.firstOrNull { it.esIndex == esIndex } ?: return ByteArray(0)
-            pendingSubs.remove(pend)
-            tracks.add(pend)
+            tracks.addAll(pendingSubs)
+            pendingSubs.clear()
             trackByEs = tracks.associateBy { it.esIndex }
             pmtVersion = (pmtVersion + 1) and 0x1F
             t = pend
