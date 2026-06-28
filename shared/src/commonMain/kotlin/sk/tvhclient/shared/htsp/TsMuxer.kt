@@ -13,14 +13,15 @@ package sk.tvhclient.shared.htsp
  */
 class TsMuxer(streams: List<Stream>) {
 
-    data class Stream(val index: Int, val type: String)
+    data class Stream(val index: Int, val type: String, val language: String = "")
 
     private class Track(
         val esIndex: Int,
         val pid: Int,
         val streamType: Int,
         val streamId: Int,
-        val isVideo: Boolean
+        val isVideo: Boolean,
+        val language: String
     ) {
         var cc = 0
     }
@@ -50,7 +51,7 @@ class TsMuxer(streams: List<Stream>) {
         val list = ArrayList<Track>()
         for (s in streams) {
             val m = mapType(s.type) ?: continue
-            list.add(Track(s.index, nextPid++, m.first, m.second, m.third))
+            list.add(Track(s.index, nextPid++, m.first, m.second, m.third, s.language))
         }
         tracks = list
         trackByEs = list.associateBy { it.esIndex }
@@ -127,10 +128,27 @@ class TsMuxer(streams: List<Stream>) {
         return psiToTs(patPid, body.toByteArray(), cc)
     }
 
+    /** ES_info pre stopu: audio s 3-pismenovym jazykom dostane ISO_639_language_descriptor
+     *  (tag 0x0A), aby libVLC zobrazil jazyk hned z PMT (HTSP "language" zo subscriptionStart). */
+    private fun esInfo(t: Track): ByteArray {
+        if (!t.isVideo && t.language.length == 3) {
+            val l = t.language.lowercase()
+            return byteArrayOf(
+                0x0A, 0x04,
+                l[0].code.toByte(), l[1].code.toByte(), l[2].code.toByte(),
+                0x00                                        // audio_type = undefined
+            )
+        }
+        return ByteArray(0)
+    }
+
     private fun pmt(): ByteArray {
         val body = ArrayList<Byte>()
         body.add(0x02)                                  // table_id PMT
-        val sectionLen = 5 + 4 + tracks.size * 5 + 4
+        val esInfos = tracks.map { esInfo(it) }
+        var esTotal = 0
+        for (i in tracks.indices) esTotal += 5 + esInfos[i].size
+        val sectionLen = 5 + 4 + esTotal + 4
         body.add((0xB0 or ((sectionLen ushr 8) and 0x0F)).toByte())
         body.add((sectionLen and 0xFF).toByte())
         body.add(((programNumber ushr 8) and 0xFF).toByte())
@@ -140,11 +158,15 @@ class TsMuxer(streams: List<Stream>) {
         body.add((0xE0 or ((pcrPid ushr 8) and 0x1F)).toByte())
         body.add((pcrPid and 0xFF).toByte())
         body.add(0xF0.toByte()); body.add(0x00)         // program_info_length = 0
-        for (t in tracks) {
+        for (i in tracks.indices) {
+            val t = tracks[i]
+            val info = esInfos[i]
             body.add((t.streamType and 0xFF).toByte())
             body.add((0xE0 or ((t.pid ushr 8) and 0x1F)).toByte())
             body.add((t.pid and 0xFF).toByte())
-            body.add(0xF0.toByte()); body.add(0x00)     // ES_info_length = 0
+            body.add((0xF0 or ((info.size ushr 8) and 0x0F)).toByte())  // ES_info_length (rezerv. 1111)
+            body.add((info.size and 0xFF).toByte())
+            for (b in info) body.add(b)
         }
         appendCrc(body)
         val cc = pmtCc; pmtCc = (pmtCc + 1) and 0x0F

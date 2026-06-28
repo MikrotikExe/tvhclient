@@ -258,7 +258,8 @@ class HtspClient(
                             val sm = it as? Map<*, *> ?: return@mapNotNull null
                             val idx = (sm["index"] as? Long)?.toInt() ?: return@mapNotNull null
                             val typ = sm["type"] as? String ?: return@mapNotNull null
-                            TsMuxer.Stream(idx, typ)
+                            val lang = (sm["language"] as? String) ?: ""
+                            TsMuxer.Stream(idx, typ, lang)
                         }
                         val existing = muxer
                         if (existing == null) {

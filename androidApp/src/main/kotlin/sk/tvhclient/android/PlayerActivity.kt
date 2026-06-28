@@ -2456,7 +2456,6 @@ class PlayerActivity : ComponentActivity() {
     /** Naplanuje znovupripojenie zivého streamu po vypadku (narastajuce oneskorenie). */
     private fun scheduleReconnect() {
         if (seekablePlayback) return  // DVR nahravka sa neobnovuje (in-progress riesi reopenDvrLive)
-        val url = currentStreamUrl ?: return
         if (!::mediaPlayer.isInitialized) return
         if (reconnectAttempts >= maxReconnectAttempts) {
             reconnectingState.value = false
@@ -2469,17 +2468,29 @@ class PlayerActivity : ComponentActivity() {
         reconnectHandler.removeCallbacksAndMessages(null)
         reconnectHandler.postDelayed({
             if (!::mediaPlayer.isInitialized) return@postDelayed
+            val srv = liveServer
+            val cid = liveUuids.getOrNull(liveIndex)?.toLongOrNull()
+            val url = currentStreamUrl
             runCatching {
-                if (liveNeedsFeeder == true) {
-                    val srv = liveServer ?: return@runCatching
-                    playLiveViaFeeder(srv, url)
-                } else {
-                    val m = buildMedia(url)
+                if (htspStream && srv != null && cid != null) {
+                    // HTSP kanal -> znovu napoj cez HTSP (zachova HTSP/timeshift)
+                    playHtspLive(srv, cid, htspLive)
+                } else if (liveNeedsFeeder == true && srv != null && url != null) {
+                    playLiveViaFeeder(srv, url)   // HTTP digest-only -> feeder
+                } else if (url != null) {
+                    val m = buildMedia(url)       // bezne HTTP
                     mediaPlayer.media = m
                     m.release()
                     mediaPlayer.play()
                 }
             }
+            // watchdog: ak sa do 8 s neobjavi prehravanie (spinner ostal), skus znova;
+            // po vycerpani pokusov scheduleReconnect ohlasi chybu -> ziadne trvale zaseknutie
+            reconnectHandler.postDelayed({
+                if (::mediaPlayer.isInitialized && reconnectingState.value && !mediaPlayer.isPlaying) {
+                    scheduleReconnect()
+                }
+            }, 8000)
         }, delay)
     }
 
@@ -2603,10 +2614,10 @@ class PlayerActivity : ComponentActivity() {
     private var trackReparseDone = false
     private val trackReparseHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private fun maybeReparseForTracks() {
-        if (trackReparseDone || seekablePlayback) return
+        if (trackReparseDone || seekablePlayback || htspStream) return  // HTSP berie jazyky z PMT
         trackReparseHandler.removeCallbacksAndMessages(null)
         trackReparseHandler.postDelayed({
-            if (trackReparseDone || seekablePlayback || !::mediaPlayer.isInitialized) return@postDelayed
+            if (trackReparseDone || seekablePlayback || htspStream || !::mediaPlayer.isInitialized) return@postDelayed
             val langs = runCatching { mediaPlayer.trackLanguages() }.getOrDefault(emptyMap())
             val anyLang = langs.values.any { !it.isNullOrBlank() && !it.equals("und", true) }
             trackReparseDone = true  // tak ci tak skus len raz
