@@ -9,9 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +45,11 @@ internal fun TrackMenu(
     onPick: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val listState = rememberLazyListState()
+    // TV D-pad: drz zvyrazneny riadok vo vyhlade pri posuvani
+    LaunchedEffect(navIndex) {
+        runCatching { listState.animateScrollToItem(navIndex.coerceAtLeast(0)) }
+    }
     Box(
         Modifier
             .fillMaxSize()
@@ -52,7 +62,8 @@ internal fun TrackMenu(
     ) {
         Column(
             Modifier
-                .widthIn(min = 240.dp)
+                // uzky ohraniceny dialog (nie cez celu sirku TV); riadky vnutri su posuvatelne
+                .widthIn(min = 280.dp, max = 460.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xEE202020))
                 .padding(8.dp)
@@ -65,18 +76,26 @@ internal fun TrackMenu(
             )
             // poradie riadkov musi sediet s trackMenuIds() v Activity: [Vypnute] + items (pre titulky)
             val offset = if (allowOff) 1 else 0
-            if (allowOff) {
-                TrackRow(stringResource(R.string.track_off), selected = currentId == -1, highlighted = navIndex == 0) { onPick(-1) }
-            }
             if (items.isEmpty() && !allowOff) {
                 Text(
                     stringResource(R.string.track_none),
                     color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.padding(12.dp)
                 )
-            }
-            items.forEachIndexed { i, t ->
-                TrackRow(t.name, selected = t.id == currentId, highlighted = navIndex == i + offset) { onPick(t.id) }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.heightIn(max = 320.dp)
+                ) {
+                    if (allowOff) {
+                        item(key = "off") {
+                            TrackRow(stringResource(R.string.track_off), selected = currentId == -1, highlighted = navIndex == 0) { onPick(-1) }
+                        }
+                    }
+                    itemsIndexed(items, key = { _, t -> t.id }) { i, t ->
+                        TrackRow(t.name, selected = t.id == currentId, highlighted = navIndex == i + offset) { onPick(t.id) }
+                    }
+                }
             }
         }
     }
