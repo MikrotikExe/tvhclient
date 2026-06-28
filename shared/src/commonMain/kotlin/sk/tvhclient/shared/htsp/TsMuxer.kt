@@ -61,6 +61,7 @@ class TsMuxer(streams: List<Stream>) {
     private var lastOut = 0L
     private val discontTicks = 90000L * 4   // 4 s = diskontinuita -> re-base
     private val frameGapTicks = 3000L        // ~33 ms medzera po skoku
+    private val subLeadTicks = 36000L        // ~400 ms predstih titulkov (anti-drop v rychlom slede)
 
     init {
         var nextPid = 0x1001
@@ -189,8 +190,11 @@ class TsMuxer(streams: List<Stream>) {
     /** Premap titulkoveho casu pomocou existujuceho offsetu, bez re-base a bez vplyvu na os. */
     private fun remapSub(pts: Long?, dts: Long?): Pair<Long?, Long?> {
         if (!hasOffset) return Pair(pts, dts)
-        val outPts = pts?.let { (it - tsOffset).coerceAtLeast(0L) }
-        val outDts = dts?.let { (it - tsOffset).coerceAtLeast(0L) }
+        // maly predstih (~400 ms): tesne za sebou iduce display-sety dekodér casto zahodi,
+        // ak ich nestihne zobrazit pred prichodom dalsieho; predstih mu da margin. Drzime sa
+        // hlboko vnutri file-caching bufra (1500 ms), aby titulok neskoncil "v minulosti".
+        val outPts = pts?.let { (it - tsOffset - subLeadTicks).coerceAtLeast(0L) }
+        val outDts = dts?.let { (it - tsOffset - subLeadTicks).coerceAtLeast(0L) }
         return Pair(outPts, outDts)
     }
 
