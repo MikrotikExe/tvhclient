@@ -59,21 +59,12 @@ class TsMuxer(streams: List<Stream>) {
         var nextPid = 0x1001
         val list = ArrayList<Track>()
         for (s in streams) {
-            if (s.type == "DVBSUB") {
-                // DVB titulky: stream_type 0x06 (private PES), PES stream_id 0xBD
-                list.add(Track(
-                    esIndex = s.index, pid = nextPid++, streamType = 0x06, streamId = 0xBD,
-                    isVideo = false, language = s.language, isSubtitle = true,
-                    compositionId = s.compositionId, ancillaryId = s.ancillaryId
-                ))
-                continue
-            }
             val m = mapType(s.type) ?: continue
             list.add(Track(s.index, nextPid++, m.first, m.second, m.third, s.language))
         }
         tracks = list
         trackByEs = list.associateBy { it.esIndex }
-        pcrPid = (tracks.firstOrNull { it.isVideo } ?: tracks.firstOrNull { !it.isSubtitle } ?: tracks.firstOrNull())?.pid ?: 0x1001
+        pcrPid = (tracks.firstOrNull { it.isVideo } ?: tracks.firstOrNull())?.pid ?: 0x1001
     }
 
     fun hasTracks(): Boolean = tracks.isNotEmpty()
@@ -99,9 +90,6 @@ class TsMuxer(streams: List<Stream>) {
     /** Jeden muxpkt → TS bajty. Prazdne ak je stopa nepodporovana. */
     fun mux(esIndex: Int, payload: ByteArray, pts: Long?, dts: Long?, randomAccess: Boolean): ByteArray {
         val t = trackByEs[esIndex] ?: return ByteArray(0)
-        // DVB titulky su zatial len ohlasene v PMT (objavia sa v menu), ich PES este
-        // nemuxujeme — overujeme, ci PES nebol pricinou padu streamu pri starte
-        if (t.isSubtitle) return ByteArray(0)
         val (outPts, outDts) = remap(pts, dts)
         val packets = ArrayList<ByteArray>()
         psiCounter -= 1
@@ -149,20 +137,9 @@ class TsMuxer(streams: List<Stream>) {
         return psiToTs(patPid, body.toByteArray(), cc)
     }
 
-    /** ES_info pre stopu: audio -> ISO_639_language_descriptor (0x0A); DVB titulky ->
-     *  subtitling_descriptor (0x59) s jazykom + composition/ancillary page id. Aby libVLC
-     *  zobrazil jazyk/titulky hned z PMT (udaje zo subscriptionStart). */
+    /** ES_info pre stopu: audio s 3-pismenovym jazykom dostane ISO_639_language_descriptor
+     *  (tag 0x0A), aby libVLC zobrazil jazyk hned z PMT (HTSP "language" zo subscriptionStart). */
     private fun esInfo(t: Track): ByteArray {
-        if (t.isSubtitle && t.language.length == 3) {
-            val l = t.language.lowercase()
-            return byteArrayOf(
-                0x59, 0x08,
-                l[0].code.toByte(), l[1].code.toByte(), l[2].code.toByte(),
-                0x10,                                       // subtitling_type = normal
-                ((t.compositionId ushr 8) and 0xFF).toByte(), (t.compositionId and 0xFF).toByte(),
-                ((t.ancillaryId ushr 8) and 0xFF).toByte(), (t.ancillaryId and 0xFF).toByte()
-            )
-        }
         if (!t.isVideo && t.language.length == 3) {
             val l = t.language.lowercase()
             return byteArrayOf(
