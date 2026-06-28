@@ -76,7 +76,9 @@ class SubtitleOverlayView(context: Context) : View(context) {
     }
 
     private fun update() {
-        val now = clock?.invoke() ?: return
+        // clock siaha na mediaPlayer.time; po uvolneni prehravaca hodi getTime()
+        // IllegalStateException ("can't get VLCObject instance") — nesmie zhodit appku.
+        val now = runCatching { clock?.invoke() }.getOrNull() ?: return
         var chosen: Timed? = null
         synchronized(lock) {
             var idx = -1

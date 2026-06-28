@@ -2682,6 +2682,7 @@ class PlayerActivity : ComponentActivity() {
         sleepHandler.removeCallbacksAndMessages(null)
         pipReceiver?.let { runCatching { unregisterReceiver(it) } }
         pipReceiver = null
+        subOverlay?.stopTicker()   // zastav titulkovy ticker skor nez uvolnis mediaPlayer
         if (::mediaPlayer.isInitialized) {
             mediaPlayer.stop()
             mediaPlayer.detachViews()
