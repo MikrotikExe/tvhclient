@@ -110,16 +110,28 @@ class TsMuxer(streams: List<Stream>) {
         var t = trackByEs[esIndex]
         var activated = ByteArray(0)
         if (t == null) {
-            // prvy paket cakajuceho titulku potvrdzuje, ze libVLC za behu prijme novu stopu;
-            // pridame NARAZ vsetky cakajuce titulky, nech je zoznam kompletny a rovnaky na
-            // kazdom zariadeni (inak by sa jazyky objavovali postupne, ako ktory "prehovori").
+            // Prvy realny titulkovy paket potvrdzuje, ze prehravanie bezi a libVLC za behu
+            // prijme nove stopy. Vtedy deklarujeme NARAZ vsetky cakajuce titulky (jedna PMT
+            // zmena = ziadne krehke priebezne pridavanie, ktore TV libVLC zahadzuje) a do
+            // KAZDEJ hned posleme syntheticky "clear" segment, aby ziadna nebola mlciaca
+            // (mlciace stopy zhadzuju libVLC do reconnect slucky). Vysledok: kompletny a
+            // rovnaky zoznam na kazdom zariadeni, bez padu.
             val pend = pendingSubs.firstOrNull { it.esIndex == esIndex } ?: return ByteArray(0)
-            tracks.addAll(pendingSubs)
+            val toActivate = ArrayList(pendingSubs)
+            tracks.addAll(toActivate)
             pendingSubs.clear()
             trackByEs = tracks.associateBy { it.esIndex }
             pmtVersion = (pmtVersion + 1) and 0x1F
             t = pend
-            activated = flatten(listOf(pat(), pmt()))
+            val act = ArrayList<ByteArray>()
+            act.add(pat()); act.add(pmt())
+            val (sPts, sDts) = remapSub(pts, dts)
+            for (sub in toActivate) {
+                if (sub.esIndex == pend.esIndex) continue   // pend dostane realny paket nizsie
+                val primePes = buildPes(sub, wrapDvbSub(clearSubSegments(sub)), sPts, sDts)
+                writePackets(sub, primePes, null, false, act)
+            }
+            activated = flatten(act)
             psiCounter = siInterval
         }
         // DVB titulky: Tvheadend posiela holé segmenty bez PES data-field obalu, treba
@@ -151,6 +163,20 @@ class TsMuxer(streams: List<Stream>) {
         payload.copyInto(out, 2)
         out[out.size - 1] = 0xFF.toByte()   // end_of_PES_data_field_marker
         return out
+    }
+
+    /** Minimalna platna DVB titulkova sekvencia, ktora nic nevykresli: page composition
+     *  segment s prazdnym zoznamom regionov (clear) + end of display set. Sluzi na
+     *  "rozhovorenie" cakajucej stopy, aby nebola mlciaca a libVLC ju prijal. */
+    private fun clearSubSegments(t: Track): ByteArray {
+        val pageId = if ((t.compositionId and 0xFFFF) != 0) (t.compositionId and 0xFFFF) else 1
+        val hi = (pageId shr 8) and 0xFF
+        val lo = pageId and 0xFF
+        val seg = intArrayOf(
+            0x0F, 0x10, hi, lo, 0x00, 0x02, 0x00, 0x0B,   // PCS: prazdna stranka (mode change, 0 regionov)
+            0x0F, 0x80, hi, lo, 0x00, 0x00                // end of display set
+        )
+        return ByteArray(seg.size) { seg[it].toByte() }
     }
 
     /** Pred raw AAC rámec (TVH ho posiela bez ADTS) doplni 7-bajtovu ADTS hlavicku.
