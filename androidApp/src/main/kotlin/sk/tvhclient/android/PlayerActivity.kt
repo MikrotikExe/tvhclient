@@ -1971,6 +1971,9 @@ class PlayerActivity : ComponentActivity() {
             chProfile.ifBlank { server.profile.ifBlank { "pass" } }
         )
 
+        // Server je potrebny aj v DVR rezime (seekDvrTo / reopenDvrLive cez feeder).
+        // Live-zapping nizsie zavisi od liveUuids (pri DVR prazdne), nie od liveServer.
+        liveServer = server
         // Live zapping: priprav zoznam susednych kanalov
         if (directUrl == null && channelUuid != null && LivePlaylist.channels.isNotEmpty()) {
             liveUuids = LivePlaylist.channels.map { it.uuid }
