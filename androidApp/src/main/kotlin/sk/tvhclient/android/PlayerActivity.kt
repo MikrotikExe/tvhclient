@@ -305,7 +305,6 @@ class PlayerActivity : ComponentActivity() {
      * libVLC nezvladne. startByte = pripadny offset pre resume cez HTTP Range.
      */
     private fun playDvrViaFeeder(server: sk.tvhclient.shared.model.TvhServer, url: String, startByte: Long = 0L) {
-        android.util.Log.i("TVHSEEK", "playDvrViaFeeder startByte=$startByte url=$url")
         htspFeeder?.stop(); htspFeeder = null
         httpFeeder?.stop()
         htspStream = false
@@ -506,27 +505,20 @@ class PlayerActivity : ComponentActivity() {
     /** Absolutny seek na program-relativny cas (spodna lista / D-pad). Cez seekDvrTo,
      *  takze funguje aj pre feeder/pipe (player.position tam nic nerobi). */
     private fun seekDvrAbsolute(targetMs: Long) {
-        if (!::mediaPlayer.isInitialized || !seekablePlayback) {
-            android.util.Log.i("TVHSEEK", "seekDvrAbsolute IGNORED init=${::mediaPlayer.isInitialized} seekable=$seekablePlayback target=$targetMs")
-            return
-        }
+        if (!::mediaPlayer.isInitialized || !seekablePlayback) return
         val dur = if (dvrDurationMs > 0) dvrDurationMs else mediaPlayer.length
         if (dur <= 0) return
         val maxMs = if (dvrRecording) (dur - 45_000L).coerceAtLeast(0L) else dur
         val curMs = dvrPlayheadMsState.value.coerceIn(0L, dur)
         val tgt = targetMs.coerceIn(0L, maxMs)
-        android.util.Log.i("TVHSEEK", "seekDvrAbsolute target=$targetMs tgt=$tgt cur=$curMs dur=$dur feeder=$dvrViaFeeder")
-        if (kotlin.math.abs(tgt - curMs) < 1000L) { android.util.Log.i("TVHSEEK", "seekDvrAbsolute SKIP (diff<1s)"); return }
+        if (kotlin.math.abs(tgt - curMs) < 1000L) return
         seekDvrTo(tgt, curMs, dur)
     }
 
     private fun seekRelative(deltaMs: Long) {
-        if (!::mediaPlayer.isInitialized || !seekablePlayback) {
-            android.util.Log.i("TVHSEEK", "seekRelative IGNORED init=${::mediaPlayer.isInitialized} seekable=$seekablePlayback delta=$deltaMs")
-            return
-        }
+        if (!::mediaPlayer.isInitialized || !seekablePlayback) return
         val dur = if (dvrDurationMs > 0) dvrDurationMs else mediaPlayer.length
-        if (dur <= 0) { android.util.Log.i("TVHSEEK", "seekRelative dur<=0 dvrDur=$dvrDurationMs len=${mediaPlayer.length}"); return }
+        if (dur <= 0) return
         // Pri prebiehajucej nahravke nechaj rezervu ~45 s od zivej hrany (zapisane data
         // zaostavaju za EPG casom; mensia rezerva = EOF a zamrznutie TS).
         val maxMs = if (dvrRecording) (dur - 45_000L).coerceAtLeast(0L) else dur
@@ -534,8 +526,7 @@ class PlayerActivity : ComponentActivity() {
         // pre rastuci TS aj pre pipe nestabilna).
         val curMs = dvrPlayheadMsState.value.coerceIn(0L, dur)
         val targetMs = (curMs + deltaMs).coerceIn(0L, maxMs)
-        android.util.Log.i("TVHSEEK", "seekRelative delta=$deltaMs dur=$dur max=$maxMs cur=$curMs target=$targetMs rec=$dvrRecording feeder=$dvrViaFeeder")
-        if (kotlin.math.abs(targetMs - curMs) < 1000L) { android.util.Log.i("TVHSEEK", "seekRelative SKIP (diff<1s)"); return }
+        if (kotlin.math.abs(targetMs - curMs) < 1000L) return
         seekDvrTo(targetMs, curMs, dur)
     }
 
@@ -578,17 +569,15 @@ class PlayerActivity : ComponentActivity() {
                     val bpms = if (bytes > 0) bytes.toDouble() / fromFileMs else 0.0
                     if (bpms > 0) (bpms * fileMs).toLong().coerceAtLeast(0L) else 0L
                 }
-                android.util.Log.i("TVHSEEK", "FEEDER restart target=$targetMs fileMs=$fileMs offset=$offsetMs total=$total fileDurMs=$fileDurMs targetByte=$targetByte url=$url")
                 playDvrViaFeeder(srv, url, targetByte)
             } else {
-                android.util.Log.i("TVHSEEK", "DIRECT start-time=${fileMs / 1000}s target=$targetMs fileMs=$fileMs offset=$offsetMs url=$url")
                 val m = buildMedia(url)
                 m.addOption(":start-time=${fileMs / 1000}")
                 mediaPlayer.media = m
                 m.release()
                 mediaPlayer.play()
             }
-        }.onFailure { android.util.Log.i("TVHSEEK", "seekDvrTo FAIL ${it.message}") }
+        }
         // playhead hned na cielovu poziciu + seed pre hodiny (po restarte je player.position
         // neplatna, hodiny ju nesmu citat - prevezmu seed a tikaju dalej z neho)
         dvrPlayheadMsState.value = targetMs
@@ -634,7 +623,6 @@ class PlayerActivity : ComponentActivity() {
 
     /** Horizontalne tahanie (MX Player) -> skok o dany pocet sekund (zaporne = vzad). */
     private fun scrubSeek(seconds: Int) {
-        android.util.Log.i("TVHSEEK", "scrubSeek secs=$seconds seekable=$seekablePlayback htspLive=$htspLive")
         if (seconds == 0) return
         when {
             seekablePlayback -> seekRelative(seconds.toLong() * 1000L)
@@ -1950,7 +1938,6 @@ class PlayerActivity : ComponentActivity() {
         mediaPlayer.setEventListener { event ->
             when (event.type) {
                 MediaPlayer.Event.EncounteredError -> {
-                    android.util.Log.i("TVHSEEK", "EncounteredError seekable=$seekablePlayback rec=$dvrRecording feeder=$dvrViaFeeder")
                     // zivé vysielanie: skus znovu pripojit (vypadok siete)
                     if (!seekablePlayback) {
                         scheduleReconnect()

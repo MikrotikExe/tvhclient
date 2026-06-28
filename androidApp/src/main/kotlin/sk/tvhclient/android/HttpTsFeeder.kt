@@ -88,7 +88,6 @@ class HttpTsFeeder(
                     val total = cr?.substringAfter('/', "")?.toLongOrNull()
                         ?: resp.header("Content-Length")?.toLongOrNull()
                     if (total != null && total > 0) totalBytes = total
-                    android.util.Log.i("TVHSEEK", "feeder HTTP code=${resp.code} range=$cr len=${resp.header("Content-Length")} total=$totalBytes startByte=$startByte")
                     val body = resp.body ?: return@use
                     val src = body.byteStream()
                     val buf = ByteArray(64 * 1024)
@@ -99,8 +98,8 @@ class HttpTsFeeder(
                         bytesWritten += n
                     }
                 }
-            } catch (t: Throwable) {
-                android.util.Log.i("TVHSEEK", "feeder EXC ${t.javaClass.simpleName} ${t.message}")
+            } catch (_: Throwable) {
+                // zrusenie / zlomeny pipe / chyba spojenia
             } finally {
                 try { os.close() } catch (_: Throwable) {}
             }
