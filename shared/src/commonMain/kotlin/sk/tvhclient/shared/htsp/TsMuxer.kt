@@ -18,7 +18,9 @@ class TsMuxer(streams: List<Stream>) {
         val type: String,
         val language: String = "",
         val compositionId: Int = 0,
-        val ancillaryId: Int = 0
+        val ancillaryId: Int = 0,
+        val channels: Int = 0,
+        val sampleRateIndex: Int = 0
     )
 
     private class Track(
@@ -30,9 +32,12 @@ class TsMuxer(streams: List<Stream>) {
         val language: String,
         val isSubtitle: Boolean = false,
         val compositionId: Int = 0,
-        val ancillaryId: Int = 0
+        val ancillaryId: Int = 0,
+        val channels: Int = 0,
+        val sampleRateIndex: Int = 0
     ) {
         var cc = 0
+        val isAac: Boolean get() = streamType == 0x0F
     }
 
     private val patPid = 0x0000
@@ -71,7 +76,10 @@ class TsMuxer(streams: List<Stream>) {
                 continue
             }
             val m = mapType(s.type) ?: continue
-            tracks.add(Track(s.index, nextPid++, m.first, m.second, m.third, s.language))
+            tracks.add(Track(
+                s.index, nextPid++, m.first, m.second, m.third, s.language,
+                channels = s.channels, sampleRateIndex = s.sampleRateIndex
+            ))
         }
         trackByEs = tracks.associateBy { it.esIndex }
         pcrPid = (tracks.firstOrNull { it.isVideo } ?: tracks.firstOrNull())?.pid ?: 0x1001
@@ -114,8 +122,13 @@ class TsMuxer(streams: List<Stream>) {
         }
         // DVB titulky: Tvheadend posiela holé segmenty bez PES data-field obalu, treba
         // ho rekonstruovat (data_identifier 0x20 + subtitle_stream_id 0x00 + ... + 0xff).
+        // AAC: Tvheadend posiela raw access-unit rámce, pred kazdy treba ADTS hlavicku.
         // Casovanie titulku NEsmie prepisat spolocnu os (remapSub), inak by skakalo video.
-        val es = if (t.isSubtitle) wrapDvbSub(payload) else payload
+        val es = when {
+            t.isSubtitle -> wrapDvbSub(payload)
+            t.isAac -> adtsWrap(t, payload)
+            else -> payload
+        }
         val (outPts, outDts) = if (t.isSubtitle) remapSub(pts, dts) else remap(pts, dts)
         val packets = ArrayList<ByteArray>()
         psiCounter -= 1
@@ -135,6 +148,25 @@ class TsMuxer(streams: List<Stream>) {
         out[1] = 0x00                       // subtitle_stream_id
         payload.copyInto(out, 2)
         out[out.size - 1] = 0xFF.toByte()   // end_of_PES_data_field_marker
+        return out
+    }
+
+    /** Pred raw AAC rámec (TVH ho posiela bez ADTS) doplni 7-bajtovu ADTS hlavicku.
+     *  profil = AAC LC (object_type 2), sample-rate index a kanaly zo subscriptionStart
+     *  (rate = es_sri, channels). Bez nich fallback 48 kHz / 2 kanaly (bezne pre TV). */
+    private fun adtsWrap(t: Track, au: ByteArray): ByteArray {
+        val sfi = if (t.sampleRateIndex in 0..15) t.sampleRateIndex else 3   // 3 = 48 kHz
+        val ch = if (t.channels in 1..7) t.channels else 2
+        val frameLen = au.size + 7
+        val out = ByteArray(au.size + 7)
+        out[0] = 0xFF.toByte()
+        out[1] = 0xF1.toByte()                                  // MPEG-4, no CRC
+        out[2] = (((1 and 0x03) shl 6) or ((sfi and 0x0F) shl 2) or ((ch shr 2) and 0x01)).toByte()  // profil AAC LC=1
+        out[3] = (((ch and 0x03) shl 6) or ((frameLen shr 11) and 0x03)).toByte()
+        out[4] = ((frameLen shr 3) and 0xFF).toByte()
+        out[5] = (((frameLen and 0x07) shl 5) or 0x1F).toByte() // + buffer_fullness hi
+        out[6] = 0xFC.toByte()                                  // buffer_fullness lo + 1 blok
+        au.copyInto(out, 7)
         return out
     }
 
