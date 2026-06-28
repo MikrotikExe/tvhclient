@@ -499,9 +499,12 @@ class PlayerActivity : ComponentActivity() {
     /** Pretacanie pre DVR (live TS sa pretacat neda). TS subor nenese dlzku,
      *  preto pouzivame dlzku z DVR entry a poziciu ako zlomok (na TS spolahlive). */
     private fun seekRelative(deltaMs: Long) {
-        if (!::mediaPlayer.isInitialized || !seekablePlayback) return
+        if (!::mediaPlayer.isInitialized || !seekablePlayback) {
+            android.util.Log.i("TVHSEEK", "seekRelative IGNORED init=${::mediaPlayer.isInitialized} seekable=$seekablePlayback delta=$deltaMs")
+            return
+        }
         val dur = if (dvrDurationMs > 0) dvrDurationMs else mediaPlayer.length
-        if (dur <= 0) return
+        if (dur <= 0) { android.util.Log.i("TVHSEEK", "seekRelative dur<=0 dvrDur=$dvrDurationMs len=${mediaPlayer.length}"); return }
         // Pri prebiehajucej nahravke nechaj rezervu ~45 s od zivej hrany (zapisane data
         // zaostavaju za EPG casom; mensia rezerva = EOF a zamrznutie TS).
         val maxMs = if (dvrRecording) (dur - 45_000L).coerceAtLeast(0L) else dur
@@ -509,7 +512,8 @@ class PlayerActivity : ComponentActivity() {
         // pre rastuci TS aj pre pipe nestabilna).
         val curMs = dvrPlayheadMsState.value.coerceIn(0L, dur)
         val targetMs = (curMs + deltaMs).coerceIn(0L, maxMs)
-        if (kotlin.math.abs(targetMs - curMs) < 1000L) return
+        android.util.Log.i("TVHSEEK", "seekRelative delta=$deltaMs dur=$dur max=$maxMs cur=$curMs target=$targetMs rec=$dvrRecording feeder=$dvrViaFeeder")
+        if (kotlin.math.abs(targetMs - curMs) < 1000L) { android.util.Log.i("TVHSEEK", "seekRelative SKIP (diff<1s)"); return }
         seekDvrTo(targetMs, curMs, dur)
     }
 
@@ -535,15 +539,17 @@ class PlayerActivity : ComponentActivity() {
                 val fromFileMs = (offsetMs + fromMs).coerceAtLeast(1L)
                 val bytesPerMs = if (bytes > 0) bytes.toDouble() / fromFileMs else 0.0
                 val targetByte = if (bytesPerMs > 0) (bytesPerMs * fileMs).toLong().coerceAtLeast(0L) else 0L
+                android.util.Log.i("TVHSEEK", "FEEDER restart target=$targetMs fileMs=$fileMs offset=$offsetMs bytes=$bytes fromFileMs=$fromFileMs bpms=$bytesPerMs targetByte=$targetByte url=$url")
                 playDvrViaFeeder(srv, url, targetByte)
             } else {
+                android.util.Log.i("TVHSEEK", "DIRECT start-time=${fileMs / 1000}s target=$targetMs fileMs=$fileMs offset=$offsetMs url=$url")
                 val m = buildMedia(url)
                 m.addOption(":start-time=${fileMs / 1000}")
                 mediaPlayer.media = m
                 m.release()
                 mediaPlayer.play()
             }
-        }
+        }.onFailure { android.util.Log.i("TVHSEEK", "seekDvrTo FAIL ${it.message}") }
         // playhead hned na cielovu poziciu + seed pre hodiny (po restarte je player.position
         // neplatna, hodiny ju nesmu citat - prevezmu seed a tikaju dalej z neho)
         dvrPlayheadMsState.value = targetMs
@@ -573,6 +579,7 @@ class PlayerActivity : ComponentActivity() {
 
     /** Horizontalne tahanie (MX Player) -> skok o dany pocet sekund (zaporne = vzad). */
     private fun scrubSeek(seconds: Int) {
+        android.util.Log.i("TVHSEEK", "scrubSeek secs=$seconds seekable=$seekablePlayback htspLive=$htspLive")
         if (seconds == 0) return
         when {
             seekablePlayback -> seekRelative(seconds.toLong() * 1000L)
