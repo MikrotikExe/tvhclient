@@ -99,6 +99,9 @@ class TsMuxer(streams: List<Stream>) {
     /** Jeden muxpkt → TS bajty. Prazdne ak je stopa nepodporovana. */
     fun mux(esIndex: Int, payload: ByteArray, pts: Long?, dts: Long?, randomAccess: Boolean): ByteArray {
         val t = trackByEs[esIndex] ?: return ByteArray(0)
+        // DVB titulky su zatial len ohlasene v PMT (objavia sa v menu), ich PES este
+        // nemuxujeme — overujeme, ci PES nebol pricinou padu streamu pri starte
+        if (t.isSubtitle) return ByteArray(0)
         val (outPts, outDts) = remap(pts, dts)
         val packets = ArrayList<ByteArray>()
         psiCounter -= 1
