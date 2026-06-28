@@ -551,7 +551,15 @@ class PlayerActivity : ComponentActivity() {
         val fileMs = (offsetMs + targetMs).coerceAtLeast(0L)   // cas v subore (0 = realny zaciatok nahravky)
         reconnectHandler.removeCallbacksAndMessages(null)
         dvrReopenAttempts = 0
-        reconnectingState.value = true
+        // Bezny seek = kratky restart streamu; ukaz len lahky seek-spinner, NIE "Opatovne
+        // pripajanie" (to patri len skutocnemu vypadku/reconnectu). Zhasne ho Playing/Buffering,
+        // poistka po 6 s keby event nedosiel.
+        seekingState.value = true
+        seekSpinnerJob?.cancel()
+        seekSpinnerJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(6000)
+            seekingState.value = false
+        }
         runCatching {
             if (dvrViaFeeder) {
                 val srv = liveServer ?: return
