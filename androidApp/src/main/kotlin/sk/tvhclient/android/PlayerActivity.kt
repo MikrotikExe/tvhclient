@@ -1968,6 +1968,7 @@ class PlayerActivity : ComponentActivity() {
                         val htspMode = server.connectionMode == "htsp"
                         if (cid != null && directUrl == null && htspMode) {
                             // stream cez HTSP (9982). Timeshift funkcie len ak je pref zapnuty a server podporuje.
+                            currentStreamUrl = streamUrl  // HTTP fallback pre reconnect/reparse stop
                             lifecycleScope.launch {
                                 val ts = TimeshiftPref.get(this@PlayerActivity) && withContext(Dispatchers.IO) {
                                     runCatching {
@@ -2609,22 +2610,10 @@ class PlayerActivity : ComponentActivity() {
             val langs = runCatching { mediaPlayer.trackLanguages() }.getOrDefault(emptyMap())
             val anyLang = langs.values.any { !it.isNullOrBlank() && !it.equals("und", true) }
             trackReparseDone = true  // tak ci tak skus len raz
-            if (!anyLang) reopenCurrentLive()
-        }, 2200)
-    }
-
-    /** Ticho znovu napoji aktualny zivy stream (cerstvy parse PMT -> jazyky + DVB titulky). */
-    private fun reopenCurrentLive() {
-        if (seekablePlayback || !::mediaPlayer.isInitialized) return
-        val srv = liveServer ?: return
-        val uuid = liveUuids.getOrNull(liveIndex) ?: return
-        val cid = uuid.toLongOrNull()
-        reconnectingState.value = true  // kratky spinner pocas re-napojenia
-        runCatching {
-            if (htspStream && cid != null && playHtspLive(srv, cid, htspLive)) return
-            val url = currentStreamUrl ?: return
-            playLiveAuto(srv, url)
-        }
+            // znovu napojenie cez OVERENU reconnect cestu (sama sa zotavi, naplni stopy);
+            // vlastny re-open cez playHtspLive sa zasekaval na stop+start HTSP subscription
+            if (!anyLang) scheduleReconnect()
+        }, 1800)
     }
 
     override fun onDestroy() {
