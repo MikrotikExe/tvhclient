@@ -61,7 +61,7 @@ class TsMuxer(streams: List<Stream>) {
     private var lastOut = 0L
     private val discontTicks = 90000L * 4   // 4 s = diskontinuita -> re-base
     private val frameGapTicks = 3000L        // ~33 ms medzera po skoku
-    private val subLeadTicks = 36000L        // ~400 ms predstih titulkov (anti-drop v rychlom slede)
+    private val subLeadTicks = 81000L        // ~900 ms predstih titulkov (anti-drop v rychlom slede)
 
     init {
         var nextPid = 0x1001
