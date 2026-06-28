@@ -555,13 +555,22 @@ class PlayerActivity : ComponentActivity() {
         runCatching {
             if (dvrViaFeeder) {
                 val srv = liveServer ?: return
-                // odhad priemerneho bitrate z doteraz pretecenych dat (bytesWritten = absolutna
-                // pozicia v subore: startByte + pretecene). byte/ms = bytes / (cas v subore).
-                val bytes = httpFeeder?.bytesWritten ?: 0L
-                val fromFileMs = (offsetMs + fromMs).coerceAtLeast(1L)
-                val bytesPerMs = if (bytes > 0) bytes.toDouble() / fromFileMs else 0.0
-                val targetByte = if (bytesPerMs > 0) (bytesPerMs * fileMs).toLong().coerceAtLeast(0L) else 0L
-                android.util.Log.i("TVHSEEK", "FEEDER restart target=$targetMs fileMs=$fileMs offset=$offsetMs bytes=$bytes fromFileMs=$fromFileMs bpms=$bytesPerMs targetByte=$targetByte url=$url")
+                val feeder = httpFeeder
+                // Presny prepocet cas->byte z GLOBALNEHO priemeru: celkova velkost suboru
+                // (Content-Range "/N") / celkovy cas suboru (offset + nahrate trvanie).
+                // Lokalny odhad z bytesWritten/playhead je nespolahlivy (byte vs cas nesedi).
+                val total = feeder?.totalBytes ?: 0L
+                val fileDurMs = offsetMs + dur            // dur = aktualne nahrate trvanie relacie
+                val targetByte: Long = if (total > 0 && fileDurMs > 0) {
+                    (total.toDouble() / fileDurMs * fileMs).toLong().coerceIn(0L, total - 1)
+                } else {
+                    // fallback: lokalny odhad ak este nepoznam celkovu velkost
+                    val bytes = feeder?.bytesWritten ?: 0L
+                    val fromFileMs = (offsetMs + fromMs).coerceAtLeast(1L)
+                    val bpms = if (bytes > 0) bytes.toDouble() / fromFileMs else 0.0
+                    if (bpms > 0) (bpms * fileMs).toLong().coerceAtLeast(0L) else 0L
+                }
+                android.util.Log.i("TVHSEEK", "FEEDER restart target=$targetMs fileMs=$fileMs offset=$offsetMs total=$total fileDurMs=$fileDurMs targetByte=$targetByte url=$url")
                 playDvrViaFeeder(srv, url, targetByte)
             } else {
                 android.util.Log.i("TVHSEEK", "DIRECT start-time=${fileMs / 1000}s target=$targetMs fileMs=$fileMs offset=$offsetMs url=$url")

@@ -39,6 +39,12 @@ class HttpTsFeeder(
     @Volatile var bytesWritten: Long = startByte
         private set
 
+    /** Celkova velkost suboru na serveri (z Content-Range "/N" alebo Content-Length).
+     *  Pri in-progress nahravke rastie. 0 = zatial nezname. Pouziva sa na presny
+     *  prepocet cas->byte pri pretacani (globalny priemerny bitrate). */
+    @Volatile var totalBytes: Long = 0L
+        private set
+
     /** Spusti stahovanie a vrati read FileDescriptor pre Media(libVlc, fd). */
     fun start(scope: CoroutineScope): FileDescriptor {
         val pipe = ParcelFileDescriptor.createPipe()
@@ -77,7 +83,12 @@ class HttpTsFeeder(
         job = scope.launch(Dispatchers.IO) {
             try {
                 ok.newCall(req).execute().use { resp ->
-                    android.util.Log.i("TVHSEEK", "feeder HTTP code=${resp.code} range=${resp.header("Content-Range")} len=${resp.header("Content-Length")} startByte=$startByte")
+                    // celkova velkost suboru: z Content-Range "bytes A-B/TOTAL", inak Content-Length
+                    val cr = resp.header("Content-Range")
+                    val total = cr?.substringAfter('/', "")?.toLongOrNull()
+                        ?: resp.header("Content-Length")?.toLongOrNull()
+                    if (total != null && total > 0) totalBytes = total
+                    android.util.Log.i("TVHSEEK", "feeder HTTP code=${resp.code} range=$cr len=${resp.header("Content-Length")} total=$totalBytes startByte=$startByte")
                     val body = resp.body ?: return@use
                     val src = body.byteStream()
                     val buf = ByteArray(64 * 1024)
