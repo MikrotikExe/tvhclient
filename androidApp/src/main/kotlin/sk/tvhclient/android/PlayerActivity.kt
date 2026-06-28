@@ -305,6 +305,7 @@ class PlayerActivity : ComponentActivity() {
      * libVLC nezvladne. startByte = pripadny offset pre resume cez HTTP Range.
      */
     private fun playDvrViaFeeder(server: sk.tvhclient.shared.model.TvhServer, url: String, startByte: Long = 0L) {
+        android.util.Log.i("TVHSEEK", "playDvrViaFeeder startByte=$startByte url=$url")
         htspFeeder?.stop(); htspFeeder = null
         httpFeeder?.stop()
         htspStream = false
@@ -1932,10 +1933,17 @@ class PlayerActivity : ComponentActivity() {
         mediaPlayer.setEventListener { event ->
             when (event.type) {
                 MediaPlayer.Event.EncounteredError -> {
-                    // zivé vysielanie: skus znovu pripojit (vypadok siete); inak nahlas chybu
+                    android.util.Log.i("TVHSEEK", "EncounteredError seekable=$seekablePlayback rec=$dvrRecording feeder=$dvrViaFeeder")
+                    // zivé vysielanie: skus znovu pripojit (vypadok siete)
                     if (!seekablePlayback) {
                         scheduleReconnect()
+                    } else if (dvrRecording) {
+                        // DVR seek/feeder zlyhal -> znovu otvor stream na aktualnom playheade
+                        // (reopenDvrLive ma backoff a po vycerpani pokusov vycisti spinner),
+                        // nech to neostane zaseknute na "Opatovne pripajanie"
+                        reopenDvrLive()
                     } else {
+                        reconnectingState.value = false
                         Toast.makeText(
                             this,
                             getString(R.string.playback_error, "VLC"),

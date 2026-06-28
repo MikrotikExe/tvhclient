@@ -77,6 +77,7 @@ class HttpTsFeeder(
         job = scope.launch(Dispatchers.IO) {
             try {
                 ok.newCall(req).execute().use { resp ->
+                    android.util.Log.i("TVHSEEK", "feeder HTTP code=${resp.code} range=${resp.header("Content-Range")} len=${resp.header("Content-Length")} startByte=$startByte")
                     val body = resp.body ?: return@use
                     val src = body.byteStream()
                     val buf = ByteArray(64 * 1024)
@@ -87,8 +88,8 @@ class HttpTsFeeder(
                         bytesWritten += n
                     }
                 }
-            } catch (_: Throwable) {
-                // zrusenie / zlomeny pipe / chyba spojenia
+            } catch (t: Throwable) {
+                android.util.Log.i("TVHSEEK", "feeder EXC ${t.javaClass.simpleName} ${t.message}")
             } finally {
                 try { os.close() } catch (_: Throwable) {}
             }
