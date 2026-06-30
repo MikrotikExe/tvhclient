@@ -315,6 +315,57 @@ internal fun PlaybackSettings(ctx: android.content.Context) {
         }
     )
 
+    // Zvukovy vystup — riesi rozchadzajuci sa / oneskoreny zvuk. PASSTHROUGH
+    // (priamy prenos) posiela zvuk priamo do TV/AVR (zarovna sync na niektorych boxoch).
+    // Len na TV/boxoch — na telefone nema zmysel (zvuk ide do reproduktora).
+    if (isTvDev) {
+        Spacer(Modifier.height(16.dp))
+        var aout by remember { mutableStateOf(AudioOutputPref.get(ctx)) }
+        val aoutLabel: @Composable (String) -> String = { v ->
+            when (v) {
+                AudioOutputPref.PASSTHROUGH -> stringResource(R.string.audio_out_passthrough)
+                AudioOutputPref.PCM -> "PCM"
+                AudioOutputPref.STEREO -> "Stereo"
+                else -> stringResource(R.string.orient_auto)
+            }
+        }
+        DropdownField(
+            label = stringResource(R.string.audio_out_title),
+            value = aout,
+            options = AudioOutputPref.options,
+            optionLabel = aoutLabel,
+            onSelect = { v ->
+                aout = v
+                AudioOutputPref.set(ctx, v)
+                TabController.settingsDirty.value = true
+            }
+        )
+    }
+
+    // Zvukovy vystup (telefon) — pri rozchadzajucom sa / oneskorenom zvuku, ktory
+    // narasta v case, skus prepnut na OpenSL ES (ina sprava latencie).
+    if (!isTvDev) {
+        Spacer(Modifier.height(16.dp))
+        var amod by remember { mutableStateOf(AudioModulePref.get(ctx)) }
+        val amodLabel: @Composable (String) -> String = { v ->
+            when (v) {
+                AudioModulePref.OPENSLES -> "OpenSL ES"
+                else -> stringResource(R.string.orient_auto)
+            }
+        }
+        DropdownField(
+            label = stringResource(R.string.audio_out_title),
+            value = amod,
+            options = AudioModulePref.options,
+            optionLabel = amodLabel,
+            onSelect = { v ->
+                amod = v
+                AudioModulePref.set(ctx, v)
+                TabController.settingsDirty.value = true
+            }
+        )
+    }
+
     // Automaticky PiP rezim (len zariadenia s podporou PiP - telefony/tablety)
     if (ctx.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
         Spacer(Modifier.height(16.dp))

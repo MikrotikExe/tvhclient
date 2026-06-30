@@ -1962,6 +1962,11 @@ class PlayerActivity : ComponentActivity() {
         if (dMode != null) options.add("--deinterlace-mode=$dMode")
         libVlc = LibVLC(this, options)
         mediaPlayer = MediaPlayer(libVlc)
+        // Zvukovy vystup z nastaveni. Modul (telefon: AudioTrack/OpenSL ES) aj
+        // zariadenie (TV: passthrough/pcm/stereo) sa musia nastavit pred prehravanim;
+        // menia sa az pri (znovu)otvoreni prehravaca.
+        AudioModulePref.module(this)?.let { aout -> runCatching { mediaPlayer.setAudioOutput(aout) } }
+        AudioOutputPref.deviceId(this)?.let { dev -> runCatching { mediaPlayer.setAudioOutputDevice(dev) } }
 
         mediaPlayer.setEventListener { event ->
             when (event.type) {
