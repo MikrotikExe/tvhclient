@@ -47,7 +47,7 @@
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|screenLayout"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+            android:theme="@android:style/Theme.Black.NoTitleBar" />
 
         <receiver
             android:name=".BootReceiver"
