@@ -310,6 +310,38 @@ private fun TvHomeHost() {
         else -> {
             androidx.activity.compose.BackHandler(enabled = !showExit) { showExit = true }
             Box(Modifier.fillMaxSize()) {
+                // Rezim rozhrania: klasicky launcher (default) alebo moderny (UiModePref);
+                // cita sa pri kazdom navrate na home, takze prepnutie v nastaveniach
+                // sa prejavi hned bez restartu.
+                if (UiModePref.get(ctx) == UiModePref.MODERN) {
+                    ModernTvHomeScreen(
+                        chState = chState,
+                        epgMap = epgMap,
+                        onPlayChannel = { uuid, title ->
+                            lastTile = "channels"
+                            // napln playlist ako klasicky tok (play="tv"), inak by
+                            // v prehravaci neslo prepinanie kanalov
+                            (chState as? ChannelsState.Loaded)?.let { st ->
+                                val sid2 = sk.tvhclient.shared.Tvh.store.active()?.id
+                                val hidden = HiddenChannels.all(ctx, sid2)
+                                LivePlaylist.channels = st.allRows.filter { it.channel.uuid !in hidden }.map { r ->
+                                    LivePlaylist.LiveChannel(
+                                        uuid = r.channel.uuid, name = r.channel.name,
+                                        number = r.channel.number ?: 0, piconUrl = r.piconUrl,
+                                        nowTitle = r.nowTitle ?: "", nowStart = r.nowStart, nowStop = r.nowStop
+                                    )
+                                }
+                            }
+                            LivePlaylist.setIndexForUuid(uuid)
+                            playUuid(uuid, title)
+                        },
+                        onChannels = { lastTile = "channels"; if (play.isEmpty()) play = "tv" },
+                        onRadio = { lastTile = "radio"; if (play.isEmpty()) play = "radio" },
+                        onTvProgram = { lastTile = "epg"; section = "epg" },
+                        onArchive = { lastTile = "archive"; section = "archive" },
+                        onSettings = { lastTile = "settings"; section = "settings" },
+                    )
+                } else {
                 TvHomeScreen(   // pocas pending (play) zostava viditelny launcher, kym naskoci prehravac
                     focusKey = lastTile,
                     onChannels = { lastTile = "channels"; if (play.isEmpty()) play = "tv" },
@@ -318,6 +350,7 @@ private fun TvHomeHost() {
                     onArchive = { lastTile = "archive"; section = "archive" },
                     onSettings = { lastTile = "settings"; section = "settings" },
                 )
+                }
                 if (showExit) {
                     androidx.activity.compose.BackHandler { showExit = false }
                     TvExitDialog(
